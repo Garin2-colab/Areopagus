@@ -1,0 +1,252 @@
+{
+  "project": "Areopagus",
+  "created_at": "2026-05-08T00:00:00Z",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "turns": [
+    {
+      "turn": 1,
+      "created_at": "2026-05-08T00:05:00Z",
+      "prompt_json": {
+        "scene_description": "A ceremonial civic oracle suspended between steel and cloud.",
+        "subject": {
+          "type": "architectural witness",
+          "features": {
+            "face": "faceted and anonymous, like carved limestone",
+            "hair": "no visible hair, the figure merges into the structure",
+            "makeup": "none, the surface is rendered as stone and light"
+          },
+          "position": "Centered frontal composition with a towering civic frame."
+        },
+        "attire": {
+          "style": "Brutal futurism with ritual geometry.",
+          "collar": "Angular monolith collar with etched seams.",
+          "textures": [
+            "Raw concrete grain",
+            "Polished chrome edges",
+            "Translucent veils of glass",
+            "Micro-etched legal markings"
+          ]
+        },
+        "lighting_and_effects": {
+          "type": "Hard museum lighting with faint atmospheric haze.",
+          "primary_effect": "Specular highlights on steel and stone.",
+          "shadows": "Long, disciplined shadows with deep contrast.",
+          "glitch_effect": "Minimal scan-line interference"
+        },
+        "environment": {
+          "setting": "An elevated tribunal platform above a silent city.",
+          "background_color": "Cold slate and smoke.",
+          "atmosphere": "Ritual, civic, and severe."
+        },
+        "color_palette": {
+          "base_tones": ["Charcoal", "Slate", "Bone"],
+          "accent_colors": ["Signal red", "Electric cyan", "Pale amber"],
+          "saturation": "Low base saturation with isolated luminous accents"
+        },
+        "style": {
+          "medium": "Cinematic editorial concept art",
+          "aesthetic": "Areopagus ritual futurism",
+          "quality": "Sharp and monumental",
+          "aspect_ratio": "1:1"
+        },
+        "camera": {
+          "focal_length": "50mm",
+          "aperture": "f/2.0",
+          "shutter_speed_effect": "Still, polished, and precise"
+        },
+        "turn": 1,
+        "debate_context": [],
+        "keywords": ["#liminal", "#structural", "#juridical", "#monumental", "#oracle"]
+      },
+      "prompt_text": "{\"scene_description\":\"A ceremonial civic oracle suspended between steel and cloud.\"}",
+      "image_id": "turn-1-image",
+      "image_url": "https://mock.runway.local/areopagus/turn-1.png",
+      "critique": "The image obeys the tribunal mood, but the composition feels too polite for a true civic verdict. Push the shadows harder and let the geometry cut closer to the frame.",
+      "agent2": {
+        "critique": "The image obeys the tribunal mood, but the composition feels too polite for a true civic verdict. Push the shadows harder and let the geometry cut closer to the frame.",
+        "agreed_keywords": ["#liminal", "#structural", "#juridical", "#monumental", "#oracle"]
+      },
+      "keywords": ["#liminal", "#structural", "#juridical", "#monumental", "#oracle"],
+      "knowledge_graph": {
+        "image_id": "turn-1-image",
+        "keyword_links": [
+          { "keyword": "#liminal", "image_id": "turn-1-image" },
+          { "keyword": "#structural", "image_id": "turn-1-image" },
+          { "keyword": "#juridical", "image_id": "turn-1-image" },
+          { "keyword": "#monumental", "image_id": "turn-1-image" },
+          { "keyword": "#oracle", "image_id": "turn-1-image" }
+        ]
+      }
+    },
+    {
+      "turn": 2,
+      "created_at": "2026-05-08T00:10:00Z",
+      "prompt_json": {
+        "scene_description": "A brutalist archive chamber where verdicts become architecture.",
+        "subject": {
+          "type": "archive sentinel",
+          "features": {
+            "face": "partially obscured by layered glass and concrete planes",
+            "hair": "compressed into a helmet-like silhouette",
+            "makeup": "matte, ash-toned, nearly erased"
+          },
+          "position": "Three-quarter view with the body nested inside a rigid corridor."
+        },
+        "attire": {
+          "style": "Monastic brutalism with modular panels.",
+          "collar": "Stacked ribbed collar that reads like a filing system.",
+          "textures": [
+            "Rough concrete",
+            "Satin black metal",
+            "Frosted acrylic",
+            "Stamped index labels"
+          ]
+        },
+        "lighting_and_effects": {
+          "type": "Top-light from concealed clerestory windows.",
+          "primary_effect": "Silvery edge light tracing every seam.",
+          "shadows": "Dense, boxlike shadows that hold the figure in place.",
+          "glitch_effect": "Subtle chromatic fringing"
+        },
+        "environment": {
+          "setting": "A vault-like corridor of legal memory.",
+          "background_color": "Smoke gray and bone white.",
+          "atmosphere": "Severe, archival, and hushed."
+        },
+        "color_palette": {
+          "base_tones": ["Concrete", "Graphite", "Bone"],
+          "accent_colors": ["Infrared", "Cold teal", "Oxide orange"],
+          "saturation": "Controlled and documentary"
+        },
+        "style": {
+          "medium": "Conceptual architectural portrait",
+          "aesthetic": "Brutalist civic memory",
+          "quality": "High detail with tactile surfaces",
+          "aspect_ratio": "1:1"
+        },
+        "camera": {
+          "focal_length": "85mm",
+          "aperture": "f/2.8",
+          "shutter_speed_effect": "Slight motion tension in the veils"
+        },
+        "turn": 2,
+        "debate_context": [
+          { "turn": 1, "keywords": ["#liminal", "#structural", "#juridical", "#monumental", "#oracle"], "critique": "The image obeys the tribunal mood, but the composition feels too polite for a true civic verdict. Push the shadows harder and let the geometry cut closer to the frame." }
+        ],
+        "keywords": ["#liminal", "#structural", "#juridical", "#archival", "#brutalist"]
+      },
+      "prompt_text": "{\"scene_description\":\"A brutalist archive chamber where verdicts become architecture.\"}",
+      "image_id": "turn-2-image",
+      "image_url": "https://mock.runway.local/areopagus/turn-2.png",
+      "critique": "The archive logic is strong, but the image still reads as a set rather than a lived institution. Add more friction between human scale and the mass of the structure.",
+      "agent2": {
+        "critique": "The archive logic is strong, but the image still reads as a set rather than a lived institution. Add more friction between human scale and the mass of the structure.",
+        "agreed_keywords": ["#liminal", "#structural", "#juridical", "#archival", "#brutalist"]
+      },
+      "keywords": ["#liminal", "#structural", "#juridical", "#archival", "#brutalist"],
+      "knowledge_graph": {
+        "image_id": "turn-2-image",
+        "keyword_links": [
+          { "keyword": "#liminal", "image_id": "turn-2-image" },
+          { "keyword": "#structural", "image_id": "turn-2-image" },
+          { "keyword": "#juridical", "image_id": "turn-2-image" },
+          { "keyword": "#archival", "image_id": "turn-2-image" },
+          { "keyword": "#brutalist", "image_id": "turn-2-image" }
+        ]
+      }
+    },
+    {
+      "turn": 3,
+      "created_at": "2026-05-08T00:15:00Z",
+      "prompt_json": {
+        "scene_description": "A luminous final tribunal with the feeling of a future ritual.",
+        "subject": {
+          "type": "ritual adjudicator",
+          "features": {
+            "face": "calm, reflective, and partially veiled by prismatic light",
+            "hair": "threaded through translucent architectural elements",
+            "makeup": "minimal, with a glass-like sheen"
+          },
+          "position": "Centered, stepping forward through a ring of light."
+        },
+        "attire": {
+          "style": "Ceremonial futurewear with sharp civic detailing.",
+          "collar": "Radiant collar formed from layered transparent planes.",
+          "textures": [
+            "Iridescent film",
+            "Polished stone",
+            "Fine mesh",
+            "Luminous etched glyphs"
+          ]
+        },
+        "lighting_and_effects": {
+          "type": "Backlit with prismatic bloom.",
+          "primary_effect": "Haloing edges and spectral highlights.",
+          "shadows": "Soft but deliberate.",
+          "glitch_effect": "Controlled slit-scan shimmer"
+        },
+        "environment": {
+          "setting": "A civic chamber opening into daylight.",
+          "background_color": "Pearl, silver, and bright haze.",
+          "atmosphere": "Resolute, hopeful, and ceremonial."
+        },
+        "color_palette": {
+          "base_tones": ["Pearl", "Silver", "Stone"],
+          "accent_colors": ["Cyan", "Magenta", "Solar gold"],
+          "saturation": "High luminosity with disciplined contrast"
+        },
+        "style": {
+          "medium": "Editorial future ritual portrait",
+          "aesthetic": "Luminous civic futurism",
+          "quality": "Hyper-detailed with atmospheric glow",
+          "aspect_ratio": "1:1"
+        },
+        "camera": {
+          "focal_length": "70mm",
+          "aperture": "f/2.2",
+          "shutter_speed_effect": "Crisp subject with luminous trailing edges"
+        },
+        "turn": 3,
+        "debate_context": [
+          { "turn": 1, "keywords": ["#liminal", "#structural", "#juridical", "#monumental", "#oracle"], "critique": "The image obeys the tribunal mood, but the composition feels too polite for a true civic verdict. Push the shadows harder and let the geometry cut closer to the frame." },
+          { "turn": 2, "keywords": ["#liminal", "#structural", "#juridical", "#archival", "#brutalist"], "critique": "The archive logic is strong, but the image still reads as a set rather than a lived institution. Add more friction between human scale and the mass of the structure." }
+        ],
+        "keywords": ["#liminal", "#structural", "#juridical", "#luminous", "#ritual"]
+      },
+      "prompt_text": "{\"scene_description\":\"A luminous final tribunal with the feeling of a future ritual.\"}",
+      "image_id": "turn-3-image",
+      "image_url": "https://mock.runway.local/areopagus/turn-3.png",
+      "critique": "The final image finally feels like a verdict made visible, with the light doing as much legal work as the architecture. The only missing element is a stronger sense that the chamber itself is listening.",
+      "agent2": {
+        "critique": "The final image finally feels like a verdict made visible, with the light doing as much legal work as the architecture. The only missing element is a stronger sense that the chamber itself is listening.",
+        "agreed_keywords": ["#liminal", "#structural", "#juridical", "#luminous", "#ritual"]
+      },
+      "keywords": ["#liminal", "#structural", "#juridical", "#luminous", "#ritual"],
+      "knowledge_graph": {
+        "image_id": "turn-3-image",
+        "keyword_links": [
+          { "keyword": "#liminal", "image_id": "turn-3-image" },
+          { "keyword": "#structural", "image_id": "turn-3-image" },
+          { "keyword": "#juridical", "image_id": "turn-3-image" },
+          { "keyword": "#luminous", "image_id": "turn-3-image" },
+          { "keyword": "#ritual", "image_id": "turn-3-image" }
+        ]
+      }
+    }
+  ],
+  "graph": {
+    "nodes": [
+      { "id": "turn-1", "type": "turn", "label": "Turn 1", "created_at": "2026-05-08T00:05:00Z" },
+      { "id": "turn-1-image", "type": "image", "label": "turn-1-image", "url": "https://mock.runway.local/areopagus/turn-1.png" },
+      { "id": "turn-2", "type": "turn", "label": "Turn 2", "created_at": "2026-05-08T00:10:00Z" },
+      { "id": "turn-2-image", "type": "image", "label": "turn-2-image", "url": "https://mock.runway.local/areopagus/turn-2.png" },
+      { "id": "turn-3", "type": "turn", "label": "Turn 3", "created_at": "2026-05-08T00:15:00Z" },
+      { "id": "turn-3-image", "type": "image", "label": "turn-3-image", "url": "https://mock.runway.local/areopagus/turn-3.png" }
+    ],
+    "edges": [
+      { "from": "turn-1", "to": "turn-1-image", "relation": "generated_image" },
+      { "from": "turn-2", "to": "turn-2-image", "relation": "generated_image" },
+      { "from": "turn-3", "to": "turn-3-image", "relation": "generated_image" }
+    ]
+  }
+}

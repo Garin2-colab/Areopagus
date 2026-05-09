@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "rw-api-reference": {
+      "source": "runwayml/skills",
+      "sourceType": "github",
+      "skillPath": "skills/rw-api-reference/SKILL.md",
+      "computedHash": "e2089788d127ee40febec7590897d0396c5d8812e8f46e7dbc15aa05d7bc6be6"
+    },
+    "rw-generate-image": {
+      "source": "runwayml/skills",
+      "sourceType": "github",
+      "skillPath": "skills/rw-generate-image/SKILL.md",
+      "computedHash": "38936b25485a7f6084ddba2d179f50a06940fb47735d9214e569ee5205c97715"
+    },
+    "rw-generate-video": {
+      "source": "runwayml/skills",
+      "sourceType": "github",
+      "skillPath": "skills/rw-generate-video/SKILL.md",
+      "computedHash": "bbf290991d2dbad407e315e329140eeb05bd9ae6aa51aae83cb0554dccfdf9a3"
+    },
+    "rw-integrate-image": {
+      "source": "runwayml/skills",
+      "sourceType": "github",
+      "skillPath": "skills/rw-integrate-image/SKILL.md",
+      "computedHash": "0d5880c9af8daaca2fbb1714254ee036ec58f34b736695ae292325df19f7af0d"
+    },
+    "rw-integrate-video": {
+      "source": "runwayml/skills",
+      "sourceType": "github",
+      "skillPath": "skills/rw-integrate-video/SKILL.md",
+      "computedHash": "da3354f5ed903aa5c3b7b956b35013ae0dd99d89e94912a60d8bbb88948cd198"
+    }
+  }
+}
