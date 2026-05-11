@@ -96,7 +96,7 @@ def load_schema_template() -> dict[str, Any]:
 def load_history() -> dict[str, Any]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not HISTORY_PATH.exists():
-        return {
+        default_history = {
             "project": "Areopagus",
             "created_at": utc_now(),
             "updated_at": utc_now(),
@@ -107,6 +107,11 @@ def load_history() -> dict[str, Any]:
                 "edges": [],
             },
         }
+        with HISTORY_PATH.open("w", encoding="utf-8") as fh:
+            json.dump(default_history, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        data_volume.commit()
+        return default_history
 
     with HISTORY_PATH.open("r", encoding="utf-8") as fh:
         history = json.load(fh)
@@ -741,6 +746,7 @@ def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
 
     return {
         "path": str(webp_path),
+        "url": f"https://heebok-lee--areopagus-get-image.modal.run/?id={image_id}",
         "format": "webp",
         "quality": WEBP_QUALITY,
         "source_mime_type": source_mime_type,
@@ -1303,7 +1309,7 @@ def record_generated_turn(
         "prompt_text": prompt_text,
         "proposal": prompt_json.get("proposal", ""),
         "image_id": image_id,
-        "image_url": image_url,
+        "image_url": image_webp.get("url", image_url),
         "image_webp": image_webp,
         "critique": "",
         "agent2": {},
@@ -1653,13 +1659,24 @@ def history_endpoint() -> dict[str, Any]:
 def status_endpoint() -> dict[str, Any]:
     data_volume.reload()
     if not STUDIO_STATUS_PATH.exists():
-        return {
-            "message": "Waiting for pulse.",
-            "active": False,
-            "updated_at": utc_now(),
-        }
+        return update_studio_status("Studio Reset. Ready for a new era.", active=False)
     with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
         return json.load(fh)
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+)
+@modal.fastapi_endpoint(method="GET")
+def get_image(id: str) -> Any:
+    from fastapi.responses import FileResponse
+    data_volume.reload()
+    if not id.endswith(".webp"):
+        id += ".webp"
+    path = IMAGE_DIR / id
+    if path.exists():
+        return FileResponse(path, media_type="image/webp")
+    return {"error": "Not found", "status_code": 404}
 
 @app.function(
     image=image,
