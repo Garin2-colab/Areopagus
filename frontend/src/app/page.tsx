@@ -69,7 +69,14 @@ export default function Home() {
           </Button>
 
           <div className="flex flex-col items-center gap-5">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-zinc-50 md:text-7xl">AREOPAGUS</h1>
+            <div className="flex flex-col items-center gap-2">
+              <h1 className="font-display text-5xl font-bold tracking-tighter text-zinc-50 md:text-7xl">AREOPAGUS</h1>
+              {view === "macro" && (
+                <h2 className="font-display text-lg font-medium tracking-widest text-zinc-400 uppercase md:text-xl">
+                  Knowledge Web
+                </h2>
+              )}
+            </div>
 
             <TabsList className="mx-auto">
               <TabsTrigger value="micro" className="px-4">
