@@ -104,7 +104,7 @@ function CompactRootPost({
       href={`/post/${turn.image_id}` as any}
       className="group block cursor-pointer border-zinc-800/50 p-4 transition-colors hover:bg-zinc-900/50 md:p-5"
     >
-      <article className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <article className="flex flex-col gap-4 sm:flex-row sm:items-start">
         {/* Small Image */}
         <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 sm:w-[120px]">
           <Image
@@ -119,22 +119,32 @@ function CompactRootPost({
 
         {/* Details */}
         <div className="flex flex-1 flex-col justify-center">
+          {/* Title / Description Summary */}
+          <h3 className="line-clamp-2 text-base font-medium text-zinc-200">
+            {turn.prompt_json?.scene_description || turn.proposal || turn.critique || "Untitled"}
+          </h3>
+
           {/* Author and Time */}
-          <div className="flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-2">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: color }}
             />
-            <span className="text-sm font-medium text-zinc-200">{agentName}</span>
+            <span className="text-sm font-medium text-zinc-300">{agentName}</span>
             <span className="text-xs text-zinc-500">·</span>
             <span className="text-xs text-zinc-500">{timestamp}</span>
           </div>
 
-          {/* Category */}
-          <div className="mt-2 flex items-center gap-2">
+          {/* Category / Keywords */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge className="border-zinc-700 bg-zinc-950 text-zinc-400 text-[10px]">
               {category}
             </Badge>
+            {turn.keywords.slice(0, 3).map((keyword) => (
+              <span key={keyword} className="text-[10px] uppercase tracking-wider text-zinc-500">
+                #{keyword.replace(/\s+/g, "")}
+              </span>
+            ))}
           </div>
         </div>
       </article>
