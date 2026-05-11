@@ -1009,11 +1009,8 @@ Return JSON only with this shape:
 {{
   "agent_id": "...",
   "agent_name": "...",
-  "interest_score": 0,
-  "action": "Initiate",
-  "selected_turn": 0,
-  "selected_image_id": "...",
-  "reason": "...",
+  "initiate_score": 0,
+  "initiate_reason": "...",
   "post_scores": [
     {{
       "turn": 0,
@@ -1038,22 +1035,19 @@ Recent posts:
 {json.dumps([summarize_turn_for_agent(turn) for turn in recent_turns], indent=2, ensure_ascii=False)}
 
 Rules:
-- Score each of the recent posts from 0 to 100.
-- Pick the single highest-interest post for the top-level fields.
-- Use Initiate when the agent wants to start a new direction or thread.
-- Use Critique when the best move is to comment on the existing thread without generating a new image.
-- Use Pivot when the agent wants to refine the selected prompt into a reply image.
-- If the agent is modelled as image-first, lean toward Initiate or Pivot when the fit is strong.
+- You must decide how much this agent wants to start a completely new topic vs interact with existing posts.
+- Give an `initiate_score` from 0 to 100 based strictly on the agent's persona. If the persona describes they love to generate new stuff, create their own posts, or initiate, this score should be very high (e.g., 80-100).
+- For each of the recent posts, give an `interest_score` from 0 to 100. If the post perfectly aligns with the agent's persona and they have strong opinions on it, score it high.
+- For each post, decide the best reply `action` if the agent were to reply:
+  - Use `Pivot` when the agent wants to reply by generating a new image inspired by the post.
+  - Use `Critique` when the agent wants to reply with text only (commenting).
 - Keep reasons short and operational.
 """
 
     assessment = gemini_generate(prompt, model=agent_gemini_model(agent))
     assessment["agent_id"] = agent.get("id")
     assessment["agent_name"] = agent.get("name", agent.get("id", "Agent"))
-    assessment["interest_score"] = clamp_interest_score(assessment.get("interest_score"))
-    assessment["action"] = normalize_action(assessment.get("action"))
-    assessment["selected_turn"] = assessment.get("selected_turn")
-    assessment["selected_image_id"] = assessment.get("selected_image_id") or ""
+    initiate_score = clamp_interest_score(assessment.get("initiate_score"))
 
     post_scores = assessment.get("post_scores", [])
     if not isinstance(post_scores, list):
@@ -1073,13 +1067,20 @@ Rules:
             }
         )
 
-    if normalized_scores:
-        best_score = max(normalized_scores, key=lambda item: item["interest_score"])
-        assessment["selected_turn"] = best_score.get("turn", assessment.get("selected_turn"))
-        assessment["selected_image_id"] = best_score.get("image_id", assessment.get("selected_image_id"))
-        assessment["interest_score"] = clamp_interest_score(best_score.get("interest_score"))
-        assessment["action"] = normalize_action(best_score.get("action"))
-        assessment["reason"] = assessment.get("reason") or best_score.get("reason", "")
+    best_post_score = max(normalized_scores, key=lambda item: item["interest_score"]) if normalized_scores else None
+
+    if best_post_score and best_post_score["interest_score"] > initiate_score:
+        assessment["selected_turn"] = best_post_score.get("turn")
+        assessment["selected_image_id"] = best_post_score.get("image_id")
+        assessment["interest_score"] = best_post_score["interest_score"]
+        assessment["action"] = best_post_score["action"]
+        assessment["reason"] = best_post_score.get("reason", "")
+    else:
+        assessment["selected_turn"] = None
+        assessment["selected_image_id"] = ""
+        assessment["interest_score"] = initiate_score
+        assessment["action"] = "Initiate"
+        assessment["reason"] = assessment.get("initiate_reason", "Agent persona prefers initiating a new thread.")
 
     assessment["post_scores"] = normalized_scores
     return assessment
