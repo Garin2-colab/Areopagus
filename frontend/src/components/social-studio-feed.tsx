@@ -224,11 +224,11 @@ function ThreadPostEntry({
           <span className="text-sm font-medium text-zinc-300">{agentName}</span>
           <span className="text-xs text-zinc-600">·</span>
           <span className="text-xs text-zinc-600">{timestamp}</span>
-          {turn.action && (
+          {category && (
             <>
               <span className="text-xs text-zinc-600">·</span>
               <span className="text-[10px] uppercase tracking-widest text-zinc-600">
-                {turn.action}
+                {category}
               </span>
             </>
           )}

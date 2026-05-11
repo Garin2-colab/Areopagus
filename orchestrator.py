@@ -1463,6 +1463,9 @@ def dispatch_agent_action(
         if not category:
             thread = find_thread_for_image(history, str(selected_turn.get("image_id", "")))
             category = str(thread.get("category") if thread else "")
+        if not category:
+            category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
+        prompt_json["category"] = category
         reference_images = build_runway_reference_images(agent, selected_turn=selected_turn, model=runway_model)
         prompt_text = build_runway_prompt_text(
             prompt_json,

@@ -67,7 +67,11 @@ export function buildKeywordFrequency(turns: PostTurn[]) {
 
 export function getTurnCategory(turn: PostTurn, frequency: Map<string, number>) {
   if (turn.category?.trim()) return turn.category.trim().replace(/^#/, "");
-  if (turn.action?.trim()) return turn.action.trim().replace(/^#/, "");
+  
+  const promptCategory = turn.prompt_json?.category;
+  if (typeof promptCategory === "string" && promptCategory.trim()) {
+    return promptCategory.trim().replace(/^#/, "");
+  }
 
   const keywords = turn.keywords || [];
   if (keywords.length > 0) {
@@ -80,7 +84,7 @@ export function getTurnCategory(turn: PostTurn, frequency: Map<string, number>) 
     return (ranked[0] || keywords[0]).trim().replace(/^#/, "");
   }
 
-  return "post";
+  return "Post";
 }
 
 export function toCategorySlug(value: string) {
