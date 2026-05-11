@@ -45,14 +45,17 @@ RUNWAY_SAFETY_REPLACEMENTS = {
 }
 
 GEMINI_MODEL = "gemini-2.5-flash"
-RUNWAY_MODEL = "gpt_image_2"
-RUNWAY_GEMINI_IMAGE_MODEL = "gemini_image3_pro"
+RUNWAY_MODEL = "gen4_image"
+RUNWAY_GEMINI_IMAGE_MODEL = "gemini_2.5_flash"
 RUNWAY_ASPECT_RATIO = "1:1"
 RUNWAY_RATIO_BY_MODEL = {
-    "gpt_image_2": {
-        "1:1": "1920:1920",
+    "gen4_image": {
+        "1:1": "1080:1080",
     },
-    "gemini_image3_pro": {
+    "gen4_image_turbo": {
+        "1:1": "1080:1080",
+    },
+    "gemini_2.5_flash": {
         "1:1": "1024:1024",
     },
 }
@@ -509,7 +512,6 @@ def runway_create_text_to_image(
     *,
     model: str = RUNWAY_MODEL,
     reference_images: list[dict[str, Any]] | None = None,
-    webhook_url: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": model,
@@ -520,8 +522,8 @@ def runway_create_text_to_image(
         payload["quality"] = RUNWAY_QUALITY
     if reference_images:
         payload["referenceImages"] = reference_images
-    if webhook_url:
-        payload["webhook_url"] = webhook_url
+
+    print(f"[runway_create_text_to_image] model={model} ratio={payload['ratio']} prompt_len={len(prompt_text)}", flush=True)
 
     return runway_request(
         "POST",
@@ -849,22 +851,29 @@ def agent_runway_model(agent: dict[str, Any]) -> str:
     model = str(raw_model).strip().lower().replace("-", "_").replace(" ", "_")
 
     aliases = {
-        "gpt_image_2": "gpt_image_2",
-        "gptimage2": "gpt_image_2",
-        "gpt_image2": "gpt_image_2",
-        "gemini_image3_pro": "gemini_image3_pro",
-        "gemini_3_pro": "gemini_image3_pro",
-        "gemini3pro": "gemini_image3_pro",
-        "gemini_3pro": "gemini_image3_pro",
+        "gen4_image": "gen4_image",
+        "gen4_image_turbo": "gen4_image_turbo",
+        "gpt_image_2": "gen4_image",
+        "gptimage2": "gen4_image",
+        "gpt_image2": "gen4_image",
+        "gemini_2.5_flash": "gemini_2.5_flash",
+        "gemini_image3_pro": "gemini_2.5_flash",
+        "gemini_3_pro": "gemini_2.5_flash",
+        "gemini3pro": "gemini_2.5_flash",
+        "gemini_3pro": "gemini_2.5_flash",
     }
 
     if model in aliases:
         return aliases[model]
 
-    if "gemini" in model and "image3" in model:
-        return "gemini_image3_pro"
+    if "gemini" in model:
+        return "gemini_2.5_flash"
     if "gpt" in model and "image" in model:
-        return "gpt_image_2"
+        return "gen4_image"
+    if "gen4" in model and "turbo" in model:
+        return "gen4_image_turbo"
+    if "gen4" in model:
+        return "gen4_image"
 
     return RUNWAY_MODEL
 
@@ -1353,6 +1362,23 @@ def record_generated_turn(
     return turn_record
 
 
+def poll_runway_task(task_id: str, max_wait: int = 300) -> dict[str, Any]:
+    """Poll Runway GET /v1/tasks/{id} until SUCCEEDED or FAILED."""
+    elapsed = 0
+    while elapsed < max_wait:
+        task = runway_get_task(task_id)
+        status = str(task.get("status") or "").upper()
+        print(f"[poll_runway_task] task={task_id} status={status} elapsed={elapsed}s", flush=True)
+        if status == "SUCCEEDED":
+            return task
+        if status == "FAILED":
+            failure = task.get("failure") or task.get("error") or "Unknown failure"
+            raise RuntimeError(f"Runway task {task_id} FAILED: {failure}")
+        time.sleep(RUNWAY_POLLING_DELAY_SECONDS)
+        elapsed += RUNWAY_POLLING_DELAY_SECONDS
+    raise RuntimeError(f"Runway task {task_id} timed out after {max_wait}s")
+
+
 def dispatch_agent_action(
     history: dict[str, Any],
     agent: dict[str, Any],
@@ -1387,34 +1413,43 @@ def dispatch_agent_action(
             action=action,
             reference_images=reference_images,
         )
-        webhook_url = runway_webhook_receiver.web_url
-        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images, webhook_url=webhook_url)
+        print(f"[dispatch] Initiate: model={runway_model} prompt_len={len(prompt_text)}", flush=True)
+        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
         task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
-        
+        if not task_id:
+            raise RuntimeError(f"No task ID returned from Runway. Response: {runway_task}")
+        print(f"[dispatch] Runway task created: {task_id}", flush=True)
+
+        completed_task = poll_runway_task(task_id)
+        raw_image_url = runway_image_url(completed_task)
+
         image_id = new_image_id("thread", str(agent.get("id", "agent")), turn_number)
         thread_id = image_id
-        
-        if task_id:
-            save_pending_task({
-                "task_id": task_id,
-                "agent": agent,
-                "assessment": assessment,
-                "prompt_json": prompt_json,
-                "prompt_text": prompt_text,
-                "category": category,
-                "action": action,
-                "runway_model": runway_model,
-                "image_id": image_id,
-                "thread_id": thread_id,
-                "parent_image_id": None,
-            })
-            return {
-                "status": "pending_webhook",
-                "action": action,
-                "task_id": task_id,
-            }
-        else:
-            raise RuntimeError("No task ID returned from Runway.")
+        image_webp = save_webp_image(raw_image_url, image_id)
+        data_volume.commit()
+
+        turn_record = record_generated_turn(
+            history,
+            agent=agent,
+            assessment=assessment,
+            category=category,
+            prompt_json=prompt_json,
+            prompt_text=prompt_text,
+            image_url=raw_image_url,
+            image_webp=image_webp,
+            image_id=image_id,
+            parent_image_id=None,
+            thread_id=thread_id,
+            action=action,
+            runway_model=runway_model,
+        )
+        return {
+            "status": "completed",
+            "action": action,
+            "task_id": task_id,
+            "image_id": image_id,
+            "turn": turn_record.get("turn"),
+        }
 
     if action == "Pivot":
         if selected_turn is None:
@@ -1435,36 +1470,45 @@ def dispatch_agent_action(
             selected_turn=selected_turn,
             reference_images=reference_images,
         )
-        webhook_url = runway_webhook_receiver.web_url
-        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images, webhook_url=webhook_url)
+        print(f"[dispatch] Pivot: model={runway_model} prompt_len={len(prompt_text)}", flush=True)
+        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
         task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
+        if not task_id:
+            raise RuntimeError(f"No task ID returned from Runway. Response: {runway_task}")
+        print(f"[dispatch] Runway task created: {task_id}", flush=True)
+
+        completed_task = poll_runway_task(task_id)
+        raw_image_url = runway_image_url(completed_task)
 
         parent_image_id = str(selected_turn.get("image_id", ""))
         thread = find_thread_for_image(history, parent_image_id)
         thread_id = str(thread.get("thread_id")) if thread and thread.get("thread_id") else parent_image_id
         image_id = new_image_id("reply", str(agent.get("id", "agent")), turn_number)
-        
-        if task_id:
-            save_pending_task({
-                "task_id": task_id,
-                "agent": agent,
-                "assessment": assessment,
-                "prompt_json": prompt_json,
-                "prompt_text": prompt_text,
-                "category": category or "Illustration",
-                "action": action,
-                "runway_model": runway_model,
-                "image_id": image_id,
-                "thread_id": thread_id,
-                "parent_image_id": parent_image_id,
-            })
-            return {
-                "status": "pending_webhook",
-                "action": action,
-                "task_id": task_id,
-            }
-        else:
-            raise RuntimeError("No task ID returned from Runway.")
+        image_webp = save_webp_image(raw_image_url, image_id)
+        data_volume.commit()
+
+        turn_record = record_generated_turn(
+            history,
+            agent=agent,
+            assessment=assessment,
+            category=category or "Illustration",
+            prompt_json=prompt_json,
+            prompt_text=prompt_text,
+            image_url=raw_image_url,
+            image_webp=image_webp,
+            image_id=image_id,
+            parent_image_id=parent_image_id,
+            thread_id=thread_id,
+            action=action,
+            runway_model=runway_model,
+        )
+        return {
+            "status": "completed",
+            "action": action,
+            "task_id": task_id,
+            "image_id": image_id,
+            "turn": turn_record.get("turn"),
+        }
     if selected_turn is None:
         raise RuntimeError("Critique requested but no recent post was available to comment on.")
 
@@ -1598,6 +1642,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                 }
             )
         except Exception as exc:
+            print(f"[orchestrate] ERROR for agent {agent_name}: {exc}", flush=True)
             skipped_agents.append(
                 {
                     "agent_id": agent.get("id"),
