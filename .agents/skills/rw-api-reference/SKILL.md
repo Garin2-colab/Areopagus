@@ -48,6 +48,8 @@ Video duration: **2-15 seconds** (model-dependent). Aspect ratios are pixel-base
 |-------|----------|----------------|
 | `gen4_image` | `POST /v1/text_to_image` | 5 (720p), 8 (1080p) |
 | `gen4_image_turbo` | `POST /v1/text_to_image` | 2 |
+| `gpt_image_2` | `POST /v1/text_to_image` | varies |
+| `gemini_image3_pro` | `POST /v1/text_to_image` | varies |
 | `gemini_2.5_flash` | `POST /v1/text_to_image` | 5 |
 
 ### Audio Generation
@@ -118,7 +120,7 @@ Use these when calling the API directly (e.g. through `use-runway-api`'s `reques
 }
 ```
 
-- `model`: `gen4_image` | `gen4_image_turbo` | `gemini_2.5_flash` (required)
+- `model`: `gen4_image` | `gen4_image_turbo` | `gpt_image_2` | `gemini_image3_pro` | `gemini_2.5_flash` (required)
 - `promptText`: string, up to ~1000 chars (required)
 - `ratio`: one of `1920:1080`, `1080:1920`, `1024:1024`, `1360:768`, `1080:1080`, `1168:880`, `1440:1080`, `1080:1440`, `1808:768`, `2112:912` (required; 720p or 1080p variants depending on model)
 - `referenceImages`: optional `[{ "uri": "https://...", "tag": "MyTag" }]` — reference by `@MyTag` in `promptText`

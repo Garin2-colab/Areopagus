@@ -46,10 +46,16 @@ RUNWAY_SAFETY_REPLACEMENTS = {
 }
 
 GEMINI_MODEL = "gemini-2.5-flash"
-RUNWAY_MODEL = "gen4_image"
-RUNWAY_GEMINI_IMAGE_MODEL = "gemini_2.5_flash"
+RUNWAY_MODEL = "gpt_image_2"
+RUNWAY_GEMINI_IMAGE_MODEL = "gemini_image3_pro"
 RUNWAY_ASPECT_RATIO = "1:1"
 RUNWAY_RATIO_BY_MODEL = {
+    "gpt_image_2": {
+        "1:1": "1080:1080",
+    },
+    "gemini_image3_pro": {
+        "1:1": "1024:1024",
+    },
     "gen4_image": {
         "1:1": "1080:1080",
     },
@@ -514,7 +520,10 @@ def runway_create_text_to_image(
     model: str = RUNWAY_MODEL,
     reference_images: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    safe_prompt = prompt_text[:950]
+    # gpt_image_2 allows 32K chars, gemini_image3_pro allows 5.5K.
+    # Use 5000 as a safe max that works for all models.
+    max_len = 5000 if model in ("gpt_image_2", "gemini_image3_pro") else 950
+    safe_prompt = prompt_text[:max_len]
     payload: dict[str, Any] = {
         "model": model,
         "promptText": safe_prompt,
@@ -853,16 +862,16 @@ def agent_runway_model(agent: dict[str, Any]) -> str:
     model = str(raw_model).strip().lower().replace("-", "_").replace(" ", "_")
 
     aliases = {
+        "gpt_image_2": "gpt_image_2",
+        "gptimage2": "gpt_image_2",
+        "gpt_image2": "gpt_image_2",
+        "gemini_image3_pro": "gemini_image3_pro",
+        "gemini_3_pro": "gemini_image3_pro",
+        "gemini3pro": "gemini_image3_pro",
+        "gemini_3pro": "gemini_image3_pro",
         "gen4_image": "gen4_image",
         "gen4_image_turbo": "gen4_image_turbo",
-        "gpt_image_2": "gen4_image",
-        "gptimage2": "gen4_image",
-        "gpt_image2": "gen4_image",
         "gemini_2.5_flash": "gemini_2.5_flash",
-        "gemini_image3_pro": "gemini_2.5_flash",
-        "gemini_3_pro": "gemini_2.5_flash",
-        "gemini3pro": "gemini_2.5_flash",
-        "gemini_3pro": "gemini_2.5_flash",
     }
 
     if model in aliases:
