@@ -31,12 +31,37 @@ export type HistoryTurn = {
   };
 };
 
+export type ThreadComment = {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  post_image_id: string;
+  comment: string;
+  interest_score: number;
+  created_at: string;
+};
+
+export type Thread = {
+  thread_id: string;
+  root_image_id: string;
+  title?: string;
+  agent_id?: string;
+  action?: string;
+  interest_score?: number;
+  active?: boolean;
+  category?: string;
+  posts: string[];
+  comments: ThreadComment[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type HistoryData = {
   project?: string;
   created_at?: string;
   updated_at?: string;
   turns: HistoryTurn[];
-  threads?: Array<Record<string, unknown>>;
+  threads?: Thread[];
   graph?: {
     nodes?: Array<Record<string, unknown>>;
     edges?: Array<Record<string, unknown>>;

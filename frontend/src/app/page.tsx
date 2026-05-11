@@ -51,6 +51,7 @@ export default function Home() {
   }, []);
 
   const turns = useMemo(() => sortTurnsNewestFirst(history?.turns ?? []), [history]);
+  const threads = useMemo(() => history?.threads ?? [], [history]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.08),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(255,255,255,0.05),_transparent_24%),linear-gradient(180deg,_#09090b_0%,_#020202_100%)] pb-14 text-zinc-50">
@@ -84,7 +85,7 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 pb-10 pt-8">
           {historyError ? <p className="mb-4 text-sm text-zinc-400">{historyError}</p> : null}
           <TabsContent value="micro" className="mt-0">
-            <SocialStudioFeed turns={turns} />
+            <SocialStudioFeed turns={turns} threads={threads} />
           </TabsContent>
           <TabsContent value="macro" className="mt-0">
             <KnowledgeWeb
