@@ -350,6 +350,33 @@ def save_history(history: dict[str, Any]) -> None:
     data_volume.commit()
 
 
+PENDING_TASKS_PATH = DATA_DIR / "pending_tasks.json"
+
+def load_pending_tasks() -> dict[str, Any]:
+    if not PENDING_TASKS_PATH.exists():
+        return {}
+    with PENDING_TASKS_PATH.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+def save_pending_task(task_data: dict[str, Any]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tasks = load_pending_tasks()
+    tasks[task_data["task_id"]] = task_data
+    with PENDING_TASKS_PATH.open("w", encoding="utf-8") as fh:
+        json.dump(tasks, fh, indent=2, ensure_ascii=False)
+    data_volume.commit()
+
+def remove_pending_task(task_id: str) -> dict[str, Any] | None:
+    tasks = load_pending_tasks()
+    task = tasks.pop(task_id, None)
+    if task:
+        with PENDING_TASKS_PATH.open("w", encoding="utf-8") as fh:
+            json.dump(tasks, fh, indent=2, ensure_ascii=False)
+        data_volume.commit()
+    return task
+
+
+
 def update_studio_status(message: str, active: bool = True, agent_name: str | None = None) -> dict[str, Any]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     status = {
@@ -477,6 +504,7 @@ def runway_create_text_to_image(
     *,
     model: str = RUNWAY_MODEL,
     reference_images: list[dict[str, Any]] | None = None,
+    webhook_url: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": model,
@@ -487,6 +515,8 @@ def runway_create_text_to_image(
         payload["quality"] = RUNWAY_QUALITY
     if reference_images:
         payload["referenceImages"] = reference_images
+    if webhook_url:
+        payload["webhook_url"] = webhook_url
 
     return runway_request(
         "POST",
@@ -497,32 +527,6 @@ def runway_create_text_to_image(
 
 def runway_get_task(task_id: str) -> dict[str, Any]:
     return runway_request("GET", f"/v1/tasks/{task_id}")
-
-
-def runway_wait_for_output(task: dict[str, Any], timeout_seconds: int = 600) -> dict[str, Any]:
-    task_id = task.get("id") or task.get("taskId") or task.get("task_id")
-    if not task_id:
-        return task
-
-    deadline = time.time() + timeout_seconds
-    current = task
-
-    while time.time() < deadline:
-        status = str(current.get("status") or current.get("state") or "").upper()
-        output = current.get("output")
-        if output:
-            return current
-
-        if status in {"SUCCEEDED", "SUCCESS", "COMPLETED", "DONE", "FINISHED"}:
-            return current
-        if status in {"FAILED", "CANCELLED", "CANCELED", "ERROR"}:
-            raise RuntimeError(f"Runway task failed: {current}")
-
-        # Delay between status checks to be a good citizen of the Runway API
-        time.sleep(RUNWAY_POLLING_DELAY_SECONDS)
-        current = runway_get_task(str(task_id))
-
-    raise TimeoutError(f"Timed out waiting for Runway task {task_id}")
 
 
 def is_runway_safety_failure(exc: Exception) -> bool:
@@ -1377,32 +1381,34 @@ def dispatch_agent_action(
             action=action,
             reference_images=reference_images,
         )
-        runway_task = runway_wait_for_output(
-            runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
-        )
-        image_url = runway_image_url(runway_task)
+        webhook_url = runway_webhook_receiver.web_url
+        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images, webhook_url=webhook_url)
+        task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
+        
         image_id = new_image_id("thread", str(agent.get("id", "agent")), turn_number)
-        image_webp = save_webp_image(image_url, image_id)
         thread_id = image_id
-        return {
-            "status": "created_thread",
-            "action": action,
-            "record": record_generated_turn(
-                history,
-                agent=agent,
-                assessment=assessment,
-                prompt_json=prompt_json,
-                prompt_text=prompt_text,
-                image_url=image_url,
-                image_webp=image_webp,
-                image_id=image_id,
-                parent_image_id=None,
-                thread_id=thread_id,
-                action=action,
-                category=category,
-                runway_model=runway_model,
-            ),
-        }
+        
+        if task_id:
+            save_pending_task({
+                "task_id": task_id,
+                "agent": agent,
+                "assessment": assessment,
+                "prompt_json": prompt_json,
+                "prompt_text": prompt_text,
+                "category": category,
+                "action": action,
+                "runway_model": runway_model,
+                "image_id": image_id,
+                "thread_id": thread_id,
+                "parent_image_id": None,
+            })
+            return {
+                "status": "pending_webhook",
+                "action": action,
+                "task_id": task_id,
+            }
+        else:
+            raise RuntimeError("No task ID returned from Runway.")
 
     if action == "Pivot":
         if selected_turn is None:
@@ -1423,35 +1429,36 @@ def dispatch_agent_action(
             selected_turn=selected_turn,
             reference_images=reference_images,
         )
-        runway_task = runway_wait_for_output(
-            runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
-        )
-        image_url = runway_image_url(runway_task)
+        webhook_url = runway_webhook_receiver.web_url
+        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images, webhook_url=webhook_url)
+        task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
+
         parent_image_id = str(selected_turn.get("image_id", ""))
         thread = find_thread_for_image(history, parent_image_id)
         thread_id = str(thread.get("thread_id")) if thread and thread.get("thread_id") else parent_image_id
         image_id = new_image_id("reply", str(agent.get("id", "agent")), turn_number)
-        image_webp = save_webp_image(image_url, image_id)
-        return {
-            "status": "created_reply_image",
-            "action": action,
-            "record": record_generated_turn(
-                history,
-                agent=agent,
-                assessment=assessment,
-                prompt_json=prompt_json,
-                prompt_text=prompt_text,
-                image_url=image_url,
-                image_webp=image_webp,
-                image_id=image_id,
-                parent_image_id=parent_image_id,
-                thread_id=thread_id,
-                action=action,
-                category=category or "Illustration",
-                runway_model=runway_model,
-            ),
-        }
-
+        
+        if task_id:
+            save_pending_task({
+                "task_id": task_id,
+                "agent": agent,
+                "assessment": assessment,
+                "prompt_json": prompt_json,
+                "prompt_text": prompt_text,
+                "category": category or "Illustration",
+                "action": action,
+                "runway_model": runway_model,
+                "image_id": image_id,
+                "thread_id": thread_id,
+                "parent_image_id": parent_image_id,
+            })
+            return {
+                "status": "pending_webhook",
+                "action": action,
+                "task_id": task_id,
+            }
+        else:
+            raise RuntimeError("No task ID returned from Runway.")
     if selected_turn is None:
         raise RuntimeError("Critique requested but no recent post was available to comment on.")
 
@@ -1653,6 +1660,91 @@ def status_endpoint() -> dict[str, Any]:
         }
     with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
         return json.load(fh)
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="POST")
+def save_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    data_volume.commit()
+    return {"ok": True, "message": "Config saved to Modal volume."}
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="POST")
+def pulse_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    data_volume.commit()
+    
+    # Run orchestrate asynchronously so the request doesn't block
+    orchestrate.spawn(payload)
+    
+    return {"ok": True, "message": "Pulse started remotely on Modal."}
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60 * 5,
+)
+@modal.fastapi_endpoint(method="POST")
+def runway_webhook_receiver(payload: dict[str, Any]) -> dict[str, Any]:
+    task_id = payload.get("id") or payload.get("taskId") or payload.get("task_id")
+    status = str(payload.get("status") or payload.get("state") or "").upper()
+    
+    if not task_id:
+        return {"ok": False, "message": "No task_id in payload."}
+
+    data_volume.reload()
+    
+    if status not in {"SUCCEEDED", "SUCCESS", "COMPLETED", "DONE", "FINISHED"}:
+        if status in {"FAILED", "CANCELLED", "CANCELED", "ERROR"}:
+            remove_pending_task(task_id)
+            update_studio_status(f"Runway task {task_id} failed.", active=False)
+        return {"ok": True, "message": f"Ignored status {status}."}
+        
+    pending = remove_pending_task(task_id)
+    if not pending:
+        return {"ok": False, "message": f"No pending task found for {task_id}."}
+
+    try:
+        image_url = runway_image_url(payload)
+        image_webp = save_webp_image(image_url, pending["image_id"])
+
+        history = load_history()
+        
+        record_generated_turn(
+            history,
+            agent=pending["agent"],
+            assessment=pending["assessment"],
+            category=pending["category"],
+            prompt_json=pending["prompt_json"],
+            prompt_text=pending["prompt_text"],
+            image_url=image_url,
+            image_webp=image_webp,
+            image_id=pending["image_id"],
+            parent_image_id=pending["parent_image_id"],
+            thread_id=pending["thread_id"],
+            action=pending["action"],
+            runway_model=pending["runway_model"],
+        )
+        
+        update_studio_status("Idle", active=False)
+        return {"ok": True, "message": "Turn recorded successfully."}
+    except Exception as exc:
+        update_studio_status(f"Error processing webhook: {str(exc)}", active=False)
+        return {"ok": False, "error": str(exc)}
 
 @app.local_entrypoint()
 def main() -> None:
