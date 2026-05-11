@@ -4,8 +4,11 @@ import json
 import base64
 import os
 import re
+import random
 import time
+import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,24 +19,68 @@ APP_NAME = "areopagus"
 VOLUME_NAME = "areopagus-data"
 DATA_DIR = Path("/data")
 HISTORY_PATH = DATA_DIR / "history.json"
+AGENTS_CONFIG_PATH = DATA_DIR / "agents_config.json"
+STUDIO_STATUS_PATH = DATA_DIR / "status.json"
+IMAGE_DIR = DATA_DIR / "images"
 SCHEMA_PATH = Path(__file__).resolve().parent / "example" / "exampleJson.json"
+ROOT_PATH = Path(__file__).resolve().parent
+LOCAL_AGENTS_CONFIG_PATH = ROOT_PATH / "agents_config.json"
 
 TURN_COUNT = 3
 KEYWORD_COUNT = 5
+RUNWAY_SAFETY_REPLACEMENTS = {
+    "tribunal": "civic forum",
+    "verdict": "annotation",
+    "verdicts": "annotations",
+    "judgment": "reflection",
+    "judgement": "reflection",
+    "punishment": "revision",
+    "severe": "precise",
+    "intense": "focused",
+    "high consequence": "ceremonial",
+    "nick knight": "editorial photography",
+    "iris van herpen": "sculptural fashion",
+    "dazed digital": "fashion publication",
+    "vogue": "fashion magazine",
+}
 
-GEMINI_MODEL = "gemini-3-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 RUNWAY_MODEL = "gpt_image_2"
-RUNWAY_RATIO = "1920:1920"
+RUNWAY_GEMINI_IMAGE_MODEL = "gemini_image3_pro"
+RUNWAY_ASPECT_RATIO = "1:1"
+RUNWAY_RATIO_BY_MODEL = {
+    "gpt_image_2": {
+        "1:1": "1920:1920",
+    },
+    "gemini_image3_pro": {
+        "1:1": "1024:1024",
+    },
+}
 RUNWAY_QUALITY = "high"
+WEBP_QUALITY = 82
 RUNWAY_API_BASE = "https://api.dev.runwayml.com"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+INTEREST_WINDOW = 3
+DEFAULT_AGENT_ACTIONS = {"Initiate", "Critique", "Pivot"}
+PULSE_JITTER_MIN_SECONDS = 60
+PULSE_JITTER_MAX_SECONDS = 120
+RUNWAY_POLLING_DELAY_SECONDS = 5
+CATEGORY_OPTIONS = [
+    "Fashion",
+    "Illustration",
+    "Graphic Design",
+    "Architecture",
+    "UX/UI",
+    "Industrial Design",
+]
 
 app = modal.App(APP_NAME)
 data_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .pip_install("pillow", "fastapi[standard]")
+    .add_local_dir("./example", remote_path="/root/example")
 )
-secret = modal.Secret.from_dotenv()
 
 
 def utc_now() -> str:
@@ -54,6 +101,7 @@ def load_history() -> dict[str, Any]:
             "created_at": utc_now(),
             "updated_at": utc_now(),
             "turns": [],
+            "threads": [],
             "graph": {
                 "nodes": [],
                 "edges": [],
@@ -61,7 +109,236 @@ def load_history() -> dict[str, Any]:
         }
 
     with HISTORY_PATH.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+        history = json.load(fh)
+
+    history.setdefault("turns", [])
+    history.setdefault("threads", [])
+    history.setdefault("graph", {"nodes": [], "edges": []})
+    history["graph"].setdefault("nodes", [])
+    history["graph"].setdefault("edges", [])
+    return history
+
+
+def load_agents_config(override: dict[str, Any] | None = None) -> dict[str, Any]:
+    if isinstance(override, dict):
+        override.setdefault("agents", [])
+        return override
+
+    for path in (AGENTS_CONFIG_PATH, LOCAL_AGENTS_CONFIG_PATH):
+        if path.exists():
+            with path.open("r", encoding="utf-8") as fh:
+                config = json.load(fh)
+            config.setdefault("agents", [])
+            return config
+
+    return {"agents": []}
+
+
+def normalize_action(action: Any) -> str:
+    if not isinstance(action, str):
+        return "Critique"
+
+    normalized = action.strip().title()
+    if normalized in DEFAULT_AGENT_ACTIONS:
+        return normalized
+    return "Critique"
+
+
+def get_active_agents(agents_config: dict[str, Any]) -> list[dict[str, Any]]:
+    agents = agents_config.get("agents", [])
+    if not isinstance(agents, list):
+        return []
+
+    active_agents: list[dict[str, Any]] = []
+    for agent in agents:
+        if not isinstance(agent, dict):
+            continue
+
+        active_value = agent.get("active", True)
+        if isinstance(active_value, str):
+            active = active_value.strip().lower() not in {"false", "0", "no", "off"}
+        else:
+            active = bool(active_value)
+
+        if active:
+            active_agents.append(agent)
+
+    return active_agents
+
+
+def summarize_turn_for_agent(turn: dict[str, Any]) -> dict[str, Any]:
+    prompt_json = turn.get("prompt_json") if isinstance(turn.get("prompt_json"), dict) else {}
+    return {
+        "turn": turn.get("turn"),
+        "image_id": turn.get("image_id"),
+        "thread_id": turn.get("thread_id"),
+        "proposal": turn.get("proposal", ""),
+        "prompt": {
+            "scene_description": prompt_json.get("scene_description", ""),
+            "proposal": prompt_json.get("proposal", ""),
+            "keywords": prompt_json.get("keywords", turn.get("keywords", [])),
+        },
+        "critique": turn.get("critique", ""),
+        "keywords": turn.get("keywords", []),
+        "action": turn.get("action"),
+        "agent_id": turn.get("agent_id"),
+    }
+
+
+def recent_turns_for_agents(history: dict[str, Any], limit: int = INTEREST_WINDOW) -> list[dict[str, Any]]:
+    turns = history.get("turns", [])
+    if not isinstance(turns, list):
+        return []
+    return turns[-limit:]
+
+
+def next_turn_number(history: dict[str, Any]) -> int:
+    turns = history.get("turns", [])
+    if not isinstance(turns, list) or not turns:
+        return 1
+
+    max_turn = 0
+    for turn in turns:
+        if isinstance(turn, dict):
+            try:
+                max_turn = max(max_turn, int(turn.get("turn", 0)))
+            except (TypeError, ValueError):
+                continue
+    return max_turn + 1
+
+
+def new_image_id(prefix: str, agent_id: str, turn_number: int) -> str:
+    safe_agent_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", agent_id).strip("-") or "agent"
+    suffix = uuid.uuid4().hex[:8]
+    return f"{prefix}-{safe_agent_id}-turn-{turn_number}-{suffix}"
+
+
+def ensure_threads(history: dict[str, Any]) -> list[dict[str, Any]]:
+    threads = history.setdefault("threads", [])
+    if not threads:
+        for turn in history.get("turns", []):
+            if not isinstance(turn, dict):
+                continue
+            image_id = turn.get("image_id")
+            if not image_id:
+                continue
+            threads.append(
+                {
+                    "thread_id": turn.get("thread_id") or image_id,
+                    "root_image_id": turn.get("root_image_id") or image_id,
+                    "title": f"Turn {turn.get('turn', '')}".strip(),
+                    "active": True,
+                    "posts": [image_id],
+                    "comments": [],
+                    "created_at": turn.get("created_at", utc_now()),
+                    "updated_at": turn.get("created_at", utc_now()),
+                }
+            )
+        save_history(history)
+
+    return threads
+
+
+def find_thread(history: dict[str, Any], thread_id: str) -> dict[str, Any] | None:
+    for thread in ensure_threads(history):
+        if thread.get("thread_id") == thread_id:
+            return thread
+    return None
+
+
+def find_thread_for_image(history: dict[str, Any], image_id: str) -> dict[str, Any] | None:
+    for thread in ensure_threads(history):
+        if thread.get("root_image_id") == image_id or image_id in thread.get("posts", []):
+            return thread
+    return None
+
+
+def upsert_thread(history: dict[str, Any], *, thread_id: str, root_image_id: str, title: str, agent_id: str, interest_score: int, action: str) -> dict[str, Any]:
+    threads = ensure_threads(history)
+    existing = find_thread(history, thread_id)
+    if existing is None:
+        existing = {
+            "thread_id": thread_id,
+            "root_image_id": root_image_id,
+            "title": title,
+            "agent_id": agent_id,
+            "action": action,
+            "interest_score": interest_score,
+            "active": True,
+            "posts": [root_image_id],
+            "comments": [],
+            "created_at": utc_now(),
+            "updated_at": utc_now(),
+        }
+        threads.append(existing)
+        return existing
+
+    existing.setdefault("posts", [])
+    if root_image_id not in existing["posts"]:
+        existing["posts"].append(root_image_id)
+    existing["title"] = title or existing.get("title", "")
+    existing["agent_id"] = agent_id
+    existing["action"] = action
+    existing["interest_score"] = interest_score
+    existing["updated_at"] = utc_now()
+    return existing
+
+
+def append_thread_comment(
+    history: dict[str, Any],
+    *,
+    thread_id: str,
+    comment: str,
+    agent_id: str,
+    agent_name: str,
+    selected_image_id: str,
+    interest_score: int,
+) -> dict[str, Any]:
+    thread = find_thread(history, thread_id)
+    if thread is None:
+        thread = upsert_thread(
+            history,
+            thread_id=thread_id,
+            root_image_id=selected_image_id,
+            title=f"Thread {selected_image_id}",
+            agent_id=agent_id,
+            interest_score=interest_score,
+            action="Critique",
+        )
+
+    comment_record = {
+        "id": f"comment-{uuid.uuid4().hex[:10]}",
+        "agent_id": agent_id,
+        "agent_name": agent_name,
+        "post_image_id": selected_image_id,
+        "comment": comment,
+        "interest_score": interest_score,
+        "created_at": utc_now(),
+    }
+    thread.setdefault("comments", []).append(comment_record)
+    thread["updated_at"] = utc_now()
+    return comment_record
+
+
+def extract_first_string(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, str):
+                return item
+    return ""
+
+
+def prompt_payload_for_turn(turn: dict[str, Any]) -> dict[str, Any]:
+    prompt_json = turn.get("prompt_json")
+    if isinstance(prompt_json, dict):
+        return prompt_json
+    return {
+        "scene_description": turn.get("proposal", ""),
+        "proposal": turn.get("proposal", ""),
+        "keywords": turn.get("keywords", []),
+    }
 
 
 def save_history(history: dict[str, Any]) -> None:
@@ -71,6 +348,22 @@ def save_history(history: dict[str, Any]) -> None:
         json.dump(history, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     data_volume.commit()
+
+
+def update_studio_status(message: str, active: bool = True, agent_name: str | None = None) -> dict[str, Any]:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    status = {
+        "message": message,
+        "active": active,
+        "updated_at": utc_now(),
+    }
+    if agent_name:
+        status["agent_name"] = agent_name
+    with STUDIO_STATUS_PATH.open("w", encoding="utf-8") as fh:
+        json.dump(status, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    data_volume.commit()
+    return status
 
 
 def extract_json_object(text: str) -> dict[str, Any]:
@@ -89,17 +382,11 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 def gemini_api_key() -> str:
-    key = os.getenv("GOOGLE_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("GOOGLE_API_KEY is missing. Add it to .env before running the orchestrator.")
-    return key
+    return os.environ["GOOGLE_API_KEY"].strip()
 
 
 def runway_api_key() -> str:
-    key = os.getenv("RUNWAYML_API_SECRET", "").strip()
-    if not key:
-        raise RuntimeError("RUNWAYML_API_SECRET is missing. Add it to .env before running the orchestrator.")
-    return key
+    return os.environ["RUNWAYML_API_SECRET"].strip()
 
 
 def gemini_generate(
@@ -107,6 +394,7 @@ def gemini_generate(
     *,
     image_bytes: bytes | None = None,
     image_mime_type: str | None = None,
+    model: str = GEMINI_MODEL,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "contents": [
@@ -134,14 +422,20 @@ def gemini_generate(
         )
 
     request = urllib.request.Request(
-        url=f"{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent?key={gemini_api_key()}",
+        url=f"{GEMINI_API_BASE}/models/{model}:generateContent?key={gemini_api_key()}",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
 
-    with urllib.request.urlopen(request) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        raise RuntimeError(
+            f"HTTP {exc.code} calling Gemini: {exc.reason}. Response: {body or '<empty>'}"
+        ) from None
 
     candidates = data.get("candidates", [])
     if not candidates:
@@ -168,20 +462,36 @@ def runway_request(method: str, path: str, payload: dict[str, Any] | None = None
         method=method,
     )
 
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        raise RuntimeError(
+            f"HTTP {exc.code} calling Runway {path}: {exc.reason}. Response: {body or '<empty>'}"
+        ) from None
 
 
-def runway_create_text_to_image(prompt_text: str) -> dict[str, Any]:
+def runway_create_text_to_image(
+    prompt_text: str,
+    *,
+    model: str = RUNWAY_MODEL,
+    reference_images: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "model": model,
+        "promptText": prompt_text,
+        "ratio": runway_ratio_for_model(model),
+    }
+    if model != RUNWAY_GEMINI_IMAGE_MODEL:
+        payload["quality"] = RUNWAY_QUALITY
+    if reference_images:
+        payload["referenceImages"] = reference_images
+
     return runway_request(
         "POST",
         "/v1/text_to_image",
-        {
-            "model": RUNWAY_MODEL,
-            "promptText": prompt_text,
-            "ratio": RUNWAY_RATIO,
-            "quality": RUNWAY_QUALITY,
-        },
+        payload,
     )
 
 
@@ -208,10 +518,16 @@ def runway_wait_for_output(task: dict[str, Any], timeout_seconds: int = 600) -> 
         if status in {"FAILED", "CANCELLED", "CANCELED", "ERROR"}:
             raise RuntimeError(f"Runway task failed: {current}")
 
-        time.sleep(5)
+        # Delay between status checks to be a good citizen of the Runway API
+        time.sleep(RUNWAY_POLLING_DELAY_SECONDS)
         current = runway_get_task(str(task_id))
 
     raise TimeoutError(f"Timed out waiting for Runway task {task_id}")
+
+
+def is_runway_safety_failure(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "safety" in message or "moderation" in message or "input_preprocessing" in message
 
 
 def normalize_keyword(keyword: str) -> str:
@@ -237,10 +553,26 @@ def dedupe_keywords(keywords: list[str]) -> list[str]:
 def prompt_theme(turn_index: int) -> str:
     themes = [
         "a ceremonial civic oracle suspended between steel and cloud",
-        "a brutalist archive chamber where verdicts become architecture",
-        "a luminous final tribunal with the feeling of a future ritual",
+        "a monumental archive chamber where annotations become architecture",
+        "a luminous civic forum with the feeling of a future ritual",
     ]
     return themes[min(max(turn_index - 1, 0), len(themes) - 1)]
+
+
+def sanitize_for_runway(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: sanitize_for_runway(item) for key, item in value.items()}
+
+    if isinstance(value, list):
+        return [sanitize_for_runway(item) for item in value]
+
+    if isinstance(value, str):
+        text = value
+        for unsafe, replacement in RUNWAY_SAFETY_REPLACEMENTS.items():
+            text = re.sub(rf"\b{re.escape(unsafe)}\b", replacement, text, flags=re.IGNORECASE)
+        return text
+
+    return value
 
 
 def build_futurist_prompt(
@@ -251,11 +583,14 @@ def build_futurist_prompt(
     previous_summary = [
         {
             "turn": turn.get("turn"),
+            "proposal": turn.get("proposal", ""),
             "keywords": turn.get("keywords", []),
             "critique": turn.get("critique", ""),
         }
         for turn in previous_turns
     ]
+
+    safe_schema_template = sanitize_for_runway(schema_template)
 
     prompt = f"""
 You are Agent 1, the Futurist for the Areopagus project.
@@ -269,13 +604,17 @@ Rules:
   scene_description, subject, attire, lighting_and_effects, environment,
   color_palette, style, camera.
 - Add these top-level keys:
-  turn, debate_context, keywords
+  turn, debate_context, proposal, keywords
+- `proposal` must be 2 to 3 sentences written as Agent 1's design review proposal.
+- The proposal should explain the design intent, composition, material choices, and what Agent 2 should evaluate.
 - `keywords` must be exactly 5 hash-tagged strings.
 - Make the image concept evolve across turns while preserving the Areopagus identity.
-- The result should feel cinematic, architectural, and high consequence.
+- The result should feel cinematic, architectural, ceremonial, and non-violent.
+- Avoid legal punishment, violence, threat, weapons, injury, gore, coercion, crime, detention, or execution language.
+- Prefer neutral art-direction words such as civic forum, archive, annotation, reflection, assembly, ritual, structure, and studio.
 
 Schema template:
-{json.dumps(schema_template, indent=2, ensure_ascii=False)}
+{json.dumps(safe_schema_template, indent=2, ensure_ascii=False)}
 
 Debate history:
 {json.dumps(previous_summary, indent=2, ensure_ascii=False)}
@@ -288,8 +627,14 @@ Concept direction:
 """
 
     prompt_json = gemini_generate(prompt)
+    prompt_json = sanitize_for_runway(prompt_json)
     prompt_json["turn"] = turn_index
-    prompt_json["debate_context"] = previous_summary
+    prompt_json["debate_context"] = sanitize_for_runway(previous_summary)
+    if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
+        prompt_json["proposal"] = (
+            "Agent 1 proposes a civic image system where architecture, atmosphere, and ritual structure are held in balance. "
+            "Agent 2 should evaluate whether the composition reads clearly as an Areopagus design review object."
+        )
 
     if "keywords" not in prompt_json or not isinstance(prompt_json["keywords"], list):
         prompt_json["keywords"] = [
@@ -365,9 +710,42 @@ def runway_image_url(task: Any) -> str:
 
 
 def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
-    with urllib.request.urlopen(image_url) as response:
-        content_type = response.headers.get_content_type() or "image/png"
-        return response.read(), content_type
+    try:
+        with urllib.request.urlopen(image_url) as response:
+            content_type = response.headers.get_content_type() or "image/png"
+            return response.read(), content_type
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        raise RuntimeError(
+            f"HTTP {exc.code} fetching image {image_url}: {exc.reason}. Response: {body or '<empty>'}"
+        ) from None
+
+
+def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
+    from io import BytesIO
+
+    from PIL import Image, ImageOps
+
+    image_bytes, source_mime_type = fetch_image_bytes(image_url)
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    webp_path = IMAGE_DIR / f"{image_id}.webp"
+
+    with Image.open(BytesIO(image_bytes)) as source:
+        converted = ImageOps.fit(source.convert("RGB"), (1080, 1080), method=Image.Resampling.LANCZOS)
+        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+        width, height = converted.size
+
+    return {
+        "path": str(webp_path),
+        "format": "webp",
+        "quality": WEBP_QUALITY,
+        "source_mime_type": source_mime_type,
+        "size_bytes": webp_path.stat().st_size,
+        "dimensions": {
+            "width": width,
+            "height": height,
+        },
+    }
 
 
 def critique_image(
@@ -384,9 +762,10 @@ Analyze the image against the Futurist JSON prompt below.
 Rules:
 - Return JSON only. No markdown, no code fences, no commentary.
 - `critique` must be exactly two sentences.
+- `critique` should respond directly to Agent 1's `proposal` like a design review, not just summarize keywords.
 - `agreed_keywords` must contain exactly 5 hash-tagged strings.
 - The keywords should be the strongest shared language between the prompt and the image.
-- Be severe but useful. Focus on material fidelity, structure, atmosphere, and symbolic clarity.
+- Be precise but useful. Focus on material fidelity, structure, atmosphere, and symbolic clarity.
 
 Prompt JSON:
 {json.dumps(prompt_json, indent=2, ensure_ascii=False)}
@@ -443,6 +822,660 @@ def reconcile_keywords(
     )
 
 
+def agent_gemini_model(agent: dict[str, Any]) -> str:
+    gemini_model = agent.get("gemini_model")
+    if isinstance(gemini_model, str) and gemini_model.strip():
+        return gemini_model.strip()
+
+    model_name = str(agent.get("model", "")).strip().lower()
+    if "gemini" in model_name:
+        return "gemini-2.5-flash"
+
+    return GEMINI_MODEL
+
+
+def agent_runway_model(agent: dict[str, Any]) -> str:
+    raw_model = agent.get("selected_model") or agent.get("model") or RUNWAY_MODEL
+    model = str(raw_model).strip().lower().replace("-", "_").replace(" ", "_")
+
+    aliases = {
+        "gpt_image_2": "gpt_image_2",
+        "gptimage2": "gpt_image_2",
+        "gpt_image2": "gpt_image_2",
+        "gemini_image3_pro": "gemini_image3_pro",
+        "gemini_3_pro": "gemini_image3_pro",
+        "gemini3pro": "gemini_image3_pro",
+        "gemini_3pro": "gemini_image3_pro",
+    }
+
+    if model in aliases:
+        return aliases[model]
+
+    if "gemini" in model and "image3" in model:
+        return "gemini_image3_pro"
+    if "gpt" in model and "image" in model:
+        return "gpt_image_2"
+
+    return RUNWAY_MODEL
+
+
+def runway_ratio_for_model(model: str, aspect_ratio: str = RUNWAY_ASPECT_RATIO) -> str:
+    model_ratios = RUNWAY_RATIO_BY_MODEL.get(model)
+    if model_ratios and aspect_ratio in model_ratios:
+        return model_ratios[aspect_ratio]
+
+    return RUNWAY_RATIO_BY_MODEL[RUNWAY_MODEL][aspect_ratio]
+
+
+def runway_reference_limit(model: str) -> int:
+    return 14 if model == RUNWAY_GEMINI_IMAGE_MODEL else 16
+
+
+def build_runway_reference_images(
+    agent: dict[str, Any],
+    *,
+    selected_turn: dict[str, Any] | None = None,
+    model: str = RUNWAY_MODEL,
+) -> list[dict[str, Any]]:
+    references: list[dict[str, Any]] = []
+
+    def add_reference(uri: Any, tag: str) -> None:
+        if not isinstance(uri, str) or not uri.strip():
+            return
+        references.append({"uri": uri.strip(), "tag": tag})
+
+    agent_references = agent.get("referenceImages") or agent.get("reference_images") or []
+    if isinstance(agent_references, dict):
+        agent_references = [agent_references]
+    if isinstance(agent_references, list):
+        for index, reference in enumerate(agent_references, start=1):
+            if isinstance(reference, str):
+                add_reference(reference, f"AgentRef{index}")
+            elif isinstance(reference, dict):
+                add_reference(
+                    reference.get("uri") or reference.get("url") or reference.get("image_url"),
+                    reference.get("tag") or f"AgentRef{index}",
+                )
+
+    add_reference(agent.get("prompt_image") or agent.get("promptImage"), "AgentPrompt")
+
+    if selected_turn is not None:
+        add_reference(selected_turn.get("image_url"), "CurrentThread")
+
+    unique: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for reference in references:
+        uri = reference["uri"]
+        if uri in seen:
+            continue
+        seen.add(uri)
+        unique.append(reference)
+
+    return unique[:runway_reference_limit(model)]
+
+
+def format_prompt_reference_tags(reference_images: list[dict[str, Any]]) -> str:
+    tags = [reference.get("tag") for reference in reference_images if isinstance(reference.get("tag"), str) and reference.get("tag")]
+    return ", ".join(f"@{tag}" for tag in tags)
+
+
+def stringify_prompt_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        parts = [stringify_prompt_value(item) for item in value]
+        return ", ".join(part for part in parts if part)
+    if isinstance(value, dict):
+        parts: list[str] = []
+        for key, item in value.items():
+            rendered = stringify_prompt_value(item)
+            if rendered:
+                parts.append(f"{key}: {rendered}")
+        return "; ".join(parts)
+    return ""
+
+
+def build_runway_prompt_text(
+    prompt_json: dict[str, Any],
+    *,
+    model: str,
+    agent: dict[str, Any],
+    assessment: dict[str, Any],
+    recent_turns: list[dict[str, Any]],
+    action: str,
+    selected_turn: dict[str, Any] | None = None,
+    reference_images: list[dict[str, Any]] | None = None,
+) -> str:
+    reference_images = reference_images or []
+    reference_tags = format_prompt_reference_tags(reference_images)
+
+    if model == RUNWAY_GEMINI_IMAGE_MODEL:
+        lines = [
+            f"Scene: {stringify_prompt_value(prompt_json.get('scene_description', ''))}",
+            f"Subject: {stringify_prompt_value(prompt_json.get('subject', {}))}",
+            f"Attire: {stringify_prompt_value(prompt_json.get('attire', {}))}",
+            f"Lighting and effects: {stringify_prompt_value(prompt_json.get('lighting_and_effects', {}))}",
+            f"Environment: {stringify_prompt_value(prompt_json.get('environment', {}))}",
+            f"Color palette: {stringify_prompt_value(prompt_json.get('color_palette', {}))}",
+            f"Style: {stringify_prompt_value(prompt_json.get('style', {}))}",
+            f"Camera: {stringify_prompt_value(prompt_json.get('camera', {}))}",
+        ]
+        prompt_str = "\n".join(line for line in lines if line)
+        if len(prompt_str) > 5000:
+            prompt_str = prompt_str[:5000]
+        return prompt_str
+
+    prompt_str = json.dumps(prompt_json, ensure_ascii=False, indent=2)
+    if len(prompt_str) > 5000:
+        prompt_str = prompt_str[:5000]
+    return prompt_str
+
+
+def clamp_interest_score(value: Any) -> int:
+    try:
+        score = int(round(float(value)))
+    except (TypeError, ValueError):
+        score = 0
+    return max(0, min(100, score))
+
+
+def assess_agent_interest(agent: dict[str, Any], recent_turns: list[dict[str, Any]]) -> dict[str, Any]:
+    prompt = f"""
+You are the autonomous decision engine for Areopagus.
+
+Return JSON only with this shape:
+{{
+  "agent_id": "...",
+  "agent_name": "...",
+  "interest_score": 0,
+  "action": "Initiate",
+  "selected_turn": 0,
+  "selected_image_id": "...",
+  "reason": "...",
+  "post_scores": [
+    {{
+      "turn": 0,
+      "image_id": "...",
+      "interest_score": 0,
+      "action": "Critique",
+      "reason": "..."
+    }}
+  ]
+}}
+
+Agent profile:
+{json.dumps({
+    "id": agent.get("id"),
+    "name": agent.get("name"),
+    "active": agent.get("active", True),
+    "persona": agent.get("persona", ""),
+    "model": agent.get("model", ""),
+}, indent=2, ensure_ascii=False)}
+
+Recent posts:
+{json.dumps([summarize_turn_for_agent(turn) for turn in recent_turns], indent=2, ensure_ascii=False)}
+
+Rules:
+- Score each of the recent posts from 0 to 100.
+- Pick the single highest-interest post for the top-level fields.
+- Use Initiate when the agent wants to start a new direction or thread.
+- Use Critique when the best move is to comment on the existing thread without generating a new image.
+- Use Pivot when the agent wants to refine the selected prompt into a reply image.
+- If the agent is modelled as image-first, lean toward Initiate or Pivot when the fit is strong.
+- Keep reasons short and operational.
+"""
+
+    assessment = gemini_generate(prompt, model=agent_gemini_model(agent))
+    assessment["agent_id"] = agent.get("id")
+    assessment["agent_name"] = agent.get("name", agent.get("id", "Agent"))
+    assessment["interest_score"] = clamp_interest_score(assessment.get("interest_score"))
+    assessment["action"] = normalize_action(assessment.get("action"))
+    assessment["selected_turn"] = assessment.get("selected_turn")
+    assessment["selected_image_id"] = assessment.get("selected_image_id") or ""
+
+    post_scores = assessment.get("post_scores", [])
+    if not isinstance(post_scores, list):
+        post_scores = []
+
+    normalized_scores: list[dict[str, Any]] = []
+    for score in post_scores:
+        if not isinstance(score, dict):
+            continue
+        normalized_scores.append(
+            {
+                "turn": score.get("turn"),
+                "image_id": score.get("image_id"),
+                "interest_score": clamp_interest_score(score.get("interest_score")),
+                "action": normalize_action(score.get("action")),
+                "reason": score.get("reason", ""),
+            }
+        )
+
+    if normalized_scores:
+        best_score = max(normalized_scores, key=lambda item: item["interest_score"])
+        assessment["selected_turn"] = best_score.get("turn", assessment.get("selected_turn"))
+        assessment["selected_image_id"] = best_score.get("image_id", assessment.get("selected_image_id"))
+        assessment["interest_score"] = clamp_interest_score(best_score.get("interest_score"))
+        assessment["action"] = normalize_action(best_score.get("action"))
+        assessment["reason"] = assessment.get("reason") or best_score.get("reason", "")
+
+    assessment["post_scores"] = normalized_scores
+    return assessment
+
+
+def build_initiate_prompt_json(
+    agent: dict[str, Any],
+    recent_turns: list[dict[str, Any]],
+    assessment: dict[str, Any],
+    schema_template: dict[str, Any],
+    turn_number: int,
+) -> dict[str, Any]:
+    prompt = f"""
+You are drafting a brand-new Areopagus thread.
+
+Return JSON only. Use the schema template below as the structural guide, then expand it into a fresh prompt that feels like a new thread rather than a revision.
+
+Agent profile:
+{json.dumps({
+    "id": agent.get("id"),
+    "name": agent.get("name"),
+    "persona": agent.get("persona", ""),
+    "model": agent.get("model", ""),
+}, indent=2, ensure_ascii=False)}
+
+Interest assessment:
+{json.dumps(assessment, indent=2, ensure_ascii=False)}
+
+Recent posts:
+{json.dumps([summarize_turn_for_agent(turn) for turn in recent_turns], indent=2, ensure_ascii=False)}
+
+Schema template:
+{json.dumps(sanitize_for_runway(schema_template), indent=2, ensure_ascii=False)}
+
+Rules:
+- Keep the same top-level keys from the schema template.
+- Add turn, debate_context, proposal, and keywords.
+- proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
+- keywords must be exactly 5 hash-tagged strings.
+- The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
+- Return JSON only.
+"""
+
+    prompt_json = gemini_generate(prompt, model=agent_gemini_model(agent))
+    prompt_json = sanitize_for_runway(prompt_json)
+    prompt_json["debate_context"] = sanitize_for_runway([summarize_turn_for_agent(turn) for turn in recent_turns])
+    if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
+        prompt_json["proposal"] = (
+            f"{agent.get('name', 'Agent')} initiates a new Areopagus thread with a clear civic gesture and a sharp visual thesis. "
+            "The new prompt should feel like a decisive opening move rather than a continuation of the previous frame."
+        )
+    if "keywords" not in prompt_json or not isinstance(prompt_json["keywords"], list):
+        prompt_json["keywords"] = ["#areopagus", "#civic", "#ritual", "#studio", "#architecture"]
+    prompt_json["keywords"] = dedupe_keywords(prompt_json["keywords"])
+    prompt_json["turn"] = turn_number
+    return prompt_json
+
+
+def classify_initiation_category(
+    *,
+    agent: dict[str, Any],
+    assessment: dict[str, Any],
+    prompt_json: dict[str, Any],
+) -> str:
+    prompt = f"""
+Based on this prompt, which one category fits best: {CATEGORY_OPTIONS}?
+
+Return JSON only with the shape:
+{{"category":"..."}}
+
+Rules:
+- Choose exactly one category from the allowed list.
+- Prefer the closest visual discipline.
+- Keep the answer short and exact.
+
+Agent profile:
+{json.dumps({
+    "id": agent.get("id"),
+    "name": agent.get("name"),
+    "persona": agent.get("persona", ""),
+    "model": agent.get("model", ""),
+}, indent=2, ensure_ascii=False)}
+
+Interest assessment:
+{json.dumps(assessment, indent=2, ensure_ascii=False)}
+
+Prompt:
+{json.dumps(sanitize_for_runway(prompt_json), indent=2, ensure_ascii=False)}
+"""
+
+    category_json = gemini_generate(prompt, model=GEMINI_MODEL)
+    raw_category = category_json.get("category")
+    if not isinstance(raw_category, str):
+        raw_category = ""
+
+    normalized = raw_category.strip()
+    for option in CATEGORY_OPTIONS:
+        if normalized.lower() == option.lower():
+            return option
+
+    lowered = normalized.lower()
+    for option in CATEGORY_OPTIONS:
+        if option.lower() in lowered:
+            return option
+
+    return "Illustration"
+
+
+def build_pivot_prompt_json(
+    agent: dict[str, Any],
+    selected_turn: dict[str, Any],
+    recent_turns: list[dict[str, Any]],
+    assessment: dict[str, Any],
+    schema_template: dict[str, Any],
+    turn_number: int,
+) -> dict[str, Any]:
+    selected_prompt = prompt_payload_for_turn(selected_turn)
+    prompt = f"""
+You are refining the most recent Areopagus prompt into a reply image.
+
+Return JSON only. Keep the thread identity recognizable, but adjust the composition, material emphasis, or atmosphere in response to the agent's judgment.
+
+Agent profile:
+{json.dumps({
+    "id": agent.get("id"),
+    "name": agent.get("name"),
+    "persona": agent.get("persona", ""),
+    "model": agent.get("model", ""),
+}, indent=2, ensure_ascii=False)}
+
+Interest assessment:
+{json.dumps(assessment, indent=2, ensure_ascii=False)}
+
+Selected prompt:
+{json.dumps(sanitize_for_runway(selected_prompt), indent=2, ensure_ascii=False)}
+
+Recent posts:
+{json.dumps([summarize_turn_for_agent(turn) for turn in recent_turns], indent=2, ensure_ascii=False)}
+
+Schema template:
+{json.dumps(sanitize_for_runway(schema_template), indent=2, ensure_ascii=False)}
+
+Rules:
+- Keep the same top-level keys from the schema template.
+- Add turn, debate_context, proposal, and keywords.
+- proposal should explain what changed from the selected prompt and why.
+- keywords must be exactly 5 hash-tagged strings.
+- Make the image feel like a reply rather than a new standalone thread.
+- Return JSON only.
+"""
+
+    prompt_json = gemini_generate(prompt, model=agent_gemini_model(agent))
+    prompt_json = sanitize_for_runway(prompt_json)
+    prompt_json["debate_context"] = sanitize_for_runway([summarize_turn_for_agent(turn) for turn in recent_turns])
+    if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
+        prompt_json["proposal"] = (
+            f"{agent.get('name', 'Agent')} pivots the selected thread by tightening the composition and sharpening the visual argument. "
+            "The revised prompt should feel like a reply image with clearer emphasis and stronger structural intent."
+        )
+    if "keywords" not in prompt_json or not isinstance(prompt_json["keywords"], list):
+        prompt_json["keywords"] = ["#areopagus", "#reply", "#pivot", "#architecture", "#revision"]
+    prompt_json["keywords"] = dedupe_keywords(prompt_json["keywords"])
+    prompt_json["turn"] = turn_number
+    return prompt_json
+
+
+def build_comment_json(
+    agent: dict[str, Any],
+    selected_turn: dict[str, Any],
+    assessment: dict[str, Any],
+) -> dict[str, Any]:
+    prompt = f"""
+You are writing a short comment for the existing Areopagus thread.
+
+Return JSON only with the shape:
+{{"comment":"..."}}
+
+Agent profile:
+{json.dumps({
+    "id": agent.get("id"),
+    "name": agent.get("name"),
+    "persona": agent.get("persona", ""),
+    "model": agent.get("model", ""),
+}, indent=2, ensure_ascii=False)}
+
+Interest assessment:
+{json.dumps(assessment, indent=2, ensure_ascii=False)}
+
+Selected post:
+{json.dumps(summarize_turn_for_agent(selected_turn), indent=2, ensure_ascii=False)}
+
+Rules:
+- Write a concise, operational comment that would belong in an active design thread.
+- The comment should be one or two sentences at most.
+- Return JSON only.
+"""
+
+    comment_json = gemini_generate(prompt, model=agent_gemini_model(agent))
+    comment_text = comment_json.get("comment")
+    if not isinstance(comment_text, str) or not comment_text.strip():
+        comment_text = (
+            f"{agent.get('name', 'Agent')} thinks the post is close, but the next pass should sharpen the focal point and reduce noise."
+        )
+    return {"comment": comment_text.strip()}
+
+
+def record_generated_turn(
+    history: dict[str, Any],
+    *,
+    agent: dict[str, Any],
+    assessment: dict[str, Any],
+    category: str,
+    prompt_json: dict[str, Any],
+    prompt_text: str,
+    image_url: str,
+    image_webp: dict[str, Any],
+    image_id: str,
+    parent_image_id: str | None,
+    thread_id: str,
+    action: str,
+    runway_model: str,
+) -> dict[str, Any]:
+    turn_number = int(prompt_json.get("turn") or next_turn_number(history))
+
+    turn_record = {
+        "turn": turn_number,
+        "created_at": utc_now(),
+        "thread_id": thread_id,
+        "parent_image_id": parent_image_id,
+        "agent_id": agent.get("id"),
+        "agent_name": agent.get("name"),
+        "runway_model": runway_model,
+        "action": action,
+        "category": category,
+        "interest_score": assessment.get("interest_score", 0),
+        "selected_turn": assessment.get("selected_turn"),
+        "selected_image_id": assessment.get("selected_image_id", ""),
+        "prompt_json": prompt_json,
+        "prompt_text": prompt_text,
+        "proposal": prompt_json.get("proposal", ""),
+        "image_id": image_id,
+        "image_url": image_url,
+        "image_webp": image_webp,
+        "critique": "",
+        "agent2": {},
+        "keywords": prompt_json.get("keywords", []),
+        "knowledge_graph": {
+            "image_id": image_id,
+            "keyword_links": [
+                {
+                    "keyword": keyword,
+                    "image_id": image_id,
+                }
+                for keyword in prompt_json.get("keywords", [])
+            ],
+        },
+    }
+    turn_record["prompt_json"]["category"] = category
+
+    nodes, edges = graph_nodes_for_turn(turn_record)
+    history.setdefault("turns", []).append(turn_record)
+    history.setdefault("graph", {}).setdefault("nodes", []).extend(nodes)
+    history.setdefault("graph", {}).setdefault("edges", []).extend(edges)
+
+    thread = upsert_thread(
+        history,
+        thread_id=thread_id,
+        root_image_id=turn_record["image_id"] if action == "Initiate" else (parent_image_id or turn_record["image_id"]),
+        title=f"{agent.get('name', 'Agent')} / {action}",
+        agent_id=str(agent.get("id", "")),
+        interest_score=assessment.get("interest_score", 0),
+        action=action,
+    )
+    thread.setdefault("posts", [])
+    if turn_record["image_id"] not in thread["posts"]:
+        thread["posts"].append(turn_record["image_id"])
+    thread["updated_at"] = utc_now()
+    thread["category"] = category
+    if action == "Initiate":
+        thread["root_image_id"] = turn_record["image_id"]
+
+    save_history(history)
+    return turn_record
+
+
+def dispatch_agent_action(
+    history: dict[str, Any],
+    agent: dict[str, Any],
+    assessment: dict[str, Any],
+    recent_turns: list[dict[str, Any]],
+    schema_template: dict[str, Any],
+) -> dict[str, Any]:
+    action = normalize_action(assessment.get("action"))
+    turn_number = next_turn_number(history)
+    runway_model = agent_runway_model(agent)
+    selected_turn_number = assessment.get("selected_turn")
+    selected_turn = None
+    if selected_turn_number is not None:
+        for turn in reversed(recent_turns):
+            if turn.get("turn") == selected_turn_number:
+                selected_turn = turn
+                break
+    if selected_turn is None and recent_turns:
+        selected_turn = recent_turns[-1]
+
+    if action == "Initiate":
+        prompt_json = build_initiate_prompt_json(agent, recent_turns, assessment, schema_template, turn_number)
+        category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
+        prompt_json["category"] = category
+        reference_images = build_runway_reference_images(agent, model=runway_model)
+        prompt_text = build_runway_prompt_text(
+            prompt_json,
+            model=runway_model,
+            agent=agent,
+            assessment=assessment,
+            recent_turns=recent_turns,
+            action=action,
+            reference_images=reference_images,
+        )
+        runway_task = runway_wait_for_output(
+            runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
+        )
+        image_url = runway_image_url(runway_task)
+        image_id = new_image_id("thread", str(agent.get("id", "agent")), turn_number)
+        image_webp = save_webp_image(image_url, image_id)
+        thread_id = image_id
+        return {
+            "status": "created_thread",
+            "action": action,
+            "record": record_generated_turn(
+                history,
+                agent=agent,
+                assessment=assessment,
+                prompt_json=prompt_json,
+                prompt_text=prompt_text,
+                image_url=image_url,
+                image_webp=image_webp,
+                image_id=image_id,
+                parent_image_id=None,
+                thread_id=thread_id,
+                action=action,
+                category=category,
+                runway_model=runway_model,
+            ),
+        }
+
+    if action == "Pivot":
+        if selected_turn is None:
+            raise RuntimeError("Pivot requested but no recent post was available to refine.")
+        prompt_json = build_pivot_prompt_json(agent, selected_turn, recent_turns, assessment, schema_template, turn_number)
+        category = str(selected_turn.get("category") or "")
+        if not category:
+            thread = find_thread_for_image(history, str(selected_turn.get("image_id", "")))
+            category = str(thread.get("category") if thread else "")
+        reference_images = build_runway_reference_images(agent, selected_turn=selected_turn, model=runway_model)
+        prompt_text = build_runway_prompt_text(
+            prompt_json,
+            model=runway_model,
+            agent=agent,
+            assessment=assessment,
+            recent_turns=recent_turns,
+            action=action,
+            selected_turn=selected_turn,
+            reference_images=reference_images,
+        )
+        runway_task = runway_wait_for_output(
+            runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
+        )
+        image_url = runway_image_url(runway_task)
+        parent_image_id = str(selected_turn.get("image_id", ""))
+        thread = find_thread_for_image(history, parent_image_id)
+        thread_id = str(thread.get("thread_id")) if thread and thread.get("thread_id") else parent_image_id
+        image_id = new_image_id("reply", str(agent.get("id", "agent")), turn_number)
+        image_webp = save_webp_image(image_url, image_id)
+        return {
+            "status": "created_reply_image",
+            "action": action,
+            "record": record_generated_turn(
+                history,
+                agent=agent,
+                assessment=assessment,
+                prompt_json=prompt_json,
+                prompt_text=prompt_text,
+                image_url=image_url,
+                image_webp=image_webp,
+                image_id=image_id,
+                parent_image_id=parent_image_id,
+                thread_id=thread_id,
+                action=action,
+                category=category or "Illustration",
+                runway_model=runway_model,
+            ),
+        }
+
+    if selected_turn is None:
+        raise RuntimeError("Critique requested but no recent post was available to comment on.")
+
+    comment_json = build_comment_json(agent, selected_turn, assessment)
+    thread = find_thread_for_image(history, str(selected_turn.get("image_id", "")))
+    thread_id = str(thread.get("thread_id")) if thread and thread.get("thread_id") else str(selected_turn.get("image_id", ""))
+    category = str(selected_turn.get("category") or (thread.get("category") if thread else "") or "")
+    comment_record = append_thread_comment(
+        history,
+        thread_id=thread_id,
+        comment=comment_json["comment"],
+        agent_id=str(agent.get("id", "")),
+        agent_name=str(agent.get("name", agent.get("id", "Agent"))),
+        selected_image_id=str(selected_turn.get("image_id", "")),
+        interest_score=assessment.get("interest_score", 0),
+    )
+    save_history(history)
+    return {
+        "status": "added_comment",
+        "action": action,
+        "record": comment_record,
+    }
+
+
 def graph_nodes_for_turn(turn_record: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     turn_id = f"turn-{turn_record['turn']}"
     image_id = turn_record["image_id"]
@@ -494,78 +1527,151 @@ def graph_nodes_for_turn(turn_record: dict[str, Any]) -> tuple[list[dict[str, An
 @app.function(
     image=image,
     volumes={"/data": data_volume},
-    secrets=[secret],
+    secrets=[
+        modal.Secret.from_name("google-api-secret"),
+        modal.Secret.from_name("runway-secret"),
+    ],
     timeout=60 * 30,
 )
-def orchestrate() -> dict[str, Any]:
+def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str, Any]:
     schema_template = load_schema_template()
     history = load_history()
+    agents_config = load_agents_config(agents_config_payload)
+    active_agents = get_active_agents(agents_config)
+    recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
+    results: list[dict[str, Any]] = []
+    skipped_agents: list[dict[str, Any]] = []
 
-    previous_turns = history.get("turns", [])
-    turn_outputs: list[dict[str, Any]] = []
+    ensure_threads(history)
+    update_studio_status("Pulse started", active=True)
 
-    for turn_index in range(1, TURN_COUNT + 1):
-        prompt_json = build_futurist_prompt(
-            schema_template=schema_template,
-            turn_index=turn_index,
-            previous_turns=previous_turns,
-        )
-
-        prompt_text = json.dumps(prompt_json, ensure_ascii=False, indent=2)
-        runway_task = runway_wait_for_output(runway_create_text_to_image(prompt_text))
-
-        image_url = runway_image_url(runway_task)
-        critique_json = critique_image(
-            prompt_json=prompt_json,
-            image_url=image_url,
-        )
-
-        final_keywords = reconcile_keywords(
-            agent1_keywords=prompt_json.get("keywords", []),
-            agent2_keywords=critique_json.get("agreed_keywords", []),
-            prompt_json=prompt_json,
-            critique_json=critique_json,
-        )
-
-        turn_record = {
-            "turn": turn_index,
-            "created_at": utc_now(),
-            "prompt_json": prompt_json,
-            "prompt_text": prompt_text,
-            "image_id": f"turn-{turn_index}-image",
-            "image_url": image_url,
-            "critique": critique_json.get("critique", ""),
-            "agent2": critique_json,
-            "keywords": final_keywords,
-            "knowledge_graph": {
-                "image_id": f"turn-{turn_index}-image",
-                "keyword_links": [
-                    {
-                        "keyword": keyword,
-                        "image_id": f"turn-{turn_index}-image",
-                    }
-                    for keyword in final_keywords
-                ],
-            },
+    if not active_agents:
+        update_studio_status("Pulse complete", active=False)
+        return {
+            "history_path": str(HISTORY_PATH),
+            "agents_config_path": str(AGENTS_CONFIG_PATH),
+            "active_agents": 0,
+            "processed": 0,
+            "skipped": 0,
+            "results": [],
+            "note": "No active agents were found in agents_config.json.",
         }
 
-        nodes, edges = graph_nodes_for_turn(turn_record)
-        history.setdefault("turns", []).append(turn_record)
-        history.setdefault("graph", {}).setdefault("nodes", []).extend(nodes)
-        history.setdefault("graph", {}).setdefault("edges", []).extend(edges)
-        save_history(history)
+    jitter_log: list[dict[str, Any]] = []
 
-        turn_outputs.append(turn_record)
-        previous_turns = history["turns"]
+    for index, agent in enumerate(active_agents):
+        agent_name = str(agent.get("name", agent.get("id", "Agent")))
+        try:
+            update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name)
+            assessment = assess_agent_interest(agent, recent_turns)
+            if normalize_action(assessment.get("action")) in {"Initiate", "Pivot"}:
+                update_studio_status(f"{agent_name} is generating image...", active=True, agent_name=agent_name)
+            else:
+                update_studio_status(f"{agent_name} is writing critique...", active=True, agent_name=agent_name)
+            action_result = dispatch_agent_action(
+                history=history,
+                agent=agent,
+                assessment=assessment,
+                recent_turns=recent_turns,
+                schema_template=schema_template,
+            )
+            recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
+            results.append(
+                {
+                    "agent_id": agent.get("id"),
+                    "agent_name": agent_name,
+                    "assessment": assessment,
+                    "action_result": action_result,
+                }
+            )
+        except Exception as exc:
+            skipped_agents.append(
+                {
+                    "agent_id": agent.get("id"),
+                    "agent_name": agent_name,
+                    "error": str(exc),
+                }
+            )
+            continue
 
+        if index < len(active_agents) - 1:
+            jitter_seconds = random.uniform(PULSE_JITTER_MIN_SECONDS, PULSE_JITTER_MAX_SECONDS)
+            update_studio_status(
+                f"{agent_name} is waiting {round(jitter_seconds, 2)}s before the next agent...",
+                active=True,
+                agent_name=agent_name,
+            )
+            jitter_log.append(
+                {
+                    "after_agent_id": agent.get("id"),
+                    "after_agent_name": agent_name,
+                    "jitter_seconds": round(jitter_seconds, 2),
+                }
+            )
+            time.sleep(jitter_seconds)
+
+    save_history(history)
+    update_studio_status("Pulse complete", active=False)
     return {
         "history_path": str(HISTORY_PATH),
-        "turns_completed": len(turn_outputs),
-        "latest_turn": turn_outputs[-1] if turn_outputs else None,
+        "agents_config_path": str(AGENTS_CONFIG_PATH),
+        "active_agents": len(active_agents),
+        "processed": len(results),
+        "skipped": len(skipped_agents),
+        "pulse_mode": True,
+        "jitter_log": jitter_log,
+        "results": results,
+        "skipped_agents": skipped_agents,
+        "latest_turn": history.get("turns", [])[-1] if history.get("turns") else None,
     }
 
 
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="GET")
+def history_endpoint() -> dict[str, Any]:
+    data_volume.reload()
+    return load_history()
+
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="GET")
+def status_endpoint() -> dict[str, Any]:
+    data_volume.reload()
+    if not STUDIO_STATUS_PATH.exists():
+        return {
+            "message": "Waiting for pulse.",
+            "active": False,
+            "updated_at": utc_now(),
+        }
+    with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
 @app.local_entrypoint()
 def main() -> None:
-    result = orchestrate.remote()
+    agents_config_payload = None
+    agents_config_json = os.environ.get("AREOPAGUS_AGENTS_CONFIG_JSON", "").strip()
+    if agents_config_json:
+        agents_config_payload = json.loads(agents_config_json)
+        agents = agents_config_payload.get("agents", []) if isinstance(agents_config_payload, dict) else []
+        agent_names = [
+            str(agent.get("name") or agent.get("id") or "unnamed")
+            for agent in agents
+            if isinstance(agent, dict)
+        ]
+        print(
+            f"[orchestrator local_entrypoint] received {len(agent_names)} agents: {', '.join(agent_names)}",
+            flush=True,
+        )
+    else:
+        print("[orchestrator local_entrypoint] no AREOPAGUS_AGENTS_CONFIG_JSON payload found", flush=True)
+
+    result = orchestrate.remote(agents_config_payload)
     print(json.dumps(result, indent=2, ensure_ascii=False))

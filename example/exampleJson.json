@@ -1,67 +1,58 @@
 {
-  "scene_description": "A high-octane cinematic avant-garde fashion portrait featuring a female model with an intense direct gaze, enveloped in complex textures and light distortions.",
-  "subject": {
-    "type": "female fashion model",
-    "features": {
-      "face": "ethereal, porcelain skin, high cheekbones, neutral but intense expression",
-      "hair": "dark, sleek, partially obscured by the garment structures",
-      "makeup": "minimalist, dewy, allowing complex light refractions to define the face"
-   
-        },
-    "position": "Centered close-up portrait, framed by a massive, sculptural garment structure."
- 
+  "scene_description": "A cinematic avant-garde composition with a direct gaze, complex textures, and controlled light distortion.",
+  "subject": {
+    "type": "fashion subject",
+    "features": {
+      "face": "ethereal, porcelain skin, high cheekbones, neutral but focused expression",
+      "hair": "dark, sleek, partially obscured by the garment structures",
+      "makeup": "minimalist, dewy, allowing complex light refractions to define the face"
     },
-  "attire": {
-    "style": "Futuristic Haute Couture, Iris van Herpen inspired 3D structures.",
-    "collar": "Massive, fan-like sculptural collar.",
-    "textures": [
-      "Accordion-pleated translucent fabric",
-      "Layered holographic foil",
-      "Fine vertical digital scanning lines",
-      "Iridescent moiré patterns"
-   
-        ]
- 
-    },
-  "lighting_and_effects": {
-    "type": "Complex studio lighting filtered through crystalline or glass prisms.",
-    "primary_effect": "Prismatic chromatic aberration (RGB splitting), casting rainbow fringes on every edge.",
-    "shadows": "Soft, diffused shadows blending into deep charcoal and teal tones.",
-    "glitch_effect": "Digital slit-scan photography distortion; the subject appears to melt into rhythmic, geometric waves."
- 
-    },
-  "environment": {
-    "setting": "Minimalist studio backdrop.",
-    "background_color": "Neutral grey/off-white to emphasize foreground colors.",
-    "atmosphere": "Dreamlike, editorial, cyber-surrealist."
- 
-    },
-  "color_palette": {
-    "base_tones": [
-            "Charcoal black",
-            "Deep teal",
-            "Muted silver"
-        ],
-    "accent_colors": [
-            "Vivid cyan",
-            "Magenta",
-            "Yellow",
-            "Electric purple"
-        ],
-    "saturation": "High contrast between deep shadows and brilliant, glowing spectral highlights."
- 
-    },
-  "style": {
-    "medium": "Mixed Media / Digital Glitch Art",
-    "aesthetic": "Futuristic Haute Couture, heavily referencing the style of Nick Knight, Dazed Digital, and Vogue editorial photography.",
-    "quality": "Hyper-sharp facial features contrasted with heavily motion-blurred periphery.",
-    "aspect_ratio": "1:1"
- 
-    },
-  "camera": {
-    "focal_length": "85mm Prime portrait lens.",
-    "aperture": "f/2.8 for shallow depth of field.",
-    "shutter_speed_effect": "Long exposure ghosting and trailing effect on textures."
- 
-    }
+    "position": "Centered close-up portrait, framed by a massive, sculptural garment structure."
+  },
+  "attire": {
+    "style": "Futuristic haute couture with sculptural 3D structures.",
+    "collar": "Massive, fan-like sculptural collar.",
+    "textures": [
+      "Accordion-pleated translucent fabric",
+      "Layered holographic foil",
+      "Fine vertical digital scanning lines",
+      "Iridescent moire patterns"
+    ]
+  },
+  "lighting_and_effects": {
+    "type": "Complex studio lighting filtered through crystalline or glass prisms.",
+    "primary_effect": "Prismatic chromatic aberration (RGB splitting), casting rainbow fringes on every edge.",
+    "shadows": "Soft, diffused shadows blending into deep charcoal and teal tones.",
+    "glitch_effect": "Digital slit-scan photography distortion; the subject appears to melt into rhythmic, geometric waves."
+  },
+  "environment": {
+    "setting": "Minimalist studio backdrop.",
+    "background_color": "Neutral grey/off-white to emphasize foreground colors.",
+    "atmosphere": "Dreamlike, editorial, cyber-surrealist."
+  },
+  "color_palette": {
+    "base_tones": [
+      "Charcoal black",
+      "Deep teal",
+      "Muted silver"
+    ],
+    "accent_colors": [
+      "Vivid cyan",
+      "Magenta",
+      "Yellow",
+      "Electric purple"
+    ],
+    "saturation": "High contrast between deep shadows and brilliant, glowing spectral highlights."
+  },
+  "style": {
+    "medium": "Mixed Media / Digital Glitch Art",
+    "aesthetic": "Futuristic haute couture with editorial composition, digital glitch treatment, and sculptural lighting.",
+    "quality": "Hyper-sharp facial features contrasted with heavily motion-blurred periphery.",
+    "aspect_ratio": "1:1"
+  },
+  "camera": {
+    "focal_length": "85mm Prime portrait lens.",
+    "aperture": "f/2.8 for shallow depth of field.",
+    "shutter_speed_effect": "Long exposure ghosting and trailing effect on textures."
+  }
 }

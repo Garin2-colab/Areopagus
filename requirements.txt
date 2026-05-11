@@ -1,3 +1,4 @@
 runwayml
 modal
 python-dotenv
+pillow

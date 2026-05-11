@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
-type MockHistory = typeof import("../data/mock_history.json");
-type Turn = MockHistory["turns"][number];
+import type { HistoryTurn } from "@/lib/history";
 
 type GraphNode =
   | {
@@ -39,10 +38,11 @@ const ForceGraph2D = dynamic(async () => (await import("react-force-graph-2d")).
   ssr: false
 });
 
-function buildGraph(turns: Turn[]) {
+function buildGraph(turns: HistoryTurn[]) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
   const keywordNodes = new Map<string, GraphNode>();
+  const imageKeywords = new Map<string, string[]>();
 
   for (const turn of turns) {
     const imageNode: GraphNode = {
@@ -67,20 +67,26 @@ function buildGraph(turns: Turn[]) {
 
       links.push({ source: keyword, target: turn.image_id });
     }
+
+    imageKeywords.set(turn.image_id, [...turn.keywords]);
   }
 
-  return { nodes, links };
+  return { nodes, links, imageKeywords };
 }
 
 type KnowledgeWebProps = {
-  turns: Turn[];
+  turns: HistoryTurn[];
   onImageSelect: (turnId: string) => void;
   selectedTurnId?: string | null;
+  resetToken?: number;
 };
 
-export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId }: KnowledgeWebProps) {
+export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId, resetToken = 0 }: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
-  const { nodes, links } = useMemo(() => buildGraph(turns), [turns]);
+  const graphFrameRef = useRef<HTMLDivElement | null>(null);
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
+  const { nodes, links, imageKeywords } = useMemo(() => buildGraph(turns), [turns]);
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.kind === "image" && node.id === selectedTurnId) ?? null,
@@ -88,101 +94,228 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId }: Knowledge
   );
 
   useEffect(() => {
-    if (!graphRef.current) return;
-    graphRef.current.zoomToFit(300, 60);
+    const frame = graphFrameRef.current;
+    if (!frame) return;
+
+    const updateSize = () => {
+      const bounds = frame.getBoundingClientRect();
+      setGraphSize({
+        width: Math.max(1, Math.floor(bounds.width)),
+        height: Math.max(1, Math.floor(bounds.height))
+      });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(frame);
+
+    return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!graphRef.current || graphSize.width <= 1 || graphSize.height <= 1) return;
+
+    const resetGraph = () => {
+      graphRef.current?.d3ReheatSimulation?.();
+      graphRef.current?.centerAt?.(0, 0, 0);
+      graphRef.current?.zoomToFit?.(0, 90);
+    };
+
+    const animationFrame = requestAnimationFrame(resetGraph);
+    const settleTimer = window.setTimeout(resetGraph, 120);
+    const finalTimer = window.setTimeout(resetGraph, 420);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(finalTimer);
+    };
+  }, [graphSize.height, graphSize.width, resetToken]);
+
+  useEffect(() => {
+    const urls = Array.from(new Set(turns.map((turn) => turn.image_url)));
+    let cancelled = false;
+
+    const preload = async () => {
+      const cache = imageCacheRef.current;
+
+      await Promise.all(
+        urls.map(
+          (url) =>
+            new Promise<void>((resolve) => {
+              if (cache.has(url)) {
+                resolve();
+                return;
+              }
+
+              const image = new window.Image();
+              image.crossOrigin = "anonymous";
+              image.onload = () => {
+                cache.set(url, image);
+                resolve();
+              };
+              image.onerror = () => resolve();
+              image.src = url;
+            })
+        )
+      );
+
+      if (!cancelled) {
+        graphRef.current?.refresh?.();
+        graphRef.current?.d3ReheatSimulation?.();
+      }
+    };
+
+    preload();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [turns]);
+
+  const forceGraphData = useMemo(() => {
+    return {
+      nodes: nodes.map((node, index) => {
+        const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
+        const radius = node.kind === "image" ? 70 : 140;
+
+        return {
+          ...node,
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius
+        };
+      }),
+      links
+    };
+  }, [links, nodes]);
+
+  const handleBackgroundClick = () => {
+    requestAnimationFrame(() => {
+      graphRef.current?.centerAt?.(0, 0, 250);
+      graphRef.current?.zoomToFit?.(250, 90);
+    });
+  };
+
+  const getLabelOpacity = (globalScale: number, baseSize: number, hovered: boolean, selected: boolean) => {
+    if (hovered || selected) return 1;
+
+    const renderedSize = baseSize * Math.max(globalScale, 0.01);
+    if (renderedSize >= 11) return 1;
+    if (renderedSize <= 6) return 0;
+
+    return (renderedSize - 6) / 5;
+  };
+
   return (
-    <div className="border border-zinc-800 bg-black">
-      <div className="relative h-[72vh] min-h-[640px] bg-black">
-        <ForceGraph2D
-          ref={graphRef}
-          graphData={{ nodes, links }}
-          backgroundColor="#000000"
-          nodeRelSize={4}
-          linkWidth={0.6}
-          linkColor={() => "rgba(160,160,160,0.35)"}
-          linkDirectionalParticles={0}
-          nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
-            const typed = node as GraphNode;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            const radius = typed.kind === "image" ? 20 : 12;
-            ctx.arc(typed.x ?? 0, typed.y ?? 0, radius, 0, Math.PI * 2, false);
-            ctx.fill();
-          }}
-          nodeCanvasObjectMode={() => "replace"}
-          nodeCanvasObject={(node: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            const typed = node as GraphNode;
-            const hovered = hoverNode?.id === typed.id;
-            const selected = selectedNode?.id === typed.id;
-            const radius = typed.kind === "image" ? 16 : 6;
-            const labelScale = Math.max(0.55, 1 / globalScale);
-
-            ctx.save();
-            ctx.translate(typed.x ?? 0, typed.y ?? 0);
-
-            ctx.fillStyle = selected || hovered ? "#f5f5f5" : "#a3a3a3";
-            ctx.beginPath();
-            ctx.arc(0, 0, radius, 0, Math.PI * 2);
-            ctx.fill();
-
-            if (typed.kind === "image") {
-              ctx.strokeStyle = selected || hovered ? "#e5e5e5" : "#737373";
-              ctx.lineWidth = selected || hovered ? 1.5 : 1;
+    <div className="rounded-2xl border border-zinc-800 bg-black">
+      <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-black active:cursor-grabbing">
+        {graphSize.width > 1 && graphSize.height > 1 ? (
+          <ForceGraph2D
+            ref={graphRef}
+            width={graphSize.width}
+            height={graphSize.height}
+            graphData={forceGraphData}
+            backgroundColor="#000000"
+            nodeRelSize={4}
+            enableZoomInteraction
+            enablePanInteraction
+            linkWidth={0.6}
+            linkColor={() => "rgba(160,160,160,0.35)"}
+            linkDirectionalParticles={0}
+            onBackgroundClick={handleBackgroundClick}
+            nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
+              const typed = node as GraphNode;
+              ctx.fillStyle = color;
               ctx.beginPath();
-              ctx.arc(0, 0, radius + 4, 0, Math.PI * 2);
-              ctx.stroke();
+              const radius = typed.kind === "image" ? 22 : 12;
+              ctx.arc(typed.x ?? 0, typed.y ?? 0, radius, 0, Math.PI * 2, false);
+              ctx.fill();
+            }}
+            nodeCanvasObjectMode={() => "replace"}
+            nodeCanvasObject={(node: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => {
+              const typed = node as GraphNode;
+              const hovered = hoverNode?.id === typed.id;
+              const selected = selectedNode?.id === typed.id;
+              const radius = typed.kind === "image" ? (hovered || selected ? 18 : 14) : 6;
+              const labelScale = Math.max(0.55, 1 / globalScale);
+              const mainLabelOpacity = getLabelOpacity(globalScale, typed.kind === "image" ? 12 : 11, hovered, selected);
 
               ctx.save();
-              ctx.beginPath();
-              ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
-              ctx.clip();
-              ctx.fillStyle = "#111";
-              ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
-              ctx.restore();
+              ctx.translate(typed.x ?? 0, typed.y ?? 0);
 
-              ctx.fillStyle = "#f5f5f5";
-              ctx.font = `${12 * labelScale}px Arial`;
-              ctx.fillText(typed.label, radius + 8, 4);
-            } else {
-              ctx.fillStyle = selected || hovered ? "#f5f5f5" : "#b5b5b5";
-              ctx.font = `${11 * labelScale}px Arial`;
-              ctx.fillText(typed.label, 10, 4);
-            }
-
-            if (hovered) {
-              ctx.fillStyle = "#e5e5e5";
-              ctx.font = `${10 * labelScale}px Arial`;
               if (typed.kind === "image") {
-                ctx.fillText(typed.imageUrl, radius + 8, 18);
-              }
-            }
+                const cachedImage = imageCacheRef.current.get(typed.imageUrl);
 
-            ctx.restore();
-          }}
-          onNodeHover={(node: unknown) => {
-            setHoverNode((node as GraphNode) || null);
-          }}
-          onNodeClick={(node: unknown) => {
-            const typed = node as GraphNode;
-            if (typed.kind === "image") {
-              onImageSelect(typed.id);
-            }
-          }}
-        />
+                ctx.fillStyle = "#101010";
+                ctx.beginPath();
+                ctx.arc(0, 0, radius + 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.clip();
+
+                if (cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) {
+                  ctx.drawImage(cachedImage, -radius, -radius, radius * 2, radius * 2);
+                } else {
+                  ctx.fillStyle = "#171717";
+                  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+                }
+
+                ctx.restore();
+
+                ctx.strokeStyle = selected || hovered ? "#f5f5f5" : "#737373";
+                ctx.lineWidth = selected || hovered ? 1.8 : 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, radius + 2, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.fillStyle = `rgba(245,245,245,${mainLabelOpacity})`;
+                ctx.font = `${12 * labelScale}px Arial`;
+                ctx.fillText(typed.label, radius + 8, 4);
+
+                if (hovered) {
+                  ctx.fillStyle = "#f5f5f5";
+                  ctx.font = `${10 * labelScale}px Arial`;
+                  const keywords = imageKeywords.get(typed.id)?.join(" | ") ?? "";
+                  ctx.fillText(keywords, radius + 8, 20);
+                }
+              } else {
+                ctx.fillStyle = selected || hovered ? "#f5f5f5" : "#a3a3a3";
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = `rgba(181,181,181,${mainLabelOpacity})`;
+                ctx.font = `${11 * labelScale}px Arial`;
+                ctx.fillText(typed.label, 10, 4);
+              }
+
+              ctx.restore();
+            }}
+            onNodeHover={(node: unknown) => {
+              setHoverNode((node as GraphNode) || null);
+            }}
+            onNodeClick={(node: unknown) => {
+              const typed = node as GraphNode;
+              if (typed.kind === "image") {
+                onImageSelect(typed.id);
+              }
+            }}
+          />
+        ) : null}
       </div>
 
       <div className="border-t border-zinc-800 px-5 py-4">
         <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-          <div className="border border-zinc-800 bg-zinc-950 p-4">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
             <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Hover</p>
-            <p className="mt-2 text-sm text-zinc-300">
-              {hoverNode ? hoverNode.label : "Hover a node to inspect it."}
-            </p>
+            <p className="mt-2 text-sm text-zinc-300">{hoverNode ? hoverNode.label : "Hover a node to inspect it."}</p>
           </div>
 
-          <div className="border border-zinc-800 bg-zinc-950 p-4">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
             <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Detail</p>
             {hoverNode?.kind === "image" ? (
               <div className="mt-3 grid gap-4 md:grid-cols-[160px_1fr]">
@@ -196,7 +329,7 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId }: Knowledge
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm text-zinc-300">{hoverNode.imageUrl}</p>
+                  <p className="break-all text-sm text-zinc-300">{hoverNode.imageUrl}</p>
                   <p className="text-sm leading-6 text-zinc-500">
                     Clicking it jumps back to the Micro tab and scrolls the strip to the same turn.
                   </p>
@@ -204,12 +337,10 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId }: Knowledge
               </div>
             ) : hoverNode?.kind === "keyword" ? (
               <p className="mt-3 text-sm leading-6 text-zinc-400">
-                {hoverNode.label} connects the image turns that share a conceptual thread in the mock debate history.
+                {hoverNode.label} connects the image turns that share a conceptual thread in the debate history.
               </p>
             ) : (
-              <p className="mt-3 text-sm leading-6 text-zinc-500">
-                Select a node to inspect its connected meaning.
-              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-500">Select a node to inspect its connected meaning.</p>
             )}
           </div>
         </div>
