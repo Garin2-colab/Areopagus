@@ -139,6 +139,14 @@ function saveAgents(agents: AgentRecord[]) {
   };
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  
+  // Fire-and-forget sync to Modal
+  fetch("/api/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).catch((err) => console.error("Failed to sync agents to Modal:", err));
+
   return payload;
 }
 
