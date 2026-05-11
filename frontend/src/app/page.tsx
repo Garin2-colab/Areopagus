@@ -90,6 +90,7 @@ export default function Home() {
           <TabsContent value="macro" className="mt-0">
             <KnowledgeWeb
               turns={turns}
+              threads={threads}
               onImageSelect={(turnId) => router.push(`/post/${turnId}` as any)}
               selectedTurnId={null}
               resetToken={0}

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
-import type { HistoryTurn } from "@/lib/history";
 
 type GraphNode =
   | {
@@ -27,6 +26,17 @@ type GraphNode =
       fx?: number;
       fy?: number;
       val?: number;
+    }
+  | {
+      id: string;
+      kind: "comment";
+      label: string;
+      text: string;
+      x?: number;
+      y?: number;
+      fx?: number;
+      fy?: number;
+      val?: number;
     };
 
 type GraphLink = {
@@ -38,7 +48,9 @@ const ForceGraph2D = dynamic(async () => (await import("react-force-graph-2d")).
   ssr: false
 });
 
-function buildGraph(turns: HistoryTurn[]) {
+import type { HistoryTurn, Thread } from "@/lib/history";
+
+function buildGraph(turns: HistoryTurn[], threads: Thread[] = []) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
   const keywordNodes = new Map<string, GraphNode>();
@@ -68,7 +80,24 @@ function buildGraph(turns: HistoryTurn[]) {
       links.push({ source: keyword, target: turn.image_id });
     }
 
+    if (turn.parent_image_id) {
+      links.push({ source: turn.image_id, target: turn.parent_image_id });
+    }
+
     imageKeywords.set(turn.image_id, [...turn.keywords]);
+  }
+
+  for (const thread of threads) {
+    for (const comment of thread.comments || []) {
+      const commentNodeId = `comment-${comment.id}`;
+      nodes.push({
+        id: commentNodeId,
+        kind: "comment",
+        label: comment.agent_name,
+        text: comment.comment,
+      });
+      links.push({ source: commentNodeId, target: comment.post_image_id });
+    }
   }
 
   return { nodes, links, imageKeywords };
@@ -76,17 +105,18 @@ function buildGraph(turns: HistoryTurn[]) {
 
 type KnowledgeWebProps = {
   turns: HistoryTurn[];
+  threads?: Thread[];
   onImageSelect: (turnId: string) => void;
   selectedTurnId?: string | null;
   resetToken?: number;
 };
 
-export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId, resetToken = 0 }: KnowledgeWebProps) {
+export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnId, resetToken = 0 }: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
   const graphFrameRef = useRef<HTMLDivElement | null>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
-  const { nodes, links, imageKeywords } = useMemo(() => buildGraph(turns), [turns]);
+  const { nodes, links, imageKeywords } = useMemo(() => buildGraph(turns, threads), [turns, threads]);
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.kind === "image" && node.id === selectedTurnId) ?? null,
@@ -150,7 +180,6 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId, resetToken 
               }
 
               const image = new window.Image();
-              image.crossOrigin = "anonymous";
               image.onload = () => {
                 cache.set(url, image);
                 resolve();
@@ -237,7 +266,7 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId, resetToken 
               const typed = node as GraphNode;
               const hovered = hoverNode?.id === typed.id;
               const selected = selectedNode?.id === typed.id;
-              const radius = typed.kind === "image" ? (hovered || selected ? 18 : 14) : 6;
+              const radius = typed.kind === "image" ? (hovered || selected ? 18 : 14) : typed.kind === "comment" ? 8 : 6;
               const labelScale = Math.max(0.55, 1 / globalScale);
               const mainLabelOpacity = getLabelOpacity(globalScale, typed.kind === "image" ? 12 : 11, hovered, selected);
 
@@ -283,7 +312,7 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId, resetToken 
                   ctx.fillText(keywords, radius + 8, 20);
                 }
               } else {
-                ctx.fillStyle = selected || hovered ? "#f5f5f5" : "#a3a3a3";
+                ctx.fillStyle = selected || hovered ? "#f5f5f5" : typed.kind === "comment" ? "#3b82f6" : "#a3a3a3";
                 ctx.beginPath();
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -338,6 +367,10 @@ export function KnowledgeWeb({ turns, onImageSelect, selectedTurnId, resetToken 
             ) : hoverNode?.kind === "keyword" ? (
               <p className="mt-3 text-sm leading-6 text-zinc-400">
                 {hoverNode.label} connects the image turns that share a conceptual thread in the debate history.
+              </p>
+            ) : hoverNode?.kind === "comment" ? (
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                <span className="font-semibold text-zinc-300">{hoverNode.label}</span>: {hoverNode.text}
               </p>
             ) : (
               <p className="mt-3 text-sm leading-6 text-zinc-500">Select a node to inspect its connected meaning.</p>

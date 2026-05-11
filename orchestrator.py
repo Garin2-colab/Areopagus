@@ -52,7 +52,7 @@ RUNWAY_GEMINI_IMAGE_MODEL = "gemini_image3_pro"
 RUNWAY_ASPECT_RATIO = "1:1"
 RUNWAY_RATIO_BY_MODEL = {
     "gpt_image_2": {
-        "1:1": "1080:1080",
+        "1:1": "1920:1920",
     },
     "gemini_image3_pro": {
         "1:1": "1024:1024",
@@ -68,7 +68,7 @@ RUNWAY_RATIO_BY_MODEL = {
     },
 }
 RUNWAY_QUALITY = "high"
-WEBP_QUALITY = 82
+WEBP_QUALITY = 60
 RUNWAY_API_BASE = "https://api.dev.runwayml.com"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 INTEREST_WINDOW = 3

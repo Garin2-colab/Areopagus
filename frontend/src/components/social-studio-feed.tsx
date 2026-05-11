@@ -140,59 +140,62 @@ function PostEntry({
   const color = dotColor(agentId);
 
   if (isRoot) {
-    /* ── Root post: full width image + details ── */
+    /* ── Root post: compact summary layout ── */
     return (
       <Link
         href={`/post/${turn.image_id}` as any}
-        className="group block cursor-pointer transition-colors hover:bg-zinc-900/50"
+        className="group block cursor-pointer border-b border-zinc-800/50 p-4 transition-colors hover:bg-zinc-900/50 md:p-5"
       >
-        <article className="p-4 md:p-5">
-          {/* Agent header */}
-          <div className="mb-3 flex items-center gap-2.5">
-            <span
-              className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: color }}
-            />
-            <span className="text-sm font-medium text-zinc-200">{agentName}</span>
-            <span className="text-xs text-zinc-500">·</span>
-            <span className="text-xs text-zinc-500">{timestamp}</span>
-            {turn.action && (
-              <>
-                <span className="text-xs text-zinc-500">·</span>
-                <span className="text-[10px] uppercase tracking-widest text-zinc-600">
-                  {turn.action}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Image */}
-          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[1.25rem] border border-zinc-800 bg-zinc-900">
+        <article className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          {/* Small Image */}
+          <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 sm:w-[120px]">
             <Image
               src={turn.image_url}
               alt={`Post ${turn.image_id}`}
               fill
-              sizes="(max-width: 768px) 100vw, 800px"
-              className="object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+              sizes="(max-width: 640px) 100vw, 120px"
+              className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
               unoptimized
             />
           </div>
 
-          {/* Proposal / description */}
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-            {turn.prompt_json?.scene_description || turn.proposal || turn.critique || ""}
-          </p>
+          {/* Details */}
+          <div className="flex flex-1 flex-col justify-center">
+            {/* Title / Description Summary */}
+            <h3 className="line-clamp-2 text-base font-medium text-zinc-200">
+              {turn.prompt_json?.scene_description || turn.proposal || turn.critique || "Untitled"}
+            </h3>
 
-          {/* Keywords */}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {turn.keywords.slice(0, 5).map((keyword) => (
-              <Badge key={keyword} className="border-zinc-700 bg-zinc-950 text-zinc-400 text-[10px]">
-                {keyword}
+            {/* Author and Time */}
+            <div className="mt-2 flex items-center gap-2">
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+              <span className="text-sm text-zinc-300">{agentName}</span>
+              <span className="text-xs text-zinc-500">·</span>
+              <span className="text-xs text-zinc-500">{timestamp}</span>
+              {turn.action && (
+                <>
+                  <span className="text-xs text-zinc-500">·</span>
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-600">
+                    {turn.action}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Category / Keywords */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge className="border-zinc-700 bg-zinc-950 text-zinc-400 text-[10px]">
+                {category}
               </Badge>
-            ))}
-            <span className="ml-auto text-[10px] uppercase tracking-[0.28em] text-zinc-600">
-              {category}
-            </span>
+              {turn.keywords.slice(0, 3).map((keyword) => (
+                <span key={keyword} className="text-[10px] uppercase tracking-wider text-zinc-500">
+                  #{keyword.replace(/\s+/g, "")}
+                </span>
+              ))}
+            </div>
           </div>
         </article>
       </Link>
