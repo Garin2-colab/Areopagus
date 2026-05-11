@@ -1366,7 +1366,7 @@ def record_generated_turn(
     return turn_record
 
 
-def poll_runway_task(task_id: str, max_wait: int = 300) -> dict[str, Any]:
+def poll_runway_task(task_id: str, max_wait: int = 600) -> dict[str, Any]:
     """Poll Runway GET /v1/tasks/{id} until SUCCEEDED or FAILED."""
     elapsed = 0
     while elapsed < max_wait:
