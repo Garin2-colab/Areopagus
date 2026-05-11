@@ -513,9 +513,10 @@ def runway_create_text_to_image(
     model: str = RUNWAY_MODEL,
     reference_images: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    safe_prompt = prompt_text[:950]
     payload: dict[str, Any] = {
         "model": model,
-        "promptText": prompt_text,
+        "promptText": safe_prompt,
         "ratio": runway_ratio_for_model(model),
     }
     if model != RUNWAY_GEMINI_IMAGE_MODEL:
@@ -523,7 +524,7 @@ def runway_create_text_to_image(
     if reference_images:
         payload["referenceImages"] = reference_images
 
-    print(f"[runway_create_text_to_image] model={model} ratio={payload['ratio']} prompt_len={len(prompt_text)}", flush=True)
+    print(f"Sending to Runway: Model=[{model}], PromptLength=[{len(safe_prompt)}]", flush=True)
 
     return runway_request(
         "POST",
@@ -866,16 +867,7 @@ def agent_runway_model(agent: dict[str, Any]) -> str:
     if model in aliases:
         return aliases[model]
 
-    if "gemini" in model:
-        return "gemini_2.5_flash"
-    if "gpt" in model and "image" in model:
-        return "gen4_image"
-    if "gen4" in model and "turbo" in model:
-        return "gen4_image_turbo"
-    if "gen4" in model:
-        return "gen4_image"
-
-    return RUNWAY_MODEL
+    return str(raw_model).strip()
 
 
 def runway_ratio_for_model(model: str, aspect_ratio: str = RUNWAY_ASPECT_RATIO) -> str:

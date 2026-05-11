@@ -28,15 +28,7 @@ type StoredAgentsPayload = {
 
 const STORAGE_KEY = "areopagus.agent-personas.v1";
 
-const DEFAULT_PERSONA = [
-  "Markdown supported.",
-  "",
-  "Write the stance, visual priorities, and edge cases for this agent.",
-  "",
-  "- concise when needed",
-  "- brutal when reviewing",
-  "- tuned for cinematic composition"
-].join("\n");
+const DEFAULT_PERSONA = "A minimalist avant-garde fashion curator. Aesthetic: Brutalist structures, silk drapery, high-contrast cinematic lighting, monochromatic palette.";
 
 const DEFAULT_AGENTS: AgentRecord[] = [
   {
@@ -98,7 +90,7 @@ function normalizeStoredAgent(value: unknown, index: number): AgentRecord | null
   return {
     id: typeof candidate.id === "string" && candidate.id.trim() ? candidate.id : fallback.id,
     name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : fallback.name,
-    persona: typeof candidate.persona === "string" ? candidate.persona : fallback.persona,
+    persona: typeof candidate.persona === "string" && candidate.persona.trim() ? candidate.persona : DEFAULT_PERSONA,
     model: isModelName(candidate.model) ? candidate.model : fallback.model,
     heartbeatMinutes:
       typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
@@ -255,15 +247,7 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
       <CardHeader className="border-b border-zinc-800/80 px-6 py-5">
         <div className="flex flex-col gap-4">
           <div className="grid gap-2 sm:grid-cols-3">
-            <Button
-              type="button"
-              onClick={saveCurrentAgents}
-              variant="outline"
-              className="justify-center rounded-full border-zinc-700"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Save
-            </Button>
+
             <Button
               type="button"
               onClick={pulse}
@@ -293,12 +277,11 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
               <Button
                 type="button"
                 variant="ghost"
-                size="icon"
                 onClick={() => removeAgent(agent.id)}
-                className="h-8 w-8 rounded-full text-zinc-400 hover:text-zinc-50"
+                className="h-8 rounded-full text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-50 px-4"
                 aria-label={`Remove ${agent.name}`}
               >
-                <Minus className="h-4 w-4" />
+                Delete
               </Button>
             </CardHeader>
 
@@ -353,21 +336,20 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Heartbeat</p>
-                  <span className="text-xs text-zinc-300">Check every {agent.heartbeatMinutes} minutes</span>
+                  <span className="text-xs text-zinc-300">{agent.heartbeatMinutes} times per day</span>
                 </div>
                 <input
                   type="range"
-                  min={5}
-                  max={60}
-                  step={5}
+                  min={1}
+                  max={5}
+                  step={1}
                   value={agent.heartbeatMinutes}
-                  disabled
-                  aria-disabled="true"
-                  className="h-2 w-full cursor-not-allowed appearance-none rounded-full bg-zinc-800 accent-zinc-100 opacity-35"
+                  onChange={(event) => updateAgent(agent.id, { heartbeatMinutes: parseInt(event.target.value, 10) })}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-800 accent-zinc-100"
                 />
-                <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-zinc-600 opacity-50">
-                  <span>5 min</span>
-                  <span>60 min</span>
+                <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-zinc-600">
+                  <span>1x/day</span>
+                  <span>5x/day</span>
                 </div>
               </div>
             </CardContent>
