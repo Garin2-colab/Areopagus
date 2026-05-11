@@ -22,6 +22,7 @@ DATA_DIR = Path("/data")
 HISTORY_PATH = DATA_DIR / "history.json"
 AGENTS_CONFIG_PATH = DATA_DIR / "agents_config.json"
 STUDIO_STATUS_PATH = DATA_DIR / "status.json"
+HEARTBEAT_PATH = DATA_DIR / "last_heartbeat.json"
 IMAGE_DIR = DATA_DIR / "images"
 SCHEMA_PATH = Path(__file__).resolve().parent / "example" / "exampleJson.json"
 ROOT_PATH = Path(__file__).resolve().parent
@@ -1813,6 +1814,104 @@ def runway_webhook_receiver(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         update_studio_status(f"Error processing webhook: {str(exc)}", active=False)
         return {"ok": False, "error": str(exc)}
+
+# ── Heartbeat Cron ──────────────────────────────────────────────────────────────
+# Runs every hour. Reads agents_config to find the max heartbeat (1-5 pulses/day),
+# checks if enough time has passed since the last automatic pulse, and fires if due.
+
+def _read_heartbeat_state() -> dict[str, Any]:
+    """Load the last heartbeat timestamp from volume."""
+    if HEARTBEAT_PATH.exists():
+        with HEARTBEAT_PATH.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
+
+def _write_heartbeat_state(state: dict[str, Any]) -> None:
+    """Persist heartbeat state to volume."""
+    HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with HEARTBEAT_PATH.open("w", encoding="utf-8") as fh:
+        json.dump(state, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    data_volume.commit()
+
+
+def _max_heartbeat_frequency(agents_config: dict[str, Any]) -> int:
+    """Return the highest heartbeat frequency across all active agents (1-5 times/day).
+    Defaults to 0 (disabled) if no agents have heartbeat configured."""
+    agents = get_active_agents(agents_config)
+    if not agents:
+        return 0
+
+    frequencies = []
+    for agent in agents:
+        hb = agent.get("heartbeatMinutes", 0)  # UI field name — actually "times per day"
+        if isinstance(hb, (int, float)) and hb > 0:
+            frequencies.append(int(hb))
+
+    return max(frequencies) if frequencies else 0
+
+
+def _heartbeat_interval_seconds(times_per_day: int) -> float:
+    """Convert N-times-per-day to the minimum interval in seconds between pulses."""
+    if times_per_day <= 0:
+        return float("inf")
+    return (24 * 3600) / times_per_day
+
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60 * 15,  # 15 min — enough for multi-agent orchestration
+    schedule=modal.Cron("0 */1 * * *"),  # Every hour on the hour
+)
+def heartbeat_cron() -> None:
+    """Automatic pulse triggered by cron. Respects the heartbeat frequency setting."""
+    data_volume.reload()
+
+    agents_config = load_agents_config()
+    freq = _max_heartbeat_frequency(agents_config)
+
+    if freq <= 0:
+        print("[heartbeat_cron] No active agents with heartbeat > 0. Skipping.", flush=True)
+        return
+
+    interval = _heartbeat_interval_seconds(freq)
+    state = _read_heartbeat_state()
+    last_run_iso = state.get("last_run")
+
+    if last_run_iso:
+        last_run = datetime.fromisoformat(last_run_iso)
+        elapsed = (datetime.now(timezone.utc) - last_run).total_seconds()
+        print(
+            f"[heartbeat_cron] freq={freq}x/day, interval={interval:.0f}s, "
+            f"elapsed={elapsed:.0f}s, due={'YES' if elapsed >= interval else 'NO'}",
+            flush=True,
+        )
+        if elapsed < interval:
+            return
+    else:
+        print(f"[heartbeat_cron] First run. freq={freq}x/day. Starting pulse.", flush=True)
+
+    # Record the heartbeat timestamp BEFORE running (prevents double-fire)
+    _write_heartbeat_state({
+        "last_run": utc_now(),
+        "frequency": freq,
+        "interval_seconds": interval,
+    })
+
+    # Fire the orchestration
+    try:
+        result = orchestrate(agents_config)
+        print(
+            f"[heartbeat_cron] Pulse complete. "
+            f"processed={result.get('processed', 0)}, skipped={result.get('skipped', 0)}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f"[heartbeat_cron] ERROR: {exc}", flush=True)
+        traceback.print_exc()
+
 
 @app.local_entrypoint()
 def main() -> None:
