@@ -6,6 +6,7 @@ import os
 import re
 import random
 import time
+import traceback
 import urllib.error
 import urllib.request
 import uuid
@@ -1608,8 +1609,11 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
 
     jitter_log: list[dict[str, Any]] = []
 
+    print(f"[orchestrate] Processing {len(active_agents)} agents: {[a.get('name', a.get('id')) for a in active_agents]}", flush=True)
+
     for index, agent in enumerate(active_agents):
         agent_name = str(agent.get("name", agent.get("id", "Agent")))
+        print(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})", flush=True)
         try:
             update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name)
             assessment = assess_agent_interest(agent, recent_turns)
@@ -1635,6 +1639,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
             )
         except Exception as exc:
             print(f"[orchestrate] ERROR for agent {agent_name}: {exc}", flush=True)
+            traceback.print_exc()
             skipped_agents.append(
                 {
                     "agent_id": agent.get("id"),
