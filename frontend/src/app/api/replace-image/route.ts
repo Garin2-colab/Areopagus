@@ -22,6 +22,23 @@ function getModalReplaceUrl() {
     .replace("-get-image.modal.run", "-replace-image-endpoint.modal.run");
 }
 
+function getModalImageUrl() {
+  const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
+  const apiUrl = (process.env.MODAL_API_URL || "").trim();
+  const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
+
+  const referenceUrl = saveUrl || apiUrl || statusUrl;
+  if (!referenceUrl) {
+    return null;
+  }
+
+  return referenceUrl
+    .replace("-save-endpoint.modal.run", "-get-image.modal.run")
+    .replace("-history-endpoint.modal.run", "-get-image.modal.run")
+    .replace("-status-endpoint.modal.run", "-get-image.modal.run")
+    .replace("-pulse-endpoint.modal.run", "-get-image.modal.run");
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -54,6 +71,12 @@ export async function POST(request: Request) {
         revalidateTag("history", "max");
       } catch (err) {
         console.error("Failed to revalidate cache tag:", err);
+      }
+
+      const modalImageBase = getModalImageUrl();
+      if (modalImageBase) {
+        const v = Math.floor(Date.now() / 1000);
+        data.url = `${modalImageBase}?id=${encodeURIComponent(body.image_id)}&v=${v}`;
       }
     }
 

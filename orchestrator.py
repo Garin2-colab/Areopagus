@@ -901,6 +901,23 @@ def runway_reference_limit(model: str) -> int:
     return 14 if model == RUNWAY_GEMINI_IMAGE_MODEL else 16
 
 
+def agent_style_slots(agent: dict[str, Any]) -> list[str]:
+    agent_refs = agent.get("referenceImages") or agent.get("reference_images") or []
+    if isinstance(agent_refs, dict):
+        agent_refs = [agent_refs]
+    slots = []
+    if isinstance(agent_refs, list):
+        for idx, ref in enumerate(agent_refs):
+            has_val = False
+            if isinstance(ref, str) and ref.strip():
+                has_val = True
+            elif isinstance(ref, dict) and (ref.get("uri") or ref.get("url") or ref.get("image_url")):
+                has_val = True
+            if has_val:
+                slots.append(f"AgentRef{idx+1}")
+    return slots
+
+
 def build_runway_reference_images(
     agent: dict[str, Any],
     *,
@@ -920,6 +937,12 @@ def build_runway_reference_images(
     if prompt_json and isinstance(prompt_json, dict):
         ref_decision = prompt_json.get("reference_image_id")
 
+    # Gather agent's custom style references
+    agent_refs = agent.get("referenceImages") or agent.get("reference_images") or []
+    if isinstance(agent_refs, dict):
+        agent_refs = [agent_refs]
+
+    # Map primary visual reference image
     if ref_decision is not None:
         if ref_decision in ("selected", "CurrentThread", "ReferenceImage"):
             if selected_turn:
@@ -931,15 +954,33 @@ def build_runway_reference_images(
                 add_reference(prompt_img, "ReferenceImage")
                 add_reference(prompt_img, "AgentPrompt")
         elif isinstance(ref_decision, str) and ref_decision.strip():
-            # Search history turns for a match
-            target_url = None
-            if history and isinstance(history.get("turns"), list):
-                for turn in history["turns"]:
-                    if turn.get("image_id") == ref_decision:
-                        target_url = turn.get("image_url")
-                        break
-            if target_url:
-                add_reference(target_url, "ReferenceImage")
+            # Check if ref_decision targets one of the AgentRef<index> slots
+            matched_style = None
+            if ref_decision.lower().startswith("agentref"):
+                try:
+                    idx = int(ref_decision[8:]) - 1
+                    if isinstance(agent_refs, list) and 0 <= idx < len(agent_refs):
+                        ref_item = agent_refs[idx]
+                        if isinstance(ref_item, str):
+                            matched_style = ref_item
+                        elif isinstance(ref_item, dict):
+                            matched_style = ref_item.get("uri") or ref_item.get("url") or ref_item.get("image_url")
+                except Exception:
+                    pass
+
+            if matched_style:
+                add_reference(matched_style, "ReferenceImage")
+                add_reference(matched_style, ref_decision)
+            else:
+                # Search history turns for a match
+                target_url = None
+                if history and isinstance(history.get("turns"), list):
+                    for turn in history["turns"]:
+                        if turn.get("image_id") == ref_decision:
+                            target_url = turn.get("image_url")
+                            break
+                if target_url:
+                    add_reference(target_url, "ReferenceImage")
     else:
         # Fallback (backward compatibility): attach default references
         if selected_turn:
@@ -951,18 +992,16 @@ def build_runway_reference_images(
             add_reference(prompt_img, "ReferenceImage")
             add_reference(prompt_img, "AgentPrompt")
 
-        agent_references = agent.get("referenceImages") or agent.get("reference_images") or []
-        if isinstance(agent_references, dict):
-            agent_references = [agent_references]
-        if isinstance(agent_references, list):
-            for index, reference in enumerate(agent_references, start=1):
-                if isinstance(reference, str):
-                    add_reference(reference, f"AgentRef{index}")
-                elif isinstance(reference, dict):
-                    add_reference(
-                        reference.get("uri") or reference.get("url") or reference.get("image_url"),
-                        reference.get("tag") or f"AgentRef{index}",
-                    )
+    # Always attach the other style reference images so they can be tagged as @AgentRef<index> in prompt fields
+    if isinstance(agent_refs, list):
+        for index, reference in enumerate(agent_refs, start=1):
+            if isinstance(reference, str):
+                add_reference(reference, f"AgentRef{index}")
+            elif isinstance(reference, dict):
+                add_reference(
+                    reference.get("uri") or reference.get("url") or reference.get("image_url"),
+                    reference.get("tag") or f"AgentRef{index}",
+                )
 
     unique: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -1143,6 +1182,16 @@ def build_initiate_prompt_json(
         except Exception as e:
             print(f"[warning] Failed to fetch agent prompt image: {e}", flush=True)
 
+    style_slots = agent_style_slots(agent)
+    agent_profile = {
+        "id": agent.get("id"),
+        "name": agent.get("name"),
+        "persona": agent.get("persona", ""),
+        "model": agent.get("model", ""),
+    }
+    if style_slots:
+        agent_profile["style_slots"] = style_slots
+
     prompt = f"""
 You are drafting a brand-new Areopagus thread.
 """
@@ -1154,12 +1203,7 @@ You are drafting a brand-new Areopagus thread.
 Return JSON only. Use the schema template below as the structural guide, then expand it into a fresh prompt that feels like a new thread rather than a revision.
 
 Agent profile:
-{json.dumps({
-    "id": agent.get("id"),
-    "name": agent.get("name"),
-    "persona": agent.get("persona", ""),
-    "model": agent.get("model", ""),
-}, indent=2, ensure_ascii=False)}
+{json.dumps(agent_profile, indent=2, ensure_ascii=False)}
 
 Interest assessment:
 {json.dumps(assessment, indent=2, ensure_ascii=False)}
@@ -1177,8 +1221,10 @@ Rules:
 - keywords must be exactly 5 hash-tagged strings.
 - reference_image_id: You must decide whether to use a style/composition reference image for this generation or generate completely from scratch.
   - If you want to use your baseline style image as a reference, set reference_image_id to "profile".
+  - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
   - If you want to generate completely from scratch without image references, set reference_image_id to null.
 - If reference_image_id is NOT null, you must reference '@ReferenceImage' in at least one description field (e.g. style or scene_description). If it is null, do NOT use the '@ReferenceImage' tag.
+- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
 """
     if prompt_img_url:
@@ -1275,17 +1321,22 @@ def build_pivot_prompt_json(
         except Exception as e:
             print(f"[warning] Failed to fetch image bytes for selected turn pivot: {e}", flush=True)
 
+    style_slots = agent_style_slots(agent)
+    agent_profile = {
+        "id": agent.get("id"),
+        "name": agent.get("name"),
+        "persona": agent.get("persona", ""),
+        "model": agent.get("model", ""),
+    }
+    if style_slots:
+        agent_profile["style_slots"] = style_slots
+
     prompt = f"""
 You are refining the most recent Areopagus prompt into a reply image.
 You are shown the actual generated image of the parent post (selected turn) in the multimodal context.
 
 Agent profile:
-{json.dumps({
-    "id": agent.get("id"),
-    "name": agent.get("name"),
-    "persona": agent.get("persona", ""),
-    "model": agent.get("model", ""),
-}, indent=2, ensure_ascii=False)}
+{json.dumps(agent_profile, indent=2, ensure_ascii=False)}
 
 Interest assessment:
 {json.dumps(assessment, indent=2, ensure_ascii=False)}
@@ -1308,9 +1359,11 @@ Rules:
 - reference_image_id: You must decide whether to use a reference image for this generation or generate from scratch/external web.
   - If you want to use the parent image as a reference, set reference_image_id to "selected".
   - If you want to use your agent profile style image as a reference, set reference_image_id to "profile".
+  - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
   - If you want to reference a different recent turn's image from the list of recent posts above, set reference_image_id to its image_id (e.g. "thread_agent-1-gothic-anatomist_1").
   - If you want to generate completely from scratch without using any image references, set reference_image_id to null.
 - If reference_image_id is NOT null, you MUST reference '@ReferenceImage' in at least one description field (e.g. style, scene_description, subject, or camera) to direct the Runway/Gemini image-to-image/reference-image logic. If it is null, do NOT use the '@ReferenceImage' tag.
+- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
 - Return JSON only.
 """
 

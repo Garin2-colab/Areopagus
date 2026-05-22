@@ -18,6 +18,7 @@ type AgentRecord = {
   persona: string;
   model: ModelName;
   heartbeatMinutes: number;
+  referenceImages?: string[];
 };
 
 type StoredAgentsPayload = {
@@ -73,8 +74,22 @@ function createAgent(index: number): AgentRecord {
     name: `Agent ${String(index).padStart(2, "0")}`,
     persona: DEFAULT_PERSONA,
     model: "GPT-Image-2",
-    heartbeatMinutes: 15
+    heartbeatMinutes: 15,
+    referenceImages: []
   };
+}
+
+function sanitizeClientImageUrl(url: string | undefined): string {
+  if (!url) return "";
+  if (url.includes("-get-image.modal.run")) {
+    const match = url.match(/[?&]id=([^&]+)/);
+    if (match && match[1]) {
+      const vMatch = url.match(/[?&]v=([^&]+)/);
+      const vParam = vMatch ? `&v=${vMatch[1]}` : "";
+      return `/api/image?id=${match[1]}${vParam}`;
+    }
+  }
+  return url;
 }
 
 function isModelName(value: unknown): value is ModelName {
@@ -95,7 +110,8 @@ function normalizeStoredAgent(value: unknown, index: number): AgentRecord | null
     heartbeatMinutes:
       typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
         ? candidate.heartbeatMinutes
-        : fallback.heartbeatMinutes
+        : fallback.heartbeatMinutes,
+    referenceImages: Array.isArray(candidate.referenceImages) ? candidate.referenceImages : []
   };
 }
 
@@ -242,6 +258,68 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
     }
   };
 
+  const handleUploadStyle = (agentId: string, index: number) => {
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64Data = event.target?.result as string;
+        try {
+          const response = await fetch("/api/replace-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              image_id: `ref_style_${agentId}_${index}`,
+              image_base64: base64Data,
+              mime_type: file.type,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) {
+            throw new Error(result.error || "Upload failed");
+          }
+
+          const uploadedUrl = result.url || `/api/image?id=ref_style_${agentId}_${index}&v=${Math.floor(Date.now() / 1000)}`;
+
+          setAgents((current) =>
+            current.map((agent) => {
+              if (agent.id !== agentId) return agent;
+              const nextRefs = [...(agent.referenceImages || [])];
+              while (nextRefs.length <= index) {
+                nextRefs.push("");
+              }
+              nextRefs[index] = uploadedUrl;
+              return { ...agent, referenceImages: nextRefs };
+            })
+          );
+        } catch (err) {
+          console.error("Style upload failed:", err);
+          alert(err instanceof Error ? err.message : "Upload failed");
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    fileInput.click();
+  };
+
+  const handleClearStyle = (agentId: string, index: number) => {
+    setAgents((current) =>
+      current.map((agent) => {
+        if (agent.id !== agentId) return agent;
+        const nextRefs = [...(agent.referenceImages || [])];
+        if (index < nextRefs.length) {
+          nextRefs[index] = "";
+        }
+        return { ...agent, referenceImages: nextRefs };
+      })
+    );
+  };
+
   return (
     <Card className="rounded-[2rem] border-zinc-800/80 bg-zinc-950/75 shadow-2xl shadow-black/25 backdrop-blur-sm">
       <CardHeader className="border-b border-zinc-800/80 px-6 py-5">
@@ -309,6 +387,59 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
                 <p className="text-xs leading-5 text-zinc-500">
                   Use Markdown for bullets, emphasis, and short sections. This keeps long personas readable.
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Style References (2x5 Grid)</p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-600">Click a slot to upload</p>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {Array.from({ length: 10 }).map((_, i) => {
+                    const imgUrl = agent.referenceImages?.[i];
+                    const hasImage = typeof imgUrl === "string" && imgUrl.trim().length > 0;
+                    const displayUrl = hasImage ? sanitizeClientImageUrl(imgUrl) : null;
+
+                    return (
+                      <div
+                        key={i}
+                        className={cn(
+                          "group relative aspect-square w-full rounded-xl overflow-hidden border flex items-center justify-center transition-colors cursor-pointer",
+                          hasImage
+                            ? "border-zinc-800 bg-zinc-900/60"
+                            : "border-dashed border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/50 bg-zinc-950"
+                        )}
+                        onClick={() => {
+                          if (!hasImage) {
+                            handleUploadStyle(agent.id, i);
+                          }
+                        }}
+                      >
+                        {displayUrl ? (
+                          <>
+                            <img
+                              src={displayUrl}
+                              alt={`Style Ref ${i + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleClearStyle(agent.id, i);
+                              }}
+                              className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] uppercase tracking-wider text-red-400 font-bold transition-opacity"
+                            >
+                              Clear
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-zinc-600 group-hover:text-zinc-400 text-sm font-semibold">+</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="space-y-2">
