@@ -23,7 +23,9 @@ export default function Home() {
 
   const reloadHistory = async () => {
     try {
-      const data = await fetchHistory();
+      // Clear Next.js and CDN edge caches
+      await fetch("/api/revalidate", { method: "POST" }).catch(() => {});
+      const data = await fetchHistory(true);
       setHistory(data);
       setHistoryError(null);
     } catch (error) {

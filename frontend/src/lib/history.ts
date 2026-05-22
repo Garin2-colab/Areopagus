@@ -112,10 +112,27 @@ function sanitizeImageUrls(url: string | undefined): string {
   return url;
 }
 
-export async function fetchHistory(): Promise<HistoryData> {
-  const response = await fetch(resolveHistorySource(), {
-    cache: "no-store"
-  });
+export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
+  const source = resolveHistorySource();
+  const isClient = typeof window !== "undefined";
+
+  let fetchUrl = source;
+  const init: RequestInit = {};
+
+  if (isClient) {
+    if (bypassCache) {
+      fetchUrl = `${source}?bypass=true`;
+      init.cache = "no-store";
+    }
+  } else {
+    if (bypassCache) {
+      init.cache = "no-store";
+    } else {
+      (init as any).next = { revalidate: 86400, tags: ["history"] };
+    }
+  }
+
+  const response = await fetch(fetchUrl, init);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch history: ${response.status} ${response.statusText}`);

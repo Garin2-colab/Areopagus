@@ -7,7 +7,10 @@ function modalHistoryUrl() {
   return process.env.MODAL_API_URL || process.env.NEXT_PUBLIC_MODAL_API_URL || "";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const bypass = searchParams.get("bypass") === "true";
+
   const endpoint = modalHistoryUrl();
   if (!endpoint) {
     return NextResponse.json(
@@ -19,18 +22,31 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(endpoint, {
-      cache: "no-store",
+    const fetchOptions: RequestInit = {
       headers: {
         Accept: "application/json"
       }
-    });
+    };
+
+    if (bypass) {
+      fetchOptions.cache = "no-store";
+    } else {
+      // Cache the response at the edge with revalidation tags
+      (fetchOptions as any).next = { revalidate: 86400, tags: ["history"] };
+    }
+
+    const response = await fetch(endpoint, fetchOptions);
 
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
 
     return NextResponse.json(body, {
-      status: response.ok ? 200 : response.status
+      status: response.ok ? 200 : response.status,
+      headers: {
+        "Cache-Control": bypass
+          ? "no-store, must-revalidate"
+          : "public, max-age=0, s-maxage=86400, stale-while-revalidate=3600"
+      }
     });
   } catch (error) {
     return NextResponse.json(
