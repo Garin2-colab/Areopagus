@@ -29,6 +29,18 @@ export type HistoryTurn = {
     critique?: string;
     agreed_keywords?: string[];
   };
+  image_webp?: {
+    path?: string;
+    url?: string;
+    format?: string;
+    quality?: number;
+    source_mime_type?: string;
+    size_bytes?: number;
+    dimensions?: {
+      width: number;
+      height: number;
+    };
+  };
 };
 
 export type ThreadComment = {
@@ -77,16 +89,27 @@ export function sortTurnsNewestFirst(turns: HistoryTurn[]) {
 }
 
 function resolveHistorySource() {
+  if (typeof window !== "undefined") {
+    return "/api/history";
+  }
+
   const configured = process.env.MODAL_API_URL || process.env.NEXT_PUBLIC_MODAL_API_URL;
   if (configured) {
     return configured;
   }
 
-  if (typeof window !== "undefined") {
-    return "/api/history";
-  }
-
   throw new Error("MODAL_API_URL is not configured.");
+}
+
+function sanitizeImageUrls(url: string | undefined): string {
+  if (!url) return "";
+  if (url.includes("-get-image.modal.run")) {
+    const match = url.match(/[?&]id=([^&]+)/);
+    if (match && match[1]) {
+      return `/api/image?id=${match[1]}`;
+    }
+  }
+  return url;
 }
 
 export async function fetchHistory(): Promise<HistoryData> {
@@ -99,8 +122,38 @@ export async function fetchHistory(): Promise<HistoryData> {
   }
 
   const data = (await response.json()) as HistoryData;
+  
+  const turns = (Array.isArray(data.turns) ? data.turns : []).map(turn => {
+    const turnCopy = { 
+      ...turn, 
+      image_url: sanitizeImageUrls(turn.image_url) 
+    };
+    if (turnCopy.image_webp) {
+      turnCopy.image_webp = {
+        ...turnCopy.image_webp,
+        url: sanitizeImageUrls(turnCopy.image_webp.url)
+      };
+    }
+    return turnCopy;
+  });
+
+  let graph = data.graph;
+  if (graph && Array.isArray(graph.nodes)) {
+    graph = {
+      ...graph,
+      nodes: graph.nodes.map(node => {
+        if (node.type === "image" && typeof node.url === "string") {
+          return { ...node, url: sanitizeImageUrls(node.url) };
+        }
+        return node;
+      })
+    };
+  }
+
   return {
     ...data,
-    turns: Array.isArray(data.turns) ? data.turns : []
+    turns,
+    graph
   };
 }
+

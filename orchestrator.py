@@ -530,7 +530,7 @@ def runway_create_text_to_image(
         "promptText": safe_prompt,
         "ratio": runway_ratio_for_model(model),
     }
-    if model != RUNWAY_GEMINI_IMAGE_MODEL:
+    if "gemini" not in model.lower():
         payload["quality"] = RUNWAY_QUALITY
     if reference_images:
         payload["referenceImages"] = reference_images
@@ -758,9 +758,18 @@ def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
         converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
         width, height = converted.size
 
+    # Try to resolve get_image URL dynamically to make the app portable
+    try:
+        web_url = get_image.get_web_url()
+    except Exception:
+        web_url = None
+
+    if not web_url:
+        web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+
     return {
         "path": str(webp_path),
-        "url": f"https://heebok-lee--areopagus-get-image.modal.run/?id={image_id}",
+        "url": f"{web_url}?id={image_id}",
         "format": "webp",
         "quality": WEBP_QUALITY,
         "source_mime_type": source_mime_type,
@@ -770,6 +779,7 @@ def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
             "height": height,
         },
     }
+
 
 
 def critique_image(
@@ -1598,101 +1608,110 @@ def graph_nodes_for_turn(turn_record: dict[str, Any]) -> tuple[list[dict[str, An
     timeout=60 * 30,
 )
 def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    schema_template = load_schema_template()
-    history = load_history()
-    agents_config = load_agents_config(agents_config_payload)
-    active_agents = get_active_agents(agents_config)
-    recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
-    results: list[dict[str, Any]] = []
-    skipped_agents: list[dict[str, Any]] = []
+    try:
+        schema_template = load_schema_template()
+        history = load_history()
+        agents_config = load_agents_config(agents_config_payload)
+        active_agents = get_active_agents(agents_config)
+        recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
+        results: list[dict[str, Any]] = []
+        skipped_agents: list[dict[str, Any]] = []
 
-    ensure_threads(history)
-    update_studio_status("Pulse started", active=True)
+        ensure_threads(history)
+        update_studio_status("Pulse started", active=True)
 
-    if not active_agents:
+        if not active_agents:
+            update_studio_status("Pulse complete", active=False)
+            return {
+                "history_path": str(HISTORY_PATH),
+                "agents_config_path": str(AGENTS_CONFIG_PATH),
+                "active_agents": 0,
+                "processed": 0,
+                "skipped": 0,
+                "results": [],
+                "note": "No active agents were found in agents_config.json.",
+            }
+
+        jitter_log: list[dict[str, Any]] = []
+
+        print(f"[orchestrate] Processing {len(active_agents)} agents: {[a.get('name', a.get('id')) for a in active_agents]}", flush=True)
+
+        for index, agent in enumerate(active_agents):
+            agent_name = str(agent.get("name", agent.get("id", "Agent")))
+            print(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})", flush=True)
+            try:
+                update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name)
+                assessment = assess_agent_interest(agent, recent_turns)
+                if normalize_action(assessment.get("action")) in {"Initiate", "Pivot"}:
+                    update_studio_status(f"{agent_name} is generating image...", active=True, agent_name=agent_name)
+                else:
+                    update_studio_status(f"{agent_name} is writing critique...", active=True, agent_name=agent_name)
+                action_result = dispatch_agent_action(
+                    history=history,
+                    agent=agent,
+                    assessment=assessment,
+                    recent_turns=recent_turns,
+                    schema_template=schema_template,
+                )
+                recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
+                results.append(
+                    {
+                        "agent_id": agent.get("id"),
+                        "agent_name": agent_name,
+                        "assessment": assessment,
+                        "action_result": action_result,
+                    }
+                )
+            except Exception as exc:
+                print(f"[orchestrate] ERROR for agent {agent_name}: {exc}", flush=True)
+                traceback.print_exc()
+                skipped_agents.append(
+                    {
+                        "agent_id": agent.get("id"),
+                        "agent_name": agent_name,
+                        "error": str(exc),
+                    }
+                )
+                continue
+
+            if index < len(active_agents) - 1:
+                jitter_seconds = random.uniform(PULSE_JITTER_MIN_SECONDS, PULSE_JITTER_MAX_SECONDS)
+                update_studio_status(
+                    f"{agent_name} is waiting {round(jitter_seconds, 2)}s before the next agent...",
+                    active=True,
+                    agent_name=agent_name,
+                )
+                jitter_log.append(
+                    {
+                        "after_agent_id": agent.get("id"),
+                        "after_agent_name": agent_name,
+                        "jitter_seconds": round(jitter_seconds, 2),
+                    }
+                )
+                time.sleep(jitter_seconds)
+
+        save_history(history)
         update_studio_status("Pulse complete", active=False)
         return {
             "history_path": str(HISTORY_PATH),
             "agents_config_path": str(AGENTS_CONFIG_PATH),
-            "active_agents": 0,
-            "processed": 0,
-            "skipped": 0,
-            "results": [],
-            "note": "No active agents were found in agents_config.json.",
+            "active_agents": len(active_agents),
+            "processed": len(results),
+            "skipped": len(skipped_agents),
+            "pulse_mode": True,
+            "jitter_log": jitter_log,
+            "results": results,
+            "skipped_agents": skipped_agents,
+            "latest_turn": history.get("turns", [])[-1] if history.get("turns") else None,
         }
-
-    jitter_log: list[dict[str, Any]] = []
-
-    print(f"[orchestrate] Processing {len(active_agents)} agents: {[a.get('name', a.get('id')) for a in active_agents]}", flush=True)
-
-    for index, agent in enumerate(active_agents):
-        agent_name = str(agent.get("name", agent.get("id", "Agent")))
-        print(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})", flush=True)
+    except Exception as exc:
+        print(f"[orchestrate] GLOBAL ERROR: {exc}", flush=True)
+        traceback.print_exc()
         try:
-            update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name)
-            assessment = assess_agent_interest(agent, recent_turns)
-            if normalize_action(assessment.get("action")) in {"Initiate", "Pivot"}:
-                update_studio_status(f"{agent_name} is generating image...", active=True, agent_name=agent_name)
-            else:
-                update_studio_status(f"{agent_name} is writing critique...", active=True, agent_name=agent_name)
-            action_result = dispatch_agent_action(
-                history=history,
-                agent=agent,
-                assessment=assessment,
-                recent_turns=recent_turns,
-                schema_template=schema_template,
-            )
-            recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
-            results.append(
-                {
-                    "agent_id": agent.get("id"),
-                    "agent_name": agent_name,
-                    "assessment": assessment,
-                    "action_result": action_result,
-                }
-            )
-        except Exception as exc:
-            print(f"[orchestrate] ERROR for agent {agent_name}: {exc}", flush=True)
-            traceback.print_exc()
-            skipped_agents.append(
-                {
-                    "agent_id": agent.get("id"),
-                    "agent_name": agent_name,
-                    "error": str(exc),
-                }
-            )
-            continue
-
-        if index < len(active_agents) - 1:
-            jitter_seconds = random.uniform(PULSE_JITTER_MIN_SECONDS, PULSE_JITTER_MAX_SECONDS)
-            update_studio_status(
-                f"{agent_name} is waiting {round(jitter_seconds, 2)}s before the next agent...",
-                active=True,
-                agent_name=agent_name,
-            )
-            jitter_log.append(
-                {
-                    "after_agent_id": agent.get("id"),
-                    "after_agent_name": agent_name,
-                    "jitter_seconds": round(jitter_seconds, 2),
-                }
-            )
-            time.sleep(jitter_seconds)
-
-    save_history(history)
-    update_studio_status("Pulse complete", active=False)
-    return {
-        "history_path": str(HISTORY_PATH),
-        "agents_config_path": str(AGENTS_CONFIG_PATH),
-        "active_agents": len(active_agents),
-        "processed": len(results),
-        "skipped": len(skipped_agents),
-        "pulse_mode": True,
-        "jitter_log": jitter_log,
-        "results": results,
-        "skipped_agents": skipped_agents,
-        "latest_turn": history.get("turns", [])[-1] if history.get("turns") else None,
-    }
+            update_studio_status(f"Error: {str(exc)}", active=False)
+        except Exception:
+            pass
+        raise exc
 
 
 @app.function(

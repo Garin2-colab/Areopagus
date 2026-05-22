@@ -9,7 +9,7 @@ from typing import Any
 import modal
 
 APP_NAME = "areopagus-api-ping"
-GEMINI_MODEL = "gemini-3-flash-preview"
+GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 RUNWAY_API_BASE = "https://api.dev.runwayml.com"
 
