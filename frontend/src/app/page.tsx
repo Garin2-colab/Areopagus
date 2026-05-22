@@ -11,12 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnowledgeWeb } from "@/components/knowledge-web";
+import { SocialStudioTable } from "@/components/social-studio-table";
 import { fetchHistory, sortTurnsNewestFirst, type HistoryData } from "@/lib/history";
 import { useStudioStatus } from "@/lib/useStudioStatus";
 
 export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [view, setView] = useState<"micro" | "macro">("micro");
+  const [view, setView] = useState<"micro" | "macro" | "table">("micro");
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const router = useRouter();
@@ -78,6 +79,11 @@ export default function Home() {
                   Knowledge Web
                 </h2>
               )}
+              {view === "table" && (
+                <h2 className="font-display text-lg font-medium tracking-widest text-zinc-400 uppercase md:text-xl">
+                  Database Table
+                </h2>
+              )}
             </div>
 
             <TabsList className="mx-auto">
@@ -86,6 +92,9 @@ export default function Home() {
               </TabsTrigger>
               <TabsTrigger value="macro" className="px-4">
                 Macro
+              </TabsTrigger>
+              <TabsTrigger value="table" className="px-4">
+                Table
               </TabsTrigger>
             </TabsList>
           </div>
@@ -104,6 +113,9 @@ export default function Home() {
               selectedTurnId={null}
               resetToken={0}
             />
+          </TabsContent>
+          <TabsContent value="table" className="mt-0">
+            <SocialStudioTable turns={turns} onRefresh={reloadHistory} />
           </TabsContent>
         </div>
       </Tabs>

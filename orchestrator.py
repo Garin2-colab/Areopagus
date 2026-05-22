@@ -1768,6 +1768,89 @@ def save_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
 @app.function(
     image=image,
     volumes={"/data": data_volume},
+    timeout=120,
+)
+@modal.fastapi_endpoint(method="POST")
+def replace_image_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    import base64
+    from io import BytesIO
+    from PIL import Image
+
+    image_id = payload.get("image_id")
+    image_base64 = payload.get("image_base64")
+
+    if not image_id or not image_base64:
+        return {"ok": False, "error": "Missing image_id or image_base64."}
+
+    data_volume.reload()
+
+    # Strip data:image/...;base64, prefix if present
+    if "," in image_base64:
+        image_base64 = image_base64.split(",", 1)[1]
+
+    try:
+        img_bytes = base64.b64decode(image_base64)
+    except Exception as exc:
+        return {"ok": False, "error": f"Invalid base64 encoding: {exc}"}
+
+    try:
+        # Save as WebP
+        IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+        webp_path = IMAGE_DIR / f"{image_id}.webp"
+
+        with Image.open(BytesIO(img_bytes)) as img:
+            # Convert RGBA to RGB
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                background.paste(img, (0, 0), img)
+                converted = background.convert("RGB")
+            else:
+                converted = img.convert("RGB")
+            converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+            width, height = converted.size
+
+        # Resolve image GET endpoint dynamically
+        try:
+            web_url = get_image.get_web_url()
+        except Exception:
+            web_url = None
+
+        if not web_url:
+            web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+
+        # Update history turn metadata
+        history = load_history()
+        updated_any = False
+        for turn in history.get("turns", []):
+            if turn.get("image_id") == image_id:
+                turn["image_webp"] = {
+                    "path": f"/data/images/{image_id}.webp",
+                    "url": f"{web_url}?id={image_id}",
+                    "format": "webp",
+                    "quality": WEBP_QUALITY,
+                    "source_mime_type": payload.get("mime_type", "image/png"),
+                    "size_bytes": webp_path.stat().st_size,
+                    "dimensions": {
+                        "width": width,
+                        "height": height,
+                    },
+                }
+                updated_any = True
+
+        if not updated_any:
+            print(f"[replace_image_endpoint] No matching turn found in history for image_id: {image_id}", flush=True)
+
+        save_history(history)
+        return {"ok": True, "message": f"Image {image_id} replaced successfully."}
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return {"ok": False, "error": str(exc)}
+
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
     timeout=60,
 )
 @modal.fastapi_endpoint(method="POST")
