@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnowledgeWeb } from "@/components/knowledge-web";
 import { SocialStudioTable } from "@/components/social-studio-table";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { fetchHistory, sortTurnsNewestFirst, type HistoryData } from "@/lib/history";
 import { useStudioStatus } from "@/lib/useStudioStatus";
 
@@ -20,6 +21,7 @@ export default function Home() {
   const [view, setView] = useState<"micro" | "macro" | "table">("micro");
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const router = useRouter();
 
   const reloadHistory = async () => {
@@ -103,7 +105,7 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 pb-10 pt-8">
           {historyError ? <p className="mb-4 text-sm text-zinc-400">{historyError}</p> : null}
           <TabsContent value="micro" className="mt-0">
-            <SocialStudioFeed turns={turns} threads={threads} />
+            <SocialStudioFeed turns={turns} threads={threads} onImageClick={setLightboxSrc} />
           </TabsContent>
           <TabsContent value="macro" className="mt-0">
             <KnowledgeWeb
@@ -115,7 +117,7 @@ export default function Home() {
             />
           </TabsContent>
           <TabsContent value="table" className="mt-0">
-            <SocialStudioTable turns={turns} onRefresh={reloadHistory} />
+            <SocialStudioTable turns={turns} onRefresh={reloadHistory} onImageClick={setLightboxSrc} />
           </TabsContent>
         </div>
       </Tabs>
@@ -133,6 +135,7 @@ export default function Home() {
       </Sheet>
 
       <StudioStatusFooter status={status} />
+      <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </main>
   );
 }

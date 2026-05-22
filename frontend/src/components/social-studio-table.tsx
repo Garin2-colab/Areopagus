@@ -11,9 +11,10 @@ import { Input } from "./ui/input";
 type SocialStudioTableProps = {
   turns: HistoryTurn[];
   onRefresh: () => Promise<void>;
+  onImageClick?: (src: string) => void;
 };
 
-export function SocialStudioTable({ turns, onRefresh }: SocialStudioTableProps) {
+export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStudioTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [replacingId, setReplacingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -183,13 +184,17 @@ export function SocialStudioTable({ turns, onRefresh }: SocialStudioTableProps) 
 
                       {/* Image Thumbnail */}
                       <td className="px-3 py-3">
-                        <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-zinc-800 bg-black group-hover:border-zinc-700">
+                        <div
+                          onClick={() => onImageClick?.(turn.image_url)}
+                          className="relative h-12 w-12 overflow-hidden rounded-lg border border-zinc-800 bg-black cursor-zoom-in hover:border-zinc-500 transition-colors"
+                          title="Click to enlarge"
+                        >
                           <Image
                             src={turn.image_url}
                             alt={`Turn ${turn.turn}`}
                             fill
                             sizes="48px"
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            className="object-cover transition-transform duration-300 hover:scale-105"
                             unoptimized
                           />
                         </div>

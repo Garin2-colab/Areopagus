@@ -1819,13 +1819,18 @@ def replace_image_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
         # Update history turn metadata
+        import time
+        version_ts = int(time.time())
+        new_url = f"{web_url}?id={image_id}&v={version_ts}"
+
         history = load_history()
         updated_any = False
         for turn in history.get("turns", []):
             if turn.get("image_id") == image_id:
+                turn["image_url"] = new_url
                 turn["image_webp"] = {
                     "path": f"/data/images/{image_id}.webp",
-                    "url": f"{web_url}?id={image_id}",
+                    "url": new_url,
                     "format": "webp",
                     "quality": WEBP_QUALITY,
                     "source_mime_type": payload.get("mime_type", "image/png"),

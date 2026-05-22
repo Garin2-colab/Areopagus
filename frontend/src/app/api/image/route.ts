@@ -24,6 +24,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const v = searchParams.get("v");
     if (!id) {
       return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
     }
@@ -36,7 +37,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const targetUrl = `${modalImageUrlBase}?id=${encodeURIComponent(id)}`;
+    let targetUrl = `${modalImageUrlBase}?id=${encodeURIComponent(id)}`;
+    if (v) {
+      targetUrl += `&v=${encodeURIComponent(v)}`;
+    }
     const response = await fetch(targetUrl, {
       cache: "no-store",
     });

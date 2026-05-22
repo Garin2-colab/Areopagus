@@ -106,7 +106,9 @@ function sanitizeImageUrls(url: string | undefined): string {
   if (url.includes("-get-image.modal.run")) {
     const match = url.match(/[?&]id=([^&]+)/);
     if (match && match[1]) {
-      return `/api/image?id=${match[1]}`;
+      const vMatch = url.match(/[?&]v=([^&]+)/);
+      const vParam = vMatch ? `&v=${vMatch[1]}` : "";
+      return `/api/image?id=${match[1]}${vParam}`;
     }
   }
   return url;

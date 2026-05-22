@@ -42,11 +42,12 @@ function dotColor(agentId: string): string {
 type SocialStudioFeedProps = {
   turns: PostTurn[];
   threads?: Thread[];
+  onImageClick?: (src: string) => void;
 };
 
 /* ── Component ──────────────────────────────────────────────────── */
 
-export function SocialStudioFeed({ turns, threads = [] }: SocialStudioFeedProps) {
+export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialStudioFeedProps) {
   const feedThreads = useMemo(
     () => buildFeedThreads(turns, threads),
     [turns, threads]
@@ -76,6 +77,7 @@ export function SocialStudioFeed({ turns, threads = [] }: SocialStudioFeedProps)
             <CompactRootPost
               turn={thread.root.turn}
               categoryFrequency={categoryFrequency}
+              onImageClick={onImageClick}
             />
           </div>
         ))}
@@ -89,9 +91,11 @@ export function SocialStudioFeed({ turns, threads = [] }: SocialStudioFeedProps)
 function CompactRootPost({
   turn,
   categoryFrequency,
+  onImageClick,
 }: {
   turn: PostTurn;
   categoryFrequency: Map<string, number>;
+  onImageClick?: (src: string) => void;
 }) {
   const timestamp = formatTimestamp(turn.created_at);
   const category = getTurnCategory(turn, categoryFrequency);
@@ -106,7 +110,15 @@ function CompactRootPost({
     >
       <article className="flex flex-col gap-4 sm:flex-row sm:items-start">
         {/* Small Image */}
-        <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 sm:w-[120px]">
+        <div
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onImageClick?.(turn.image_url);
+          }}
+          className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 sm:w-[120px] cursor-zoom-in hover:border-zinc-500 transition-colors"
+          title="Click to enlarge"
+        >
           <Image
             src={turn.image_url}
             alt={`Post ${turn.image_id}`}
