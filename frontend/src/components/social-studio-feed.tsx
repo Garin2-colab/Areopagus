@@ -2,10 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImageLightbox } from "@/components/image-lightbox";
 import type { Thread } from "@/lib/history";
 import {
   buildKeywordFrequency,
@@ -173,6 +174,7 @@ export function FullThreadView({
   thread: FeedThread;
   categoryFrequency: Map<string, number>;
 }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const entries = useMemo(() => flattenThread(thread.root), [thread.root]);
 
   return (
@@ -184,6 +186,7 @@ export function FullThreadView({
               key={entry.node.turn.image_id}
               entry={entry}
               categoryFrequency={categoryFrequency}
+              onImageClick={setLightboxSrc}
             />
           );
         }
@@ -195,6 +198,7 @@ export function FullThreadView({
           />
         );
       })}
+      <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   );
 }
@@ -204,9 +208,11 @@ export function FullThreadView({
 function ThreadPostEntry({
   entry,
   categoryFrequency,
+  onImageClick,
 }: {
   entry: Extract<FlatEntry, { kind: "post" }>;
   categoryFrequency: Map<string, number>;
+  onImageClick?: (src: string) => void;
 }) {
   const { node } = entry;
   const turn = node.turn;
@@ -247,7 +253,11 @@ function ThreadPostEntry({
         </div>
 
         {/* Image */}
-        <div className={`relative overflow-hidden border border-zinc-800 bg-zinc-900 ${isRoot ? "aspect-[4/5] w-full max-w-3xl rounded-2xl" : "aspect-square w-[140px] rounded-xl md:w-[240px]"}`}>
+        <div
+          onClick={() => onImageClick?.(turn.image_url)}
+          className={`relative overflow-hidden border border-zinc-800 bg-zinc-900 cursor-zoom-in hover:border-zinc-500 transition-colors ${isRoot ? "aspect-[4/5] w-full max-w-3xl rounded-2xl" : "aspect-square w-[140px] rounded-xl md:w-[240px]"}`}
+          title="Click to enlarge"
+        >
           <Image
             src={turn.image_url}
             alt={`Post ${turn.image_id}`}
