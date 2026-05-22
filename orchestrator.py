@@ -1101,8 +1101,23 @@ def build_initiate_prompt_json(
     schema_template: dict[str, Any],
     turn_number: int,
 ) -> dict[str, Any]:
+    # Download baseline agent reference image bytes if configured
+    image_bytes = None
+    image_mime_type = None
+    prompt_img_url = agent.get("prompt_image") or agent.get("promptImage")
+    if prompt_img_url:
+        try:
+            image_bytes, image_mime_type = fetch_image_bytes(prompt_img_url)
+        except Exception as e:
+            print(f"[warning] Failed to fetch agent prompt image: {e}", flush=True)
+
     prompt = f"""
 You are drafting a brand-new Areopagus thread.
+"""
+    if prompt_img_url:
+        prompt += "\nYou are shown your baseline style reference image (AgentPrompt) in the multimodal context. You can reference it in your prompt fields using the tag '@AgentPrompt' to maintain persona style consistency."
+
+    prompt += f"""
 
 Return JSON only. Use the schema template below as the structural guide, then expand it into a fresh prompt that feels like a new thread rather than a revision.
 
@@ -1129,10 +1144,18 @@ Rules:
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 hash-tagged strings.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
-- Return JSON only.
 """
+    if prompt_img_url:
+        prompt += "- If appropriate, reference '@AgentPrompt' in your prompt fields to anchor the style."
 
-    prompt_json = gemini_generate(prompt, model=agent_gemini_model(agent))
+    prompt += "\n- Return JSON only.\n"
+
+    prompt_json = gemini_generate(
+        prompt,
+        image_bytes=image_bytes,
+        image_mime_type=image_mime_type,
+        model=agent_gemini_model(agent)
+    )
     prompt_json = sanitize_for_runway(prompt_json)
     prompt_json["debate_context"] = sanitize_for_runway([summarize_turn_for_agent(turn) for turn in recent_turns])
     if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
@@ -1206,10 +1229,21 @@ def build_pivot_prompt_json(
     turn_number: int,
 ) -> dict[str, Any]:
     selected_prompt = prompt_payload_for_turn(selected_turn)
+    
+    # Download the parent image bytes to feed into Gemini for visual analysis
+    image_bytes = None
+    image_mime_type = None
+    if selected_turn and selected_turn.get("image_url"):
+        try:
+            image_bytes, image_mime_type = fetch_image_bytes(selected_turn["image_url"])
+        except Exception as e:
+            print(f"[warning] Failed to fetch image bytes for selected turn pivot: {e}", flush=True)
+
     prompt = f"""
 You are refining the most recent Areopagus prompt into a reply image.
+You are shown the actual generated image of the parent post (selected turn) in the multimodal context.
 
-Return JSON only. Keep the thread identity recognizable, but adjust the composition, material emphasis, or atmosphere in response to the agent's judgment.
+Refer to this parent image in your prompt text using the tag '@CurrentThread'. You should use '@CurrentThread' within prompt fields (like `scene_description`, `subject`, `style`, or `camera`) to specify what composition, subject elements, or style characteristics you want to reference, preserve, or modify.
 
 Agent profile:
 {json.dumps({
@@ -1237,10 +1271,16 @@ Rules:
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 hash-tagged strings.
 - Make the image feel like a reply rather than a new standalone thread.
+- You MUST reference '@CurrentThread' in at least one field (e.g. scene_description, subject, or style) to guide the Runway/Gemini image-to-image/reference-image logic. For example: "A destructured wool coat silhouette, modifying the silhouette of @CurrentThread" or "A close-up camera angle similar to @CurrentThread, but..."
 - Return JSON only.
 """
 
-    prompt_json = gemini_generate(prompt, model=agent_gemini_model(agent))
+    prompt_json = gemini_generate(
+        prompt,
+        image_bytes=image_bytes,
+        image_mime_type=image_mime_type,
+        model=agent_gemini_model(agent)
+    )
     prompt_json = sanitize_for_runway(prompt_json)
     prompt_json["debate_context"] = sanitize_for_runway([summarize_turn_for_agent(turn) for turn in recent_turns])
     if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
