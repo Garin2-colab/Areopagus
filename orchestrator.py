@@ -880,15 +880,13 @@ def agent_runway_model(agent: dict[str, Any]) -> str:
         "gemini_3_pro": "gemini_image3_pro",
         "gemini3pro": "gemini_image3_pro",
         "gemini_3pro": "gemini_image3_pro",
-        "gen4_image": "gen4_image",
-        "gen4_image_turbo": "gen4_image_turbo",
-        "gemini_2.5_flash": "gemini_2.5_flash",
     }
 
     if model in aliases:
         return aliases[model]
 
-    return str(raw_model).strip()
+    # Enforce only 'gpt_image_2' or 'gemini_image3_pro'
+    return "gpt_image_2"
 
 
 def runway_ratio_for_model(model: str, aspect_ratio: str = RUNWAY_ASPECT_RATIO) -> str:
