@@ -904,7 +904,9 @@ def runway_reference_limit(model: str) -> int:
 def build_runway_reference_images(
     agent: dict[str, Any],
     *,
+    prompt_json: dict[str, Any] | None = None,
     selected_turn: dict[str, Any] | None = None,
+    history: dict[str, Any] | None = None,
     model: str = RUNWAY_MODEL,
 ) -> list[dict[str, Any]]:
     references: list[dict[str, Any]] = []
@@ -914,23 +916,53 @@ def build_runway_reference_images(
             return
         references.append({"uri": uri.strip(), "tag": tag})
 
-    agent_references = agent.get("referenceImages") or agent.get("reference_images") or []
-    if isinstance(agent_references, dict):
-        agent_references = [agent_references]
-    if isinstance(agent_references, list):
-        for index, reference in enumerate(agent_references, start=1):
-            if isinstance(reference, str):
-                add_reference(reference, f"AgentRef{index}")
-            elif isinstance(reference, dict):
-                add_reference(
-                    reference.get("uri") or reference.get("url") or reference.get("image_url"),
-                    reference.get("tag") or f"AgentRef{index}",
-                )
+    ref_decision = None
+    if prompt_json and isinstance(prompt_json, dict):
+        ref_decision = prompt_json.get("reference_image_id")
 
-    add_reference(agent.get("prompt_image") or agent.get("promptImage"), "AgentPrompt")
+    if ref_decision is not None:
+        if ref_decision in ("selected", "CurrentThread", "ReferenceImage"):
+            if selected_turn:
+                add_reference(selected_turn.get("image_url"), "ReferenceImage")
+                add_reference(selected_turn.get("image_url"), "CurrentThread")
+        elif ref_decision in ("profile", "AgentPrompt"):
+            prompt_img = agent.get("prompt_image") or agent.get("promptImage")
+            if prompt_img:
+                add_reference(prompt_img, "ReferenceImage")
+                add_reference(prompt_img, "AgentPrompt")
+        elif isinstance(ref_decision, str) and ref_decision.strip():
+            # Search history turns for a match
+            target_url = None
+            if history and isinstance(history.get("turns"), list):
+                for turn in history["turns"]:
+                    if turn.get("image_id") == ref_decision:
+                        target_url = turn.get("image_url")
+                        break
+            if target_url:
+                add_reference(target_url, "ReferenceImage")
+    else:
+        # Fallback (backward compatibility): attach default references
+        if selected_turn:
+            add_reference(selected_turn.get("image_url"), "ReferenceImage")
+            add_reference(selected_turn.get("image_url"), "CurrentThread")
+        
+        prompt_img = agent.get("prompt_image") or agent.get("promptImage")
+        if prompt_img:
+            add_reference(prompt_img, "ReferenceImage")
+            add_reference(prompt_img, "AgentPrompt")
 
-    if selected_turn is not None:
-        add_reference(selected_turn.get("image_url"), "CurrentThread")
+        agent_references = agent.get("referenceImages") or agent.get("reference_images") or []
+        if isinstance(agent_references, dict):
+            agent_references = [agent_references]
+        if isinstance(agent_references, list):
+            for index, reference in enumerate(agent_references, start=1):
+                if isinstance(reference, str):
+                    add_reference(reference, f"AgentRef{index}")
+                elif isinstance(reference, dict):
+                    add_reference(
+                        reference.get("uri") or reference.get("url") or reference.get("image_url"),
+                        reference.get("tag") or f"AgentRef{index}",
+                    )
 
     unique: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -1115,7 +1147,7 @@ def build_initiate_prompt_json(
 You are drafting a brand-new Areopagus thread.
 """
     if prompt_img_url:
-        prompt += "\nYou are shown your baseline style reference image (AgentPrompt) in the multimodal context. You can reference it in your prompt fields using the tag '@AgentPrompt' to maintain persona style consistency."
+        prompt += "\nYou are shown your baseline style reference image (AgentPrompt) in the multimodal context. You can reference it in your prompt fields using the tag '@ReferenceImage' to maintain persona style consistency."
 
     prompt += f"""
 
@@ -1140,13 +1172,17 @@ Schema template:
 
 Rules:
 - Keep the same top-level keys from the schema template.
-- Add turn, debate_context, proposal, and keywords.
+- Add turn, debate_context, proposal, keywords, and reference_image_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 hash-tagged strings.
+- reference_image_id: You must decide whether to use a style/composition reference image for this generation or generate completely from scratch.
+  - If you want to use your baseline style image as a reference, set reference_image_id to "profile".
+  - If you want to generate completely from scratch without image references, set reference_image_id to null.
+- If reference_image_id is NOT null, you must reference '@ReferenceImage' in at least one description field (e.g. style or scene_description). If it is null, do NOT use the '@ReferenceImage' tag.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
 """
     if prompt_img_url:
-        prompt += "- If appropriate, reference '@AgentPrompt' in your prompt fields to anchor the style."
+        prompt += "- If appropriate, reference '@ReferenceImage' in your prompt fields to anchor the style."
 
     prompt += "\n- Return JSON only.\n"
 
@@ -1243,8 +1279,6 @@ def build_pivot_prompt_json(
 You are refining the most recent Areopagus prompt into a reply image.
 You are shown the actual generated image of the parent post (selected turn) in the multimodal context.
 
-Refer to this parent image in your prompt text using the tag '@CurrentThread'. You should use '@CurrentThread' within prompt fields (like `scene_description`, `subject`, `style`, or `camera`) to specify what composition, subject elements, or style characteristics you want to reference, preserve, or modify.
-
 Agent profile:
 {json.dumps({
     "id": agent.get("id"),
@@ -1267,11 +1301,16 @@ Schema template:
 
 Rules:
 - Keep the same top-level keys from the schema template.
-- Add turn, debate_context, proposal, and keywords.
+- Add turn, debate_context, proposal, keywords, and reference_image_id.
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 hash-tagged strings.
 - Make the image feel like a reply rather than a new standalone thread.
-- You MUST reference '@CurrentThread' in at least one field (e.g. scene_description, subject, or style) to guide the Runway/Gemini image-to-image/reference-image logic. For example: "A destructured wool coat silhouette, modifying the silhouette of @CurrentThread" or "A close-up camera angle similar to @CurrentThread, but..."
+- reference_image_id: You must decide whether to use a reference image for this generation or generate from scratch/external web.
+  - If you want to use the parent image as a reference, set reference_image_id to "selected".
+  - If you want to use your agent profile style image as a reference, set reference_image_id to "profile".
+  - If you want to reference a different recent turn's image from the list of recent posts above, set reference_image_id to its image_id (e.g. "thread_agent-1-gothic-anatomist_1").
+  - If you want to generate completely from scratch without using any image references, set reference_image_id to null.
+- If reference_image_id is NOT null, you MUST reference '@ReferenceImage' in at least one description field (e.g. style, scene_description, subject, or camera) to direct the Runway/Gemini image-to-image/reference-image logic. If it is null, do NOT use the '@ReferenceImage' tag.
 - Return JSON only.
 """
 
@@ -1455,7 +1494,12 @@ def dispatch_agent_action(
         prompt_json = build_initiate_prompt_json(agent, recent_turns, assessment, schema_template, turn_number)
         category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
         prompt_json["category"] = category
-        reference_images = build_runway_reference_images(agent, model=runway_model)
+        reference_images = build_runway_reference_images(
+            agent,
+            prompt_json=prompt_json,
+            history=history,
+            model=runway_model,
+        )
         prompt_text = build_runway_prompt_text(
             prompt_json,
             model=runway_model,
@@ -1514,7 +1558,13 @@ def dispatch_agent_action(
         if not category:
             category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
         prompt_json["category"] = category
-        reference_images = build_runway_reference_images(agent, selected_turn=selected_turn, model=runway_model)
+        reference_images = build_runway_reference_images(
+            agent,
+            prompt_json=prompt_json,
+            selected_turn=selected_turn,
+            history=history,
+            model=runway_model,
+        )
         prompt_text = build_runway_prompt_text(
             prompt_json,
             model=runway_model,
