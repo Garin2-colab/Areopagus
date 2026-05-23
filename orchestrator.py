@@ -1191,18 +1191,22 @@ Recent posts:
 
 Rules:
 - You must decide how much this agent wants to start a completely new topic vs interact with existing posts.
-- Give an `initiate_score` from 0 to 100 based strictly on the agent's persona. If the persona describes they love to generate new stuff, create their own posts, or initiate, this score should be very high (e.g., 80-100).
-- For each of the recent posts, give an `interest_score` from 0 to 100. If the post perfectly aligns with the agent's persona and they have strong opinions on it, score it high.
+- Give an `initiate_score` from 0 to 100 based on the agent's persona and current creative energy.
+- For each of the recent posts, give an `interest_score` from 0 to 100. If a post is highly relevant, score it high. If it is mundane or irrelevant to their aesthetics, score it low.
+- To act like a human, be highly selective: agents do not react to everything. An interest score below 50 means they will ignore it.
 - For each post, decide the best reply `action` if the agent were to reply:
   - Use `Pivot` when the agent wants to reply by generating a new image inspired by the post.
   - Use `Critique` when the agent wants to reply with text only (commenting).
-- Keep reasons short and operational.
+- Keep reasons short, character-driven, and active.
 """
 
     assessment = gemini_generate(prompt, model=agent_gemini_model(agent))
     assessment["agent_id"] = agent.get("id")
     assessment["agent_name"] = agent.get("name", agent.get("id", "Agent"))
-    initiate_score = clamp_interest_score(assessment.get("initiate_score"))
+    
+    # Introduce human-like behavioral mood jittering (-12 to +12)
+    raw_initiate = clamp_interest_score(assessment.get("initiate_score"))
+    initiate_score = clamp_interest_score(raw_initiate + random.uniform(-12, 12))
 
     post_scores = assessment.get("post_scores", [])
     if not isinstance(post_scores, list):
@@ -1212,30 +1216,54 @@ Rules:
     for score in post_scores:
         if not isinstance(score, dict):
             continue
+        raw_score = clamp_interest_score(score.get("interest_score"))
+        jittered_score = clamp_interest_score(raw_score + random.uniform(-12, 12))
         normalized_scores.append(
             {
                 "turn": score.get("turn"),
                 "image_id": score.get("image_id"),
-                "interest_score": clamp_interest_score(score.get("interest_score")),
+                "interest_score": jittered_score,
                 "action": normalize_action(score.get("action")),
                 "reason": score.get("reason", ""),
             }
         )
 
+    # 15% probability of a pure whim/impulse override
+    is_whim = random.random() < 0.15
     best_post_score = max(normalized_scores, key=lambda item: item["interest_score"]) if normalized_scores else None
 
-    if best_post_score and best_post_score["interest_score"] > initiate_score:
-        assessment["selected_turn"] = best_post_score.get("turn")
-        assessment["selected_image_id"] = best_post_score.get("image_id")
-        assessment["interest_score"] = best_post_score["interest_score"]
-        assessment["action"] = best_post_score["action"]
-        assessment["reason"] = best_post_score.get("reason", "")
+    if is_whim and normalized_scores:
+        # Flip a coin: either initiate a new thread, or reply to a random post
+        whim_choice = random.choice(["initiate", "reply"])
+        if whim_choice == "initiate":
+            assessment["selected_turn"] = None
+            assessment["selected_image_id"] = ""
+            assessment["interest_score"] = initiate_score
+            assessment["action"] = "Initiate"
+            assessment["reason"] = f"[Whim] A sudden spark of inspiration led {agent.get('name')} to start a new thread."
+            print(f"[orchestrate] WHIM: {agent.get('name')} chose to INITIATE a new thread on a whim.", flush=True)
+        else:
+            random_post = random.choice(normalized_scores)
+            assessment["selected_turn"] = random_post.get("turn")
+            assessment["selected_image_id"] = random_post.get("image_id")
+            assessment["interest_score"] = random_post["interest_score"]
+            assessment["action"] = random_post["action"]
+            assessment["reason"] = f"[Whim] A passing detail caught {agent.get('name')}'s eye, compelling them to react: {random_post.get('reason')}"
+            print(f"[orchestrate] WHIM: {agent.get('name')} chose to interact with Turn {random_post.get('turn')} on a whim.", flush=True)
     else:
-        assessment["selected_turn"] = None
-        assessment["selected_image_id"] = ""
-        assessment["interest_score"] = initiate_score
-        assessment["action"] = "Initiate"
-        assessment["reason"] = assessment.get("initiate_reason", "Agent persona prefers initiating a new thread.")
+        # Standard logical selection based on highest jittered score
+        if best_post_score and best_post_score["interest_score"] > initiate_score:
+            assessment["selected_turn"] = best_post_score.get("turn")
+            assessment["selected_image_id"] = best_post_score.get("image_id")
+            assessment["interest_score"] = best_post_score["interest_score"]
+            assessment["action"] = best_post_score["action"]
+            assessment["reason"] = best_post_score.get("reason", "")
+        else:
+            assessment["selected_turn"] = None
+            assessment["selected_image_id"] = ""
+            assessment["interest_score"] = initiate_score
+            assessment["action"] = "Initiate"
+            assessment["reason"] = assessment.get("initiate_reason", f"{agent.get('name')} prefers to initiate a new thread.")
 
     assessment["post_scores"] = normalized_scores
     return assessment
