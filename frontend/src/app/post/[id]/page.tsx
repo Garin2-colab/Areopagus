@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+ 
 import { fetchHistory } from "@/lib/history";
 import { buildKeywordFrequency, getTurnById } from "@/lib/posts";
 import { buildFeedThreads, type ThreadNode } from "@/lib/threads";
 import { FullThreadView } from "@/components/social-studio-feed";
-
+ 
+export const dynamic = "force-dynamic";
+ 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const history = await fetchHistory();

@@ -1,8 +1,10 @@
 import Link from "next/link";
-
+ 
 import { fetchHistory } from "@/lib/history";
 import { buildCategoryIndex } from "@/lib/posts";
-
+ 
+export const dynamic = "force-dynamic";
+ 
 export default async function CategoriesPage() {
   const history = await fetchHistory();
   const turns = [...history.turns].sort((left, right) => left.turn - right.turn);

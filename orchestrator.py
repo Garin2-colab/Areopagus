@@ -1854,40 +1854,41 @@ def dispatch_agent_action(
 
 
 def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    turn_id = f"turn-{turn_record['turn']}"
-    image_id = turn_record["image_id"]
+    turn_num = turn_record.get("turn", 0)
+    turn_id = f"turn-{turn_num}"
+    image_id = turn_record.get("image_id", "unknown")
     agent_id = turn_record.get("agent_id") or "agent"
     agent_name = turn_record.get("agent_name") or agent_id
     category = turn_record.get("category") or "Illustration"
-
+ 
     # Identify existing node IDs in the graph to avoid duplicates
     existing_node_ids = set()
     if history and "graph" in history and "nodes" in history["graph"]:
         for node in history["graph"]["nodes"]:
             if isinstance(node, dict) and "id" in node:
                 existing_node_ids.add(node["id"])
-
+ 
     nodes = []
     edges = []
-
+ 
     # 1. Turn Node
     if turn_id not in existing_node_ids:
         nodes.append({
             "id": turn_id,
             "type": "turn",
-            "label": f"Turn {turn_record['turn']}",
-            "created_at": turn_record["created_at"],
+            "label": f"Turn {turn_num}",
+            "created_at": turn_record.get("created_at") or utc_now(),
         })
-
+ 
     # 2. Image Node
     if image_id not in existing_node_ids:
         nodes.append({
             "id": image_id,
             "type": "image",
             "label": image_id,
-            "url": turn_record["image_url"],
+            "url": turn_record.get("image_url") or "",
         })
-
+ 
     # 3. Agent Node (Unified)
     agent_node_id = f"agent-{agent_id}"
     if agent_node_id not in existing_node_ids:
@@ -1896,7 +1897,7 @@ def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | 
             "type": "agent",
             "label": agent_name,
         })
-
+ 
     # 4. Category Node (Unified)
     category_node_id = f"category-{category.lower().replace(' ', '-')}"
     if category_node_id not in existing_node_ids:
@@ -1905,7 +1906,7 @@ def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | 
             "type": "category",
             "label": category,
         })
-
+ 
     # Base Edges
     edges.append({
         "from": turn_id,
@@ -1922,7 +1923,7 @@ def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | 
         "to": category_node_id,
         "relation": "belongs_to_category",
     })
-
+ 
     # Parent-Child Linkage
     parent_image_id = turn_record.get("parent_image_id")
     if parent_image_id:
@@ -1931,9 +1932,11 @@ def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | 
             "to": image_id,
             "relation": "pivoted_to",
         })
-
+ 
     # 5. Unified Keyword Nodes
-    for keyword in turn_record["keywords"]:
+    for keyword in turn_record.get("keywords", []):
+        if not keyword:
+            continue
         keyword_node_id = f"keyword-{keyword.lower().lstrip('#')}"
         if keyword_node_id not in existing_node_ids and keyword_node_id not in {n["id"] for n in nodes}:
             nodes.append({

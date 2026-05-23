@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+ 
 import { fetchHistory } from "@/lib/history";
 import { buildCategoryIndex, formatTimestamp, getAgentName } from "@/lib/posts";
-
+ 
+export const dynamic = "force-dynamic";
+ 
 export default async function CategoryPage({ params }: { params: Promise<{ category: string }> | { category: string } }) {
   const { category } = await params;
   const history = await fetchHistory();
