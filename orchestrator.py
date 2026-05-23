@@ -53,9 +53,27 @@ RUNWAY_ASPECT_RATIO = "1:1"
 RUNWAY_RATIO_BY_MODEL = {
     "gpt_image_2": {
         "1:1": "1920:1920",
+        "16:9": "1920:1088",
+        "9:16": "1088:1920",
+        "4:3": "1920:1440",
+        "3:4": "1440:1920",
+        "21:9": "2048:880",
+        "2:3": "1280:1920",
+        "3:2": "1920:1280",
+        "4:5": "1536:1920",
+        "5:4": "1920:1536",
     },
     "gemini_image3_pro": {
         "1:1": "1024:1024",
+        "16:9": "1344:768",
+        "9:16": "768:1344",
+        "4:3": "1184:864",
+        "3:4": "864:1184",
+        "21:9": "1536:672",
+        "2:3": "832:1248",
+        "3:2": "1248:832",
+        "4:5": "896:1152",
+        "5:4": "1152:896",
     },
     "gen4_image": {
         "1:1": "1080:1080",
@@ -582,22 +600,24 @@ def runway_create_text_to_image(
     *,
     model: str = RUNWAY_MODEL,
     reference_images: list[dict[str, Any]] | None = None,
+    aspect_ratio: str | None = None,
 ) -> dict[str, Any]:
     # gpt_image_2 allows 32K chars, gemini_image3_pro allows 5.5K.
     # Use 5000 as a safe max that works for all models.
     max_len = 5000 if model in ("gpt_image_2", "gemini_image3_pro") else 950
     safe_prompt = prompt_text[:max_len]
+    ratio_val = runway_ratio_for_model(model, aspect_ratio or "1:1")
     payload: dict[str, Any] = {
         "model": model,
         "promptText": safe_prompt,
-        "ratio": runway_ratio_for_model(model),
+        "ratio": ratio_val,
     }
     if "gemini" not in model.lower():
         payload["quality"] = RUNWAY_QUALITY
     if reference_images:
         payload["referenceImages"] = reference_images
 
-    print(f"Sending to Runway: Model=[{model}], PromptLength=[{len(safe_prompt)}]", flush=True)
+    print(f"Sending to Runway: Model=[{model}], Ratio=[{ratio_val}] (Requested AspectRatio=[{aspect_ratio}]), PromptLength=[{len(safe_prompt)}]", flush=True)
 
     return runway_request(
         "POST",
@@ -951,12 +971,28 @@ def agent_runway_model(agent: dict[str, Any]) -> str:
     return "gpt_image_2"
 
 
+def extract_aspect_ratio(prompt_json: Any) -> str:
+    if not isinstance(prompt_json, dict):
+        return "1:1"
+    ratio = None
+    if "style" in prompt_json and isinstance(prompt_json["style"], dict):
+        ratio = prompt_json["style"].get("aspect_ratio") or prompt_json["style"].get("ratio")
+    if not ratio:
+        ratio = prompt_json.get("aspect_ratio") or prompt_json.get("ratio")
+    if not isinstance(ratio, str):
+        return "1:1"
+    ratio = ratio.strip().replace(" ", "")
+    ratio = ratio.replace("x", ":").replace("-", ":")
+    return ratio
+
+
 def runway_ratio_for_model(model: str, aspect_ratio: str = RUNWAY_ASPECT_RATIO) -> str:
     model_ratios = RUNWAY_RATIO_BY_MODEL.get(model)
     if model_ratios and aspect_ratio in model_ratios:
         return model_ratios[aspect_ratio]
-
-    return RUNWAY_RATIO_BY_MODEL[RUNWAY_MODEL][aspect_ratio]
+    if model_ratios and "1:1" in model_ratios:
+        return model_ratios["1:1"]
+    return "1024:1024"
 
 
 def runway_reference_limit(model: str) -> int:
@@ -1399,6 +1435,7 @@ Rules:
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 hash-tagged strings.
+- Inside the "style" object, dynamically select the most appropriate "aspect_ratio" for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
 - reference_image_id: You must decide whether to use a style/composition reference image for this generation or generate completely from scratch.
   - If you want to use your baseline style image as a reference, set reference_image_id to "profile".
   - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
@@ -1575,6 +1612,7 @@ Rules:
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 hash-tagged strings.
+- Inside the "style" object, dynamically select the most appropriate "aspect_ratio" for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
 - Make the image feel like a reply rather than a new standalone thread.
 - reference_image_id: You must decide whether to use a reference image for this generation or generate from scratch/external web.
   - If you want to use the parent image as a reference, set reference_image_id to "selected".
@@ -1787,7 +1825,13 @@ def dispatch_agent_action(
             reference_images=reference_images,
         )
         print(f"[dispatch] Initiate: model={runway_model} prompt_len={len(prompt_text)}", flush=True)
-        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
+        aspect_ratio = extract_aspect_ratio(prompt_json)
+        runway_task = runway_create_text_to_image(
+            prompt_text,
+            model=runway_model,
+            reference_images=reference_images,
+            aspect_ratio=aspect_ratio,
+        )
         task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
         if not task_id:
             raise RuntimeError(f"No task ID returned from Runway. Response: {runway_task}")
@@ -1853,7 +1897,13 @@ def dispatch_agent_action(
             reference_images=reference_images,
         )
         print(f"[dispatch] Pivot: model={runway_model} prompt_len={len(prompt_text)}", flush=True)
-        runway_task = runway_create_text_to_image(prompt_text, model=runway_model, reference_images=reference_images)
+        aspect_ratio = extract_aspect_ratio(prompt_json)
+        runway_task = runway_create_text_to_image(
+            prompt_text,
+            model=runway_model,
+            reference_images=reference_images,
+            aspect_ratio=aspect_ratio,
+        )
         task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
         if not task_id:
             raise RuntimeError(f"No task ID returned from Runway. Response: {runway_task}")
