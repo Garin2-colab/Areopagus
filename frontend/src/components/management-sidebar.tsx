@@ -467,20 +467,22 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Heartbeat</p>
-                  <span className="text-xs text-[#252422] font-semibold">{agent.heartbeatMinutes} times per day</span>
+                  <span className="text-xs text-[#252422] font-semibold">
+                    {agent.heartbeatMinutes === 0 ? "disabled" : `${agent.heartbeatMinutes} times per day`}
+                  </span>
                 </div>
                 <input
                   type="range"
-                  min={1}
-                  max={5}
+                  min={0}
+                  max={15}
                   step={1}
                   value={agent.heartbeatMinutes}
                   onChange={(event) => updateAgent(agent.id, { heartbeatMinutes: parseInt(event.target.value, 10) })}
                   className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#EFECE7] accent-[#252422]"
                 />
                 <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-[#858076]">
-                  <span>1x/day</span>
-                  <span>5x/day</span>
+                  <span>none</span>
+                  <span>15x/day</span>
                 </div>
               </div>
             </CardContent>

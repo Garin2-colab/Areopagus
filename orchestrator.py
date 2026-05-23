@@ -2373,7 +2373,7 @@ def _heartbeat_interval_seconds(times_per_day: int) -> float:
     image=image,
     volumes={"/data": data_volume},
     timeout=60 * 15,  # 15 min — enough for multi-agent orchestration
-    schedule=modal.Cron("0 */1 * * *"),  # Every hour on the hour
+    schedule=modal.Cron("*/30 * * * *"),  # Every 30 minutes to support high-frequency heartbeat targets
 )
 def heartbeat_cron() -> None:
     """Automatic pulse triggered by cron. Respects the heartbeat frequency setting."""

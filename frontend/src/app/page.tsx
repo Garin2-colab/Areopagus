@@ -75,7 +75,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center gap-5">
             <div className="flex flex-col items-center gap-2">
-              <h1 className="font-display text-5xl font-extrabold tracking-tighter text-[#252422] md:text-7xl">AREOPAGUS</h1>
+              <h1 className="font-display text-5xl text-[#D45113] md:text-7xl">AREOPAGUS</h1>
               {view === "macro" && (
                 <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
                   Knowledge Web
