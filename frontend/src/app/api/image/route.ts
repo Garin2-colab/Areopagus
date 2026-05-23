@@ -25,18 +25,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const v = searchParams.get("v");
+    const isDev = searchParams.get("dev") === "true";
     if (!id) {
       return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
     }
-
-    const modalImageUrlBase = getModalImageUrl();
+ 
+    let modalImageUrlBase = getModalImageUrl();
     if (!modalImageUrlBase) {
       return NextResponse.json(
         { error: "Modal endpoint environment variables are not configured." },
         { status: 500 }
       );
     }
-
+ 
+    if (isDev) {
+      modalImageUrlBase = modalImageUrlBase.replace("-get-image.modal.run", "-get-image-dev.modal.run");
+    }
+ 
     let targetUrl = `${modalImageUrlBase}?id=${encodeURIComponent(id)}`;
     if (v) {
       targetUrl += `&v=${encodeURIComponent(v)}`;

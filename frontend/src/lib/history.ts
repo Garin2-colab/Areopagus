@@ -103,12 +103,13 @@ function resolveHistorySource() {
 
 function sanitizeImageUrls(url: string | undefined): string {
   if (!url) return "";
-  if (url.includes("-get-image.modal.run")) {
+  if (url.includes("-get-image.modal.run") || url.includes("-get-image-dev.modal.run")) {
     const match = url.match(/[?&]id=([^&]+)/);
     if (match && match[1]) {
       const vMatch = url.match(/[?&]v=([^&]+)/);
       const vParam = vMatch ? `&v=${vMatch[1]}` : "";
-      return `/api/image?id=${match[1]}${vParam}`;
+      const devParam = url.includes("-dev.modal.run") ? "&dev=true" : "";
+      return `/api/image?id=${match[1]}${vParam}${devParam}`;
     }
   }
   return url;
