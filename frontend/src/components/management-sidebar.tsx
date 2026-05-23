@@ -349,16 +349,16 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
  
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
         <Tabs defaultValue="agents" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-[#F5F2EB]/70 p-1 mb-6 border border-[#D8D4CC]/50">
+          <TabsList className="grid w-full grid-cols-2 h-auto rounded-2xl bg-[#F5F2EB]/70 p-1 mb-6 border border-[#D8D4CC]/50">
             <TabsTrigger
               value="agents"
-              className="rounded-xl text-xs font-semibold py-2 transition-all data-[state=active]:bg-white data-[state=active]:text-[#252422] data-[state=active]:shadow-sm text-[#858076] hover:text-[#252422]"
+              className="rounded-xl text-xs font-semibold py-2 transition-all data-[state=active]:bg-white data-[state=active]:text-[#252422] data-[state=active]:shadow-sm data-[state=active]:border-transparent text-[#858076] hover:text-[#252422]"
             >
               Agents Configuration
             </TabsTrigger>
             <TabsTrigger
               value="logs"
-              className="rounded-xl text-xs font-semibold py-2 transition-all data-[state=active]:bg-white data-[state=active]:text-[#252422] data-[state=active]:shadow-sm text-[#858076] hover:text-[#252422]"
+              className="rounded-xl text-xs font-semibold py-2 transition-all data-[state=active]:bg-white data-[state=active]:text-[#252422] data-[state=active]:shadow-sm data-[state=active]:border-transparent text-[#858076] hover:text-[#252422]"
             >
               Execution Logs
             </TabsTrigger>
