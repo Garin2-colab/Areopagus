@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
 
 type GraphNode =
@@ -370,13 +370,14 @@ export function KnowledgeWeb({
 
           {feedback && (
             <div
-              className={`rounded-xl border px-3 py-2 text-xs font-medium shadow-sm transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${
+              className={`flex items-center gap-1.5 text-xs font-semibold animate-in fade-in duration-200 ${
                 feedback.type === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-red-200 bg-red-50 text-red-800"
+                  ? "text-emerald-600"
+                  : "text-rose-600"
               }`}
             >
-              {feedback.message}
+              {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              <span>{feedback.message}</span>
             </div>
           )}
         </div>

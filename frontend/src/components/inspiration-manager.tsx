@@ -155,8 +155,8 @@ export function InspirationManager({ inspiration, onRefresh, onImageClick }: Ins
       </div>
 
       {uploadError && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-800 animate-in fade-in duration-200">
-          <AlertCircle className="h-4 w-4 text-red-600" />
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 animate-in fade-in duration-200">
+          <AlertCircle className="h-4 w-4" />
           <span>{uploadError}</span>
         </div>
       )}

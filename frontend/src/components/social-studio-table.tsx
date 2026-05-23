@@ -225,10 +225,10 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
 
         {feedback && (
           <div
-            className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-200 ${
+            className={`flex items-center gap-1.5 text-xs font-semibold animate-in fade-in duration-200 ${
               feedback.type === "success"
-                ? "border-emerald-800/30 bg-emerald-950/20 text-emerald-400"
-                : "border-rose-800/30 bg-rose-950/20 text-rose-400"
+                ? "text-emerald-600"
+                : "text-rose-600"
             }`}
           >
             {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
