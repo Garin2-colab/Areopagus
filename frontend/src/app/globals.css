@@ -1,21 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=Bellefair&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+ 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+ 
 :root {
   color-scheme: light;
-  --font-display: "Plus Jakarta Sans", "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Bellefair", Georgia, Cambria, "Times New Roman", Times, serif;
+  --dark-orange: #D45113;
 }
-
+ 
+.font-display {
+  font-family: var(--font-display) !important;
+  letter-spacing: normal !important;
+}
+ 
 html {
   scroll-behavior: auto;
 }
-
+ 
 body {
   @apply bg-[#F5F2EB] text-[#252422] antialiased;
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   margin: 0;
 }
 

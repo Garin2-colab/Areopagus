@@ -32,17 +32,17 @@ const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 gap-4 bg-zinc-950 shadow-2xl shadow-black/40",
-        side === "right" && "inset-y-0 right-0 h-full w-full border-l border-zinc-800 sm:max-w-xl",
-        side === "left" && "inset-y-0 left-0 h-full w-full border-r border-zinc-800 sm:max-w-xl",
-        side === "top" && "inset-x-0 top-0 border-b border-zinc-800",
-        side === "bottom" && "inset-x-0 bottom-0 border-t border-zinc-800",
+        "fixed z-50 gap-4 bg-white shadow-2xl shadow-[#252422]/10",
+        side === "right" && "inset-y-0 right-0 h-full w-full border-l border-[#D8D4CC]/60 sm:max-w-xl",
+        side === "left" && "inset-y-0 left-0 h-full w-full border-r border-[#D8D4CC]/60 sm:max-w-xl",
+        side === "top" && "inset-x-0 top-0 border-b border-[#D8D4CC]/60",
+        side === "bottom" && "inset-x-0 bottom-0 border-t border-[#D8D4CC]/60",
         className
       )}
       {...props}
     >
       {children}
-      <SheetClose className="absolute right-4 top-4 rounded-full border border-zinc-800 bg-zinc-950 p-2 text-zinc-400 hover:text-zinc-100">
+      <SheetClose className="absolute right-4 top-4 rounded-full border border-[#D8D4CC]/80 bg-white p-2 text-[#858076] hover:text-[#252422] hover:bg-[#F5F2EB] transition-colors">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </SheetClose>
@@ -50,22 +50,22 @@ const SheetContent = React.forwardRef<
   </SheetPortal>
 ));
 SheetContent.displayName = DialogPrimitive.Content.displayName;
-
+ 
 function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col space-y-2 text-left", className)} {...props} />;
 }
-
+ 
 function SheetTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <DialogPrimitive.Title
-      className={cn("font-display text-2xl tracking-tighter text-zinc-50", className)}
+      className={cn("font-display text-2xl font-bold tracking-normal text-[#252422]", className)}
       {...props}
     />
   );
 }
-
+ 
 function SheetDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <DialogPrimitive.Description className={cn("text-sm text-zinc-400", className)} {...props} />;
+  return <DialogPrimitive.Description className={cn("text-sm text-[#858076]", className)} {...props} />;
 }
 
 export {
