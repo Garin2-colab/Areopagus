@@ -32,6 +32,15 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeReplaceIdRef = useRef<string | null>(null);
 
+  const showFeedback = (type: "success" | "error", message: string) => {
+    setFeedback({ type, message });
+    if (type === "success") {
+      setTimeout(() => {
+        setFeedback((prev) => (prev?.message === message ? null : prev));
+      }, 4000);
+    }
+  };
+
   const handleDelete = async (imageId: string) => {
     if (!window.confirm("Are you sure you want to delete this post?")) {
       return;
@@ -53,16 +62,13 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
 
       const result = await response.json();
       if (response.ok && result.ok) {
-        setFeedback({ type: "success", message: `Successfully deleted post: ${imageId}` });
+        showFeedback("success", `Successfully deleted post: ${imageId}`);
         await onRefresh();
       } else {
         throw new Error(result.error || "Failed to delete post.");
       }
     } catch (err) {
-      setFeedback({
-        type: "error",
-        message: err instanceof Error ? err.message : "Failed to delete post."
-      });
+      showFeedback("error", err instanceof Error ? err.message : "Failed to delete post.");
     } finally {
       setDeletingId(null);
     }
@@ -86,16 +92,13 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
 
       const result = await response.json();
       if (response.ok && result.ok) {
-        setFeedback({ type: "success", message: `Successfully updated category to ${newCategory}` });
+        showFeedback("success", `Successfully updated category to ${newCategory}`);
         await onRefresh();
       } else {
         throw new Error(result.error || "Failed to update category.");
       }
     } catch (err) {
-      setFeedback({
-        type: "error",
-        message: err instanceof Error ? err.message : "Failed to update category."
-      });
+      showFeedback("error", err instanceof Error ? err.message : "Failed to update category.");
     } finally {
       setUpdatingCategoryId(null);
     }
@@ -144,16 +147,13 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
 
         const result = await response.json();
         if (response.ok && result.ok) {
-          setFeedback({ type: "success", message: `Successfully replaced image for turn: ${imageId}` });
+          showFeedback("success", `Successfully replaced image for turn: ${imageId}`);
           await onRefresh();
         } else {
           throw new Error(result.error || "Failed to upload image.");
         }
       } catch (err) {
-        setFeedback({
-          type: "error",
-          message: err instanceof Error ? err.message : "Failed to replace image."
-        });
+        showFeedback("error", err instanceof Error ? err.message : "Failed to replace image.");
       } finally {
         setReplacingId(null);
         activeReplaceIdRef.current = null;
