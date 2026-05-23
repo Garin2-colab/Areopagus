@@ -32,7 +32,7 @@ const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 gap-4 bg-white shadow-2xl shadow-[#252422]/10",
+        "fixed z-50 gap-4 bg-[#F5F2EB] shadow-2xl shadow-[#252422]/10",
         side === "right" && "inset-y-0 right-0 h-full w-full border-l border-[#D8D4CC]/60 sm:max-w-xl",
         side === "left" && "inset-y-0 left-0 h-full w-full border-r border-[#D8D4CC]/60 sm:max-w-xl",
         side === "top" && "inset-x-0 top-0 border-b border-[#D8D4CC]/60",
@@ -42,7 +42,7 @@ const SheetContent = React.forwardRef<
       {...props}
     >
       {children}
-      <SheetClose className="absolute right-4 top-4 rounded-full border border-[#D8D4CC]/80 bg-white p-2 text-[#858076] hover:text-[#252422] hover:bg-[#F5F2EB] transition-colors">
+      <SheetClose className="absolute right-4 top-4 rounded-full border border-[#D8D4CC]/80 bg-[#FAF9F6] p-2 text-[#858076] hover:text-[#252422] hover:bg-[#F5F2EB] transition-colors">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </SheetClose>
@@ -58,7 +58,7 @@ function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 function SheetTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <DialogPrimitive.Title
-      className={cn("font-display text-2xl font-bold tracking-normal text-[#252422]", className)}
+      className={cn("font-display text-2xl text-[#D45113]", className)}
       {...props}
     />
   );

@@ -13,6 +13,7 @@
  
 .font-display {
   font-family: var(--font-display) !important;
+  font-weight: 400 !important;
   letter-spacing: normal !important;
 }
  

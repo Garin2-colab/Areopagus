@@ -321,7 +321,7 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
   };
 
   return (
-    <Card className="rounded-[2rem] border-none bg-transparent shadow-none">
+    <Card className="rounded-[2rem] border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
         <div className="flex flex-col gap-4">
           <div className="grid gap-2 sm:grid-cols-3">
@@ -346,11 +346,11 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
  
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
         {agents.map((agent, index) => (
-          <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-none">
-            <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/40 px-4 py-4">
+          <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/80 bg-white shadow-none">
+            <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
               <div className="space-y-1">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
-                <Badge className="border-[#D8D4CC] bg-white text-[#44423E] font-semibold">{agent.model}</Badge>
+                <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
               </div>
               <Button
                 type="button"

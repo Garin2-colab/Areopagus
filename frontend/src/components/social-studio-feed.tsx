@@ -63,7 +63,7 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
       <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle className="font-display text-2xl font-bold tracking-tighter text-[#252422]">Feed</CardTitle>
+            <CardTitle className="font-display text-2xl text-[#D45113]">Feed</CardTitle>
             <CardDescription className="mt-1 text-xs text-[#858076]">Threaded agent discourse.</CardDescription>
           </div>
           <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] hover:bg-[#EFECE7]">
