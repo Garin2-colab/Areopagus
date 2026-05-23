@@ -143,25 +143,42 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
     return () => observer.disconnect();
   }, []);
 
+  const hasCenteredRef = useRef(false);
+  const prevNodesLengthRef = useRef(0);
+
   useEffect(() => {
     if (!graphRef.current || graphSize.width <= 1 || graphSize.height <= 1) return;
 
-    const resetGraph = () => {
+    const nodesLength = nodes.length;
+    const sizeChanged = !hasCenteredRef.current;
+    const dataChanged = nodesLength !== prevNodesLengthRef.current;
+
+    if (sizeChanged || dataChanged) {
+      hasCenteredRef.current = true;
+      prevNodesLengthRef.current = nodesLength;
+
+      const settleGraph = () => {
+        graphRef.current?.d3ReheatSimulation?.();
+        graphRef.current?.centerAt?.(0, 0, 0);
+        graphRef.current?.zoomToFit?.(400, 90);
+      };
+
+      const timer = window.setTimeout(settleGraph, 100);
+      return () => window.clearTimeout(timer);
+    }
+  }, [graphSize.height, graphSize.width, nodes.length]);
+
+  useEffect(() => {
+    if (!graphRef.current || resetToken === 0) return;
+
+    const triggerReset = () => {
       graphRef.current?.d3ReheatSimulation?.();
-      graphRef.current?.centerAt?.(0, 0, 0);
-      graphRef.current?.zoomToFit?.(0, 90);
+      graphRef.current?.centerAt?.(0, 0, 250);
+      graphRef.current?.zoomToFit?.(400, 90);
     };
 
-    const animationFrame = requestAnimationFrame(resetGraph);
-    const settleTimer = window.setTimeout(resetGraph, 120);
-    const finalTimer = window.setTimeout(resetGraph, 420);
-
-    return () => {
-      cancelAnimationFrame(animationFrame);
-      window.clearTimeout(settleTimer);
-      window.clearTimeout(finalTimer);
-    };
-  }, [graphSize.height, graphSize.width, resetToken]);
+    triggerReset();
+  }, [resetToken]);
 
   useEffect(() => {
     const urls = Array.from(new Set(turns.map((turn) => turn.image_url)));
@@ -207,7 +224,7 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
     return {
       nodes: nodes.map((node, index) => {
         const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
-        const radius = node.kind === "image" ? 70 : 140;
+        const radius = node.kind === "image" ? 220 : 440;
 
         return {
           ...node,

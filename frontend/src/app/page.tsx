@@ -104,10 +104,10 @@ export default function Home() {
 
         <div className="mx-auto max-w-7xl px-6 pb-10 pt-8">
           {historyError ? <p className="mb-4 text-sm text-zinc-400">{historyError}</p> : null}
-          <TabsContent value="micro" className="mt-0">
+          <div className={view === "micro" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
             <SocialStudioFeed turns={turns} threads={threads} onImageClick={setLightboxSrc} />
-          </TabsContent>
-          <TabsContent value="macro" className="mt-0">
+          </div>
+          <div className={view === "macro" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
             <KnowledgeWeb
               turns={turns}
               threads={threads}
@@ -115,10 +115,10 @@ export default function Home() {
               selectedTurnId={null}
               resetToken={0}
             />
-          </TabsContent>
-          <TabsContent value="table" className="mt-0">
+          </div>
+          <div className={view === "table" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
             <SocialStudioTable turns={turns} onRefresh={reloadHistory} onImageClick={setLightboxSrc} />
-          </TabsContent>
+          </div>
         </div>
       </Tabs>
 
