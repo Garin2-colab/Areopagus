@@ -237,20 +237,20 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-black">
-      <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-black active:cursor-grabbing">
+    <div className="rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
+      <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-[#FAF9F6] active:cursor-grabbing">
         {graphSize.width > 1 && graphSize.height > 1 ? (
           <ForceGraph2D
             ref={graphRef}
             width={graphSize.width}
             height={graphSize.height}
             graphData={forceGraphData}
-            backgroundColor="#000000"
+            backgroundColor="#FAF9F6"
             nodeRelSize={4}
             enableZoomInteraction
             enablePanInteraction
             linkWidth={0.6}
-            linkColor={() => "rgba(160,160,160,0.35)"}
+            linkColor={() => "rgba(133, 128, 118, 0.35)"}
             linkDirectionalParticles={0}
             onBackgroundClick={handleBackgroundClick}
             nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
@@ -276,7 +276,7 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
               if (typed.kind === "image") {
                 const cachedImage = imageCacheRef.current.get(typed.imageUrl);
 
-                ctx.fillStyle = "#101010";
+                ctx.fillStyle = "#FAF9F6";
                 ctx.beginPath();
                 ctx.arc(0, 0, radius + 4, 0, Math.PI * 2);
                 ctx.fill();
@@ -289,35 +289,35 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
                 if (cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) {
                   ctx.drawImage(cachedImage, -radius, -radius, radius * 2, radius * 2);
                 } else {
-                  ctx.fillStyle = "#171717";
+                  ctx.fillStyle = "#FAF9F6";
                   ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
                 }
 
                 ctx.restore();
 
-                ctx.strokeStyle = selected || hovered ? "#f5f5f5" : "#737373";
+                ctx.strokeStyle = selected || hovered ? "#252422" : "#858076";
                 ctx.lineWidth = selected || hovered ? 1.8 : 1;
                 ctx.beginPath();
                 ctx.arc(0, 0, radius + 2, 0, Math.PI * 2);
                 ctx.stroke();
 
-                ctx.fillStyle = `rgba(245,245,245,${mainLabelOpacity})`;
+                ctx.fillStyle = `rgba(37,36,34,${mainLabelOpacity})`;
                 ctx.font = `${12 * labelScale}px Arial`;
                 ctx.fillText(typed.label, radius + 8, 4);
 
                 if (hovered) {
-                  ctx.fillStyle = "#f5f5f5";
+                  ctx.fillStyle = "#252422";
                   ctx.font = `${10 * labelScale}px Arial`;
                   const keywords = imageKeywords.get(typed.id)?.join(" | ") ?? "";
                   ctx.fillText(keywords, radius + 8, 20);
                 }
               } else {
-                ctx.fillStyle = selected || hovered ? "#f5f5f5" : typed.kind === "comment" ? "#3b82f6" : "#a3a3a3";
+                ctx.fillStyle = selected || hovered ? "#252422" : typed.kind === "comment" ? "#6366f1" : "#858076";
                 ctx.beginPath();
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.fillStyle = `rgba(181,181,181,${mainLabelOpacity})`;
+                ctx.fillStyle = `rgba(68,66,62,${mainLabelOpacity})`;
                 ctx.font = `${11 * labelScale}px Arial`;
                 ctx.fillText(typed.label, 10, 4);
               }
@@ -337,43 +337,43 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
         ) : null}
       </div>
 
-      <div className="border-t border-zinc-800 px-5 py-4">
+      <div className="border-t border-[#D8D4CC]/60 bg-[#FAF9F6] px-5 py-4">
         <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Hover</p>
-            <p className="mt-2 text-sm text-zinc-300">{hoverNode ? hoverNode.label : "Hover a node to inspect it."}</p>
+          <div className="rounded-2xl border border-[#D8D4CC]/60 bg-white p-4">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Hover</p>
+            <p className="mt-2 text-sm text-[#252422] font-semibold">{hoverNode ? hoverNode.label : "Hover a node to inspect it."}</p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Detail</p>
+          <div className="rounded-2xl border border-[#D8D4CC]/60 bg-white p-4">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Detail</p>
             {hoverNode?.kind === "image" ? (
               <div className="mt-3 grid gap-4 md:grid-cols-[160px_1fr]">
-                <div className="aspect-square border border-zinc-800 bg-zinc-900 p-4 text-zinc-50">
+                <div className="aspect-square border border-[#D8D4CC] bg-[#FAF9F6] p-4 text-[#252422]">
                   <div className="flex h-full flex-col justify-between">
-                    <span className="text-xs uppercase tracking-[0.3em] text-zinc-500">{hoverNode.label}</span>
+                    <span className="text-xs uppercase tracking-[0.3em] text-[#858076] font-semibold">{hoverNode.label}</span>
                     <div className="space-y-2">
-                      <div className="text-4xl font-medium">{hoverNode.turn}</div>
-                      <div className="h-px bg-zinc-700" />
+                      <div className="text-4xl font-extrabold text-[#252422]">{hoverNode.turn}</div>
+                      <div className="h-px bg-[#D8D4CC]" />
                     </div>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <p className="break-all text-sm text-zinc-300">{hoverNode.imageUrl}</p>
-                  <p className="text-sm leading-6 text-zinc-500">
+                  <p className="break-all text-sm text-[#44423E] font-medium">{hoverNode.imageUrl}</p>
+                  <p className="text-sm leading-6 text-[#858076]">
                     Clicking it jumps back to the Micro tab and scrolls the strip to the same turn.
                   </p>
                 </div>
               </div>
             ) : hoverNode?.kind === "keyword" ? (
-              <p className="mt-3 text-sm leading-6 text-zinc-400">
+              <p className="mt-3 text-sm leading-6 text-[#44423E]">
                 {hoverNode.label} connects the image turns that share a conceptual thread in the debate history.
               </p>
             ) : hoverNode?.kind === "comment" ? (
-              <p className="mt-3 text-sm leading-6 text-zinc-400">
-                <span className="font-semibold text-zinc-300">{hoverNode.label}</span>: {hoverNode.text}
+              <p className="mt-3 text-sm leading-6 text-[#44423E]">
+                <span className="font-semibold text-[#252422]">{hoverNode.label}</span>: {hoverNode.text}
               </p>
             ) : (
-              <p className="mt-3 text-sm leading-6 text-zinc-500">Select a node to inspect its connected meaning.</p>
+              <p className="mt-3 text-sm leading-6 text-[#858076]">Select a node to inspect its connected meaning.</p>
             )}
           </div>
         </div>

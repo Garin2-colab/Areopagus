@@ -1,10 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  --font-display: "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+  --font-display: "Plus Jakarta Sans", "Aptos", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 html {
@@ -12,7 +14,7 @@ html {
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-50 antialiased;
+  @apply bg-[#F5F2EB] text-[#252422] antialiased;
   font-family: var(--font-display);
   margin: 0;
 }
@@ -22,7 +24,7 @@ body {
 }
 
 ::selection {
-  @apply bg-zinc-200 text-zinc-950;
+  @apply bg-[#252422] text-[#FAF9F6];
 }
 
 /* ── Threaded feed lines ────────────────────────────────────────── */
@@ -36,17 +38,17 @@ body {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #3f3f46; /* zinc-700 — visible by default */
+  background: #D8D4CC;
   border-radius: 1px;
   pointer-events: none;
   transition: background-color 0.2s, box-shadow 0.2s;
 }
 
 .thread-card:hover .thread-line {
-  background: #52525b; /* zinc-600 */
+  background: #B8B4AA;
 }
 
 .thread-reply:hover > .thread-line {
-  background: #71717a; /* zinc-500 — bright on direct hover */
-  box-shadow: 0 0 6px rgba(113, 113, 122, 0.3);
+  background: #858076;
+  box-shadow: 0 0 6px rgba(133, 128, 118, 0.35);
 }

@@ -321,8 +321,8 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
   };
 
   return (
-    <Card className="rounded-[2rem] border-zinc-800/80 bg-zinc-950/75 shadow-2xl shadow-black/25 backdrop-blur-sm">
-      <CardHeader className="border-b border-zinc-800/80 px-6 py-5">
+    <Card className="rounded-[2rem] border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
+      <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
         <div className="flex flex-col gap-4">
           <div className="grid gap-2 sm:grid-cols-3">
 
@@ -330,33 +330,33 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
               type="button"
               onClick={pulse}
               disabled={pulsePending}
-              className="justify-center rounded-full border-zinc-700 bg-zinc-100 text-black hover:bg-zinc-200"
+              className="justify-center rounded-full border-[#D8D4CC] bg-[#252422] text-[#FAF9F6] hover:bg-black hover:text-white hover:border-[#252422]"
             >
               <Bolt className="mr-2 h-4 w-4" />
               {pulsePending ? "Pulsing..." : "Pulse"}
             </Button>
-            <Button type="button" onClick={addAgent} variant="outline" className="justify-center rounded-full border-zinc-700">
+            <Button type="button" onClick={addAgent} variant="outline" className="justify-center rounded-full border-[#D8D4CC] bg-white text-[#44423E] hover:bg-[#F5F2EB] hover:text-[#252422]">
               <Plus className="mr-2 h-4 w-4" />
               Add Agent
             </Button>
           </div>
-          {pulseMessage ? <p className="text-xs leading-5 text-zinc-400">{pulseMessage}</p> : null}
+          {pulseMessage ? <p className="text-xs leading-5 text-[#858076] font-medium">{pulseMessage}</p> : null}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
         {agents.map((agent, index) => (
-          <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border-zinc-800 bg-black/55">
-            <CardHeader className="flex-row items-start justify-between gap-3 border-b border-zinc-800/70 px-4 py-4">
+          <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/80 bg-white shadow-none">
+            <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
               <div className="space-y-1">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Agent {index + 1}</p>
-                <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">{agent.model}</Badge>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
+                <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => removeAgent(agent.id)}
-                className="h-8 rounded-full text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-50 px-4"
+                className="h-8 rounded-full text-xs text-red-600 hover:bg-red-50 hover:text-red-700 px-4 transition-colors font-semibold"
                 aria-label={`Remove ${agent.name}`}
               >
                 Delete
@@ -365,7 +365,7 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
 
             <CardContent className="space-y-4 px-4 py-4">
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Name</p>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Name</p>
                 <Input
                   value={agent.name}
                   onChange={(event) => updateAgent(agent.id, { name: event.target.value })}
@@ -375,8 +375,8 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Persona</p>
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-600">Markdown supported</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Persona</p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-[#858076]/70">Markdown supported</p>
                 </div>
                 <Textarea
                   value={agent.persona}
@@ -384,15 +384,15 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
                   placeholder="Describe the agent's worldview, tone, and editing preferences."
                   className="min-h-[164px]"
                 />
-                <p className="text-xs leading-5 text-zinc-500">
+                <p className="text-xs leading-5 text-[#858076]">
                   Use Markdown for bullets, emphasis, and short sections. This keeps long personas readable.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Style References (2x5 Grid)</p>
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-600">Click a slot to upload</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Style References (2x5 Grid)</p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-[#858076]/70">Click a slot to upload</p>
                 </div>
                 <div className="grid grid-cols-5 gap-2">
                   {Array.from({ length: 10 }).map((_, i) => {
@@ -406,8 +406,8 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
                         className={cn(
                           "group relative aspect-square w-full rounded-xl overflow-hidden border flex items-center justify-center transition-colors cursor-pointer",
                           hasImage
-                            ? "border-zinc-800 bg-zinc-900/60"
-                            : "border-dashed border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/50 bg-zinc-950"
+                            ? "border-[#D8D4CC] bg-[#F5F2EB]/50"
+                            : "border-dashed border-[#D8D4CC] hover:border-[#858076] hover:bg-[#F5F2EB]/40 bg-white"
                         )}
                         onClick={() => {
                           if (!hasImage) {
@@ -434,7 +434,7 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
                             </button>
                           </>
                         ) : (
-                          <span className="text-zinc-600 group-hover:text-zinc-400 text-sm font-semibold">+</span>
+                          <span className="text-[#858076] group-hover:text-[#252422] text-sm font-semibold">+</span>
                         )}
                       </div>
                     );
@@ -443,12 +443,12 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
               </div>
 
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Model Selection & Save</p>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Model Selection & Save</p>
                 <div className="flex gap-2">
                   <select
                     value={agent.model}
                     onChange={(event) => updateAgent(agent.id, { model: event.target.value as ModelName })}
-                    className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-400 focus:border-zinc-600 focus:text-zinc-100 focus:outline-none"
+                    className="flex-1 rounded-2xl border border-[#D8D4CC] bg-white px-3 py-2 text-sm text-[#252422] focus:border-[#858076] focus:text-[#252422] focus:outline-none"
                   >
                     <option value="GPT-Image-2">GPT-Image-2</option>
                     <option value="Gemini-3-Pro">Gemini-3-Pro</option>
@@ -456,7 +456,7 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
                   <Button
                     type="button"
                     onClick={saveCurrentAgents}
-                    className="rounded-2xl border border-zinc-700 bg-zinc-100 px-4 text-black hover:bg-zinc-200"
+                    className="rounded-2xl border border-[#D8D4CC] bg-[#252422] px-4 text-[#FAF9F6] hover:bg-black hover:text-white"
                   >
                     <Save className="mr-2 h-4 w-4" />
                     Save
@@ -466,8 +466,8 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Heartbeat</p>
-                  <span className="text-xs text-zinc-300">{agent.heartbeatMinutes} times per day</span>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Heartbeat</p>
+                  <span className="text-xs text-[#252422] font-semibold">{agent.heartbeatMinutes} times per day</span>
                 </div>
                 <input
                   type="range"
@@ -476,9 +476,9 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
                   step={1}
                   value={agent.heartbeatMinutes}
                   onChange={(event) => updateAgent(agent.id, { heartbeatMinutes: parseInt(event.target.value, 10) })}
-                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-800 accent-zinc-100"
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#EFECE7] accent-[#252422]"
                 />
-                <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-zinc-600">
+                <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-[#858076]">
                   <span>1x/day</span>
                   <span>5x/day</span>
                 </div>

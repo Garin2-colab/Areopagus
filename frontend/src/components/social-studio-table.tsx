@@ -93,9 +93,9 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
 
   const agentBadgeColor = (agentName?: string) => {
     const name = (agentName || "").toLowerCase();
-    if (name.includes("anatomist")) return "bg-rose-955/60 text-rose-300 border-rose-800/40 hover:bg-rose-955/60";
-    if (name.includes("subversive")) return "bg-violet-955/60 text-violet-300 border-violet-800/40 hover:bg-violet-955/60";
-    return "bg-zinc-900/60 text-zinc-300 border-zinc-800/40 hover:bg-zinc-900/60";
+    if (name.includes("anatomist")) return "bg-rose-50 text-rose-800 border-rose-200/80 hover:bg-rose-50";
+    if (name.includes("subversive")) return "bg-violet-50 text-violet-800 border-violet-200/80 hover:bg-violet-50";
+    return "bg-zinc-100 text-zinc-805 border-zinc-200 hover:bg-zinc-100";
   };
 
   const getTurnPreviewText = (turn: HistoryTurn) => {
@@ -120,15 +120,15 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
       />
 
       {/* Control bar */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 md:flex-row md:p-5 backdrop-blur-md">
+      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] p-4 md:flex-row md:p-5 shadow-sm shadow-[#252422]/5">
         <div className="relative w-full max-w-md">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#858076]" />
           <Input
             type="text"
             placeholder="Search Turn, Agent, content keywords..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-10 w-full rounded-xl border-zinc-800 bg-zinc-900/50 pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-zinc-700 focus-visible:ring-offset-0"
+            className="h-10 w-full rounded-xl border-[#D8D4CC] bg-white pl-10 pr-4 text-sm text-[#252422] placeholder:text-[#858076] focus-visible:ring-1 focus-visible:ring-[#858076] focus-visible:ring-offset-0"
           />
         </div>
 
@@ -147,11 +147,11 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
       </div>
 
       {/* Table grid container */}
-      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/20 backdrop-blur-md">
+      <div className="overflow-hidden rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-sm text-zinc-300">
+          <table className="w-full border-collapse text-left text-sm text-[#44423E]">
             <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-950/80 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+              <tr className="border-b border-[#D8D4CC] bg-[#F5F2EB]/60 text-[10px] uppercase tracking-[0.25em] text-[#858076]">
                 <th className="py-4 pl-6 pr-3 font-semibold">Turn</th>
                 <th className="px-3 py-4 font-semibold">Image</th>
                 <th className="px-3 py-4 font-semibold">Agent</th>
@@ -162,10 +162,10 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                 <th className="py-4 pl-3 pr-6 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900">
+            <tbody className="divide-y divide-[#D8D4CC]/40">
               {filteredTurns.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-zinc-500">
+                  <td colSpan={8} className="py-12 text-center text-[#858076]">
                     No matching turns found.
                   </td>
                 </tr>
@@ -175,10 +175,10 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                   return (
                     <tr
                       key={turn.image_id}
-                      className="group transition-colors hover:bg-zinc-900/25"
+                      className="group transition-colors hover:bg-[#F5F2EB]/30"
                     >
                       {/* Turn ID */}
-                      <td className="py-4 pl-6 pr-3 font-mono text-xs text-zinc-400">
+                      <td className="py-4 pl-6 pr-3 font-mono text-xs text-[#858076] font-semibold">
                         {turn.turn}
                       </td>
 
@@ -186,7 +186,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                       <td className="px-3 py-3">
                         <div
                           onClick={() => onImageClick?.(turn.image_url)}
-                          className="relative h-12 w-12 overflow-hidden rounded-lg border border-zinc-800 bg-black cursor-zoom-in hover:border-zinc-500 transition-colors"
+                          className="relative h-12 w-12 overflow-hidden rounded-lg border border-[#D8D4CC] bg-[#F5F2EB] cursor-zoom-in hover:border-[#858076] transition-colors"
                           title="Click to enlarge"
                         >
                           <Image
@@ -208,13 +208,13 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                       </td>
 
                       {/* Action */}
-                      <td className="px-3 py-4 text-xs font-mono text-zinc-500">
+                      <td className="px-3 py-4 text-xs font-mono text-[#858076]">
                         {turn.action || "None"}
                       </td>
 
                       {/* Discourse Text Content */}
                       <td className="px-3 py-4 max-w-sm">
-                        <div className="line-clamp-2 text-xs text-zinc-400 leading-5" title={getTurnPreviewText(turn)}>
+                        <div className="line-clamp-2 text-xs text-[#44423E] leading-5 font-medium" title={getTurnPreviewText(turn)}>
                           {getTurnPreviewText(turn)}
                         </div>
                       </td>
@@ -225,13 +225,13 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                           {(turn.keywords ?? []).slice(0, 3).map((kw) => (
                             <span
                               key={kw}
-                              className="rounded bg-zinc-900 px-1.5 py-0.5 text-[9px] font-mono tracking-wide text-zinc-400 border border-zinc-800"
+                              className="rounded bg-[#F5F2EB] px-1.5 py-0.5 text-[9px] font-mono tracking-wide text-[#44423E] border border-[#D8D4CC]/60"
                             >
                               {kw}
                             </span>
                           ))}
                           {(turn.keywords ?? []).length > 3 && (
-                            <span className="text-[9px] text-zinc-600 font-mono self-center">
+                            <span className="text-[9px] text-[#858076] font-mono self-center">
                               +{turn.keywords.length - 3}
                             </span>
                           )}
@@ -239,7 +239,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                       </td>
 
                       {/* Timestamp */}
-                      <td className="px-3 py-4 text-[10px] text-zinc-500 whitespace-nowrap">
+                      <td className="px-3 py-4 text-[10px] text-[#858076] whitespace-nowrap font-medium">
                         {new Date(turn.created_at).toLocaleString([], {
                           month: "short",
                           day: "numeric",
@@ -255,7 +255,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                             asChild
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
+                            className="h-8 w-8 rounded-lg text-[#858076] hover:text-[#252422] hover:bg-[#F5F2EB]"
                             title="View post"
                           >
                             <a href={`/post/${turn.image_id}`}>
@@ -267,7 +267,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                             size="sm"
                             disabled={isThisReplacing}
                             onClick={() => triggerReplacement(turn.image_id)}
-                            className="h-8 rounded-lg border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 hover:text-zinc-50 px-3 text-xs"
+                            className="h-8 rounded-lg border-[#D8D4CC] bg-[#FAF9F6] hover:bg-[#F5F2EB] hover:text-[#252422] px-3 text-xs text-[#44423E]"
                           >
                             {isThisReplacing ? (
                               <span className="flex items-center gap-1.5">

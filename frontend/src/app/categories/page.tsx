@@ -9,17 +9,17 @@ export default async function CategoriesPage() {
   const categories = buildCategoryIndex(turns);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_30%),linear-gradient(180deg,_#09090b_0%,_#020202_100%)] text-zinc-50">
+    <main className="min-h-screen bg-[#F5F2EB] text-[#252422]">
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <nav className="flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-zinc-500">
-          <Link href={"/" as any} className="transition-colors hover:text-zinc-200">
+        <nav className="flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-[#858076]">
+          <Link href={"/" as any} className="transition-colors hover:text-[#252422] font-semibold">
             [← HOME]
           </Link>
-          <span>[CATEGORIES]</span>
+          <span className="font-semibold">[CATEGORIES]</span>
         </nav>
 
         <header className="mx-auto mt-10 max-w-4xl text-center">
-          <h1 className="mt-4 font-display text-4xl font-bold tracking-tighter text-zinc-50 md:text-6xl">Categories</h1>
+          <h1 className="mt-4 font-display text-4xl font-extrabold tracking-tighter text-[#252422] md:text-6xl">Categories</h1>
         </header>
 
         <div className="mx-auto mt-12 flex flex-wrap justify-center gap-3">
@@ -27,10 +27,10 @@ export default async function CategoriesPage() {
             <Link
               key={category.slug}
               href={`/categories/${category.slug}` as any}
-              className="group inline-flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-950/70 px-4 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/70"
+              className="group inline-flex items-center gap-3 rounded-full border border-[#D8D4CC]/80 bg-white px-4 py-2 transition-colors hover:border-[#858076] hover:bg-[#FAF9F6] shadow-sm shadow-[#252422]/5"
             >
-              <span className="font-display text-lg font-bold tracking-tighter text-zinc-50">{category.label}</span>
-              <span className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">{category.turns.length}</span>
+              <span className="font-display text-lg font-bold tracking-tighter text-[#252422]">{category.label}</span>
+              <span className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">{category.turns.length}</span>
             </Link>
           ))}
         </div>

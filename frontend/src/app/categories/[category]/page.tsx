@@ -16,22 +16,22 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_30%),linear-gradient(180deg,_#09090b_0%,_#020202_100%)] text-zinc-50">
+    <main className="min-h-screen bg-[#F5F2EB] text-[#252422]">
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <nav className="flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-zinc-500">
-          <Link href={"/" as any} className="transition-colors hover:text-zinc-200">
+        <nav className="flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-[#858076]">
+          <Link href={"/" as any} className="transition-colors hover:text-[#252422] font-semibold">
             [← HOME]
           </Link>
-          <Link href={"/categories" as any} className="transition-colors hover:text-zinc-200">
+          <Link href={"/categories" as any} className="transition-colors hover:text-[#252422] font-semibold">
             [CATEGORIES]
           </Link>
         </nav>
 
         <header className="mx-auto mt-10 max-w-4xl text-center">
-          <h1 className="mt-4 font-display text-4xl font-bold tracking-tighter text-zinc-50 md:text-6xl">
+          <h1 className="mt-4 font-display text-4xl font-extrabold tracking-tighter text-[#252422] md:text-6xl">
             {categoryEntry.label}
           </h1>
-          <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-zinc-600">{categoryEntry.turns.length} posts</p>
+          <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">{categoryEntry.turns.length} posts</p>
         </header>
 
         <div className="mx-auto mt-12 grid gap-4">
@@ -39,10 +39,10 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
             <Link
               key={turn.image_id}
               href={`/post/${turn.image_id}` as any}
-              className="group block cursor-pointer overflow-hidden rounded-[1.6rem] border border-zinc-800 bg-zinc-950/70 transition-colors hover:border-zinc-600 hover:bg-zinc-900/70"
+              className="group block cursor-pointer overflow-hidden rounded-[1.6rem] border border-[#D8D4CC]/60 bg-white transition-colors hover:border-[#858076] hover:bg-[#FAF9F6] shadow-sm shadow-[#252422]/5"
             >
               <article className="grid gap-4 p-4 md:grid-cols-[180px_minmax(0,1fr)] md:items-center md:p-5">
-                <div className="relative aspect-square overflow-hidden rounded-[1.25rem] border border-zinc-800 bg-black">
+                <div className="relative aspect-square overflow-hidden rounded-[1.25rem] border border-[#D8D4CC] bg-[#FAF9F6]">
                   <Image
                     src={turn.image_url}
                     alt={`Post ${turn.image_id}`}
@@ -54,12 +54,12 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
                 </div>
 
                 <div className="min-w-0 space-y-3">
-                  <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.28em] text-zinc-500">
+                  <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.28em] text-[#858076] font-medium">
                     <span>#{turn.image_id}</span>
                     <span>{formatTimestamp(turn.created_at)}</span>
                   </div>
-                  <h2 className="font-display text-2xl font-bold tracking-tighter text-zinc-50">{getAgentName(turn)}</h2>
-                  <p className="max-w-3xl text-sm leading-6 text-zinc-400">
+                  <h2 className="font-display text-2xl font-bold tracking-tighter text-[#252422]">{getAgentName(turn)}</h2>
+                  <p className="max-w-3xl text-sm leading-6 text-[#44423E] font-medium">
                     {turn.prompt_json?.scene_description || turn.proposal || turn.critique || "Open post"}
                   </p>
                 </div>

@@ -59,8 +59,8 @@ export default function Home() {
   const threads = useMemo(() => history?.threads ?? [], [history]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.08),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(255,255,255,0.05),_transparent_24%),linear-gradient(180deg,_#09090b_0%,_#020202_100%)] pb-14 text-zinc-50">
-      <Tabs value={view} onValueChange={(value) => setView(value as "micro" | "macro")}>
+    <main className="min-h-screen bg-[#F5F2EB] pb-14 text-[#252422]">
+      <Tabs value={view} onValueChange={(value) => setView(value as "micro" | "macro" | "table")}>
         <header className="relative mx-auto max-w-7xl px-6 pt-8">
           <Button
             type="button"
@@ -68,21 +68,21 @@ export default function Home() {
             size="icon"
             onClick={() => setSettingsOpen(true)}
             aria-label="Open settings"
-            className="absolute right-6 top-8 h-10 w-10 rounded-full text-zinc-400 hover:text-zinc-100"
+            className="absolute right-6 top-8 h-10 w-10 rounded-full border border-[#D8D4CC] bg-[#FAF9F6] text-[#44423E] hover:text-[#252422] hover:bg-[#F5F2EB] transition-colors"
           >
             <Settings2 className="h-4 w-4" />
           </Button>
 
           <div className="flex flex-col items-center gap-5">
             <div className="flex flex-col items-center gap-2">
-              <h1 className="font-display text-5xl font-bold tracking-tighter text-zinc-50 md:text-7xl">AREOPAGUS</h1>
+              <h1 className="font-display text-5xl font-extrabold tracking-tighter text-[#252422] md:text-7xl">AREOPAGUS</h1>
               {view === "macro" && (
-                <h2 className="font-display text-lg font-medium tracking-widest text-zinc-400 uppercase md:text-xl">
+                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
                   Knowledge Web
                 </h2>
               )}
               {view === "table" && (
-                <h2 className="font-display text-lg font-medium tracking-widest text-zinc-400 uppercase md:text-xl">
+                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
                   Database Table
                 </h2>
               )}

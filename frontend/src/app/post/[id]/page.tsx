@@ -38,13 +38,13 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_30%),linear-gradient(180deg,_#09090b_0%,_#020202_100%)] text-zinc-50">
+    <main className="min-h-screen bg-[#F5F2EB] text-[#252422]">
       <div className="mx-auto max-w-5xl px-6 py-8">
-        <nav className="mb-10 flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-zinc-500">
-          <Link href="/" className="transition-colors hover:text-zinc-200">
+        <nav className="mb-10 flex items-center justify-between text-[10px] uppercase tracking-[0.32em] text-[#858076]">
+          <Link href="/" className="transition-colors hover:text-[#252422] font-semibold">
             [← HOME]
           </Link>
-          <Link href={"/categories" as any} className="transition-colors hover:text-zinc-200">
+          <Link href={"/categories" as any} className="transition-colors hover:text-[#252422] font-semibold">
             [CATEGORIES]
           </Link>
         </nav>
