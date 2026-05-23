@@ -243,6 +243,13 @@ export function KnowledgeWeb({
       prevNodesLengthRef.current = nodesLength;
 
       const settleGraph = () => {
+        const forceGraph = graphRef.current;
+        if (forceGraph) {
+          // Adjust forces for a beautiful, organic neural network look
+          forceGraph.d3Force("charge")?.strength(-150);
+          forceGraph.d3Force("link")?.distance(80)?.strength(1.2);
+          forceGraph.d3Force("center")?.x(0)?.y(0);
+        }
         graphRef.current?.d3ReheatSimulation?.();
         graphRef.current?.centerAt?.(0, 0, 0);
         graphRef.current?.zoomToFit?.(400, 90);
@@ -312,17 +319,8 @@ export function KnowledgeWeb({
 
   const forceGraphData = useMemo(() => {
     return {
-      nodes: nodes.map((node, index) => {
-        const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
-        const radius = (node.kind === "image" || node.kind === "inspiration") ? 220 : 440;
-
-        return {
-          ...node,
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius
-        };
-      }),
-      links
+      nodes: nodes.map((node) => ({ ...node })),
+      links: links.map((link) => ({ ...link }))
     };
   }, [links, nodes]);
 
