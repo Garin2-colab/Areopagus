@@ -60,33 +60,33 @@ export function ImageLightbox({ src, alt = "Enlarged view", onClose }: ImageLigh
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#F5F2EB]/90 p-4 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#F5F2EB]/95 p-4 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
-      <div className="absolute right-6 top-6 flex items-center gap-3 z-50">
-        <button
-          onClick={handleDownload}
-          className="rounded-full border border-[#D8D4CC] bg-white/85 p-2.5 text-[#44423E] hover:text-[#252422] hover:bg-[#FAF9F6] transition-colors"
-          aria-label="Download image"
-          title="Download image"
-        >
-          <Download className="h-5 w-5" />
-        </button>
-        
-        <button
-          onClick={onClose}
-          className="rounded-full border border-[#D8D4CC] bg-white/85 p-2.5 text-[#44423E] hover:text-[#252422] hover:bg-[#FAF9F6] transition-colors"
-          aria-label="Close image preview"
-          title="Close preview"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
       <div
-        className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl border border-[#D8D4CC] bg-white/40 shadow-xl shadow-[#252422]/5 animate-in zoom-in-95 duration-200"
+        className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl border border-[#D8D4CC] bg-white/40 shadow-2xl shadow-[#252422]/10 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()} // Prevent close on clicking the image itself
       >
+        <div className="absolute right-4 top-4 flex items-center gap-2 z-50">
+          <button
+            onClick={handleDownload}
+            className="rounded-full border border-[#D8D4CC] bg-[#FAF9F6]/90 p-2 text-[#44423E] hover:text-[#252422] hover:bg-white transition-colors shadow-md backdrop-blur-sm"
+            aria-label="Download image"
+            title="Download image"
+          >
+            <Download className="h-4.5 w-4.5" />
+          </button>
+          
+          <button
+            onClick={onClose}
+            className="rounded-full border border-[#D8D4CC] bg-[#FAF9F6]/90 p-2 text-[#44423E] hover:text-[#252422] hover:bg-white transition-colors shadow-md backdrop-blur-sm"
+            aria-label="Close image preview"
+            title="Close preview"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
         {/* Using standard img to preserve natural aspect ratio and fit wrapper dynamically */}
         <img
           src={src}
