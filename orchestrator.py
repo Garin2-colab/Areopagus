@@ -1779,7 +1779,10 @@ def record_generated_turn(
 
 def poll_runway_task(task_id: str, max_wait: int = 600) -> dict[str, Any]:
     """Poll Runway GET /v1/tasks/{id} until SUCCEEDED or FAILED."""
-    elapsed = 0
+    # Sleep initially since image generation takes at least 10-12 seconds
+    time.sleep(12)
+    elapsed = 12
+
     while elapsed < max_wait:
         task = runway_get_task(task_id)
         status = str(task.get("status") or "").upper()
@@ -1789,8 +1792,10 @@ def poll_runway_task(task_id: str, max_wait: int = 600) -> dict[str, Any]:
         if status == "FAILED":
             failure = task.get("failure") or task.get("error") or "Unknown failure"
             raise RuntimeError(f"Runway task {task_id} FAILED: {failure}")
-        time.sleep(RUNWAY_POLLING_DELAY_SECONDS)
-        elapsed += RUNWAY_POLLING_DELAY_SECONDS
+        
+        polling_delay = 8
+        time.sleep(polling_delay)
+        elapsed += polling_delay
     raise RuntimeError(f"Runway task {task_id} timed out after {max_wait}s")
 
 
