@@ -150,7 +150,7 @@ function CompactRootPost({
 
           {/* Category / Keywords */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#44423E] text-[10px]">
+            <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#D45113] text-[10px] font-bold">
               {category}
             </Badge>
             {turn.keywords.slice(0, 3).map((keyword) => (
@@ -245,7 +245,7 @@ function ThreadPostEntry({
           {category && (
             <>
               <span className="text-xs text-[#858076]">·</span>
-              <span className="text-[10px] uppercase tracking-widest text-[#858076] font-bold">
+              <span className="text-[10px] uppercase tracking-widest text-[#D45113] font-bold">
                 {category}
               </span>
             </>
@@ -278,7 +278,7 @@ function ThreadPostEntry({
         {turn.keywords.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {isRoot && (
-              <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#44423E] text-[10px]">
+              <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#D45113] text-[10px] font-bold">
                 {category}
               </Badge>
             )}

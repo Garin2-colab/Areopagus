@@ -109,21 +109,6 @@ export default function Home() {
           <div className="flex flex-col items-center gap-5">
             <div className="flex flex-col items-center gap-2">
               <h1 className="font-display text-5xl text-[#D45113] md:text-7xl">AREOPAGUS</h1>
-              {view === "macro" && (
-                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
-                  Knowledge Web
-                </h2>
-              )}
-              {view === "inspiration" && (
-                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
-                  Inspiration Board
-                </h2>
-              )}
-              {view === "table" && (
-                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
-                  Database Table
-                </h2>
-              )}
             </div>
 
             <TabsList className="mx-auto">
@@ -140,6 +125,24 @@ export default function Home() {
                 Table
               </TabsTrigger>
             </TabsList>
+
+            <div className="flex flex-col items-center gap-2 h-5">
+              {view === "macro" && (
+                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
+                  Knowledge Web
+                </h2>
+              )}
+              {view === "inspiration" && (
+                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
+                  Inspiration Board
+                </h2>
+              )}
+              {view === "table" && (
+                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
+                  Database Table
+                </h2>
+              )}
+            </div>
           </div>
         </header>
 
