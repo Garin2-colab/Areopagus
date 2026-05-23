@@ -68,12 +68,20 @@ export type Thread = {
   updated_at: string;
 };
 
+export type InspirationItem = {
+  id: string;
+  image_url: string;
+  keywords: string[];
+  created_at: string;
+};
+
 export type HistoryData = {
   project?: string;
   created_at?: string;
   updated_at?: string;
   turns: HistoryTurn[];
   threads?: Thread[];
+  inspiration?: InspirationItem[];
   graph?: {
     nodes?: Array<Record<string, unknown>>;
     edges?: Array<Record<string, unknown>>;
@@ -157,12 +165,17 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
     return turnCopy;
   });
 
+  const inspiration = (Array.isArray(data.inspiration) ? data.inspiration : []).map(item => ({
+    ...item,
+    image_url: sanitizeImageUrls(item.image_url)
+  }));
+
   let graph = data.graph;
   if (graph && Array.isArray(graph.nodes)) {
     graph = {
       ...graph,
       nodes: graph.nodes.map(node => {
-        if (node.type === "image" && typeof node.url === "string") {
+        if ((node.type === "image" || node.type === "inspiration") && typeof node.url === "string") {
           return { ...node, url: sanitizeImageUrls(node.url) };
         }
         return node;
@@ -173,6 +186,7 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
   return {
     ...data,
     turns,
+    inspiration,
     graph
   };
 }

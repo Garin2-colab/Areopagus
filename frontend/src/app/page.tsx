@@ -14,13 +14,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnowledgeWeb } from "@/components/knowledge-web";
 import { SocialStudioTable } from "@/components/social-studio-table";
+import { InspirationManager } from "@/components/inspiration-manager";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { fetchHistory, sortTurnsNewestFirst, type HistoryData } from "@/lib/history";
 import { useStudioStatus } from "@/lib/useStudioStatus";
 
 export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [view, setView] = useState<"micro" | "macro" | "table">("micro");
+  const [view, setView] = useState<"micro" | "macro" | "inspiration" | "table">("micro");
   const [pinInput, setPinInput] = useState("");
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [pinError, setPinError] = useState(false);
@@ -88,10 +89,11 @@ export default function Home() {
 
   const turns = useMemo(() => sortTurnsNewestFirst(history?.turns ?? []), [history]);
   const threads = useMemo(() => history?.threads ?? [], [history]);
+  const inspiration = useMemo(() => history?.inspiration ?? [], [history]);
 
   return (
     <main className="min-h-screen bg-[#F5F2EB] pb-14 text-[#252422]">
-      <Tabs value={view} onValueChange={(value) => setView(value as "micro" | "macro" | "table")}>
+      <Tabs value={view} onValueChange={(value) => setView(value as "micro" | "macro" | "inspiration" | "table")}>
         <header className="relative mx-auto max-w-7xl px-6 pt-8">
           <Button
             type="button"
@@ -112,6 +114,11 @@ export default function Home() {
                   Knowledge Web
                 </h2>
               )}
+              {view === "inspiration" && (
+                <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
+                  Inspiration Board
+                </h2>
+              )}
               {view === "table" && (
                 <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
                   Database Table
@@ -125,6 +132,9 @@ export default function Home() {
               </TabsTrigger>
               <TabsTrigger value="macro" className="px-4">
                 Macro
+              </TabsTrigger>
+              <TabsTrigger value="inspiration" className="px-4">
+                Inspiration
               </TabsTrigger>
               <TabsTrigger value="table" className="px-4">
                 Table
@@ -142,9 +152,17 @@ export default function Home() {
             <KnowledgeWeb
               turns={turns}
               threads={threads}
+              inspiration={inspiration}
               onImageSelect={(turnId) => router.push(`/post/${turnId}` as any)}
               selectedTurnId={null}
               resetToken={0}
+            />
+          </div>
+          <div className={view === "inspiration" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
+            <InspirationManager
+              inspiration={inspiration}
+              onRefresh={reloadHistory}
+              onImageClick={setLightboxSrc}
             />
           </div>
           <div className={view === "table" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>

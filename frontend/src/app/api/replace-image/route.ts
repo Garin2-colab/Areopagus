@@ -4,22 +4,23 @@ import { revalidateTag } from "next/cache";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getModalReplaceUrl() {
+function getMutateUrl() {
   const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
   const apiUrl = (process.env.MODAL_API_URL || "").trim();
   const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
 
   const referenceUrl = saveUrl || apiUrl || statusUrl;
-  if (!referenceUrl) {
-    return null;
-  }
+  if (!referenceUrl) return null;
 
   return referenceUrl
-    .replace("-save-endpoint.modal.run", "-replace-image-endpoint.modal.run")
-    .replace("-history-endpoint.modal.run", "-replace-image-endpoint.modal.run")
-    .replace("-status-endpoint.modal.run", "-replace-image-endpoint.modal.run")
-    .replace("-pulse-endpoint.modal.run", "-replace-image-endpoint.modal.run")
-    .replace("-get-image.modal.run", "-replace-image-endpoint.modal.run");
+    .replace("-save-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-history-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-status-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-pulse-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-get-image.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-delete-post-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-replace-image-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
+    .replace("-update-category-endpoint.modal.run", "-mutate-history-endpoint.modal.run");
 }
 
 function getModalImageUrl() {
@@ -28,9 +29,7 @@ function getModalImageUrl() {
   const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
 
   const referenceUrl = saveUrl || apiUrl || statusUrl;
-  if (!referenceUrl) {
-    return null;
-  }
+  if (!referenceUrl) return null;
 
   return referenceUrl
     .replace("-save-endpoint.modal.run", "-get-image.modal.run")
@@ -42,21 +41,26 @@ function getModalImageUrl() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const replaceUrl = getModalReplaceUrl();
+    const mutateUrl = getMutateUrl();
 
-    if (!replaceUrl) {
+    if (!mutateUrl) {
       return NextResponse.json(
         { error: "Modal endpoint environment variables are not configured." },
         { status: 500 }
       );
     }
 
-    const response = await fetch(replaceUrl, {
+    const payload = {
+      action: "replace_image",
+      ...body
+    };
+
+    const response = await fetch(mutateUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
@@ -66,7 +70,6 @@ export async function POST(request: Request) {
     const data = await response.json();
 
     if (data.ok) {
-      // Purge Next.js Edge CDN caches so the new image renders instantly
       try {
         revalidateTag("history", "max");
       } catch (err) {

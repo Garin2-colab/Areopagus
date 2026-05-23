@@ -824,6 +824,19 @@ def runway_image_url(task: Any) -> str:
 
 
 def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
+    if "id=" in image_url:
+        import urllib.parse
+        try:
+            parsed = urllib.parse.urlparse(image_url)
+            query = urllib.parse.parse_qs(parsed.query)
+            image_id = query.get("id", [None])[0]
+            if image_id:
+                local_path = IMAGE_DIR / f"{image_id}.webp"
+                if local_path.exists():
+                    return local_path.read_bytes(), "image/webp"
+        except Exception as err:
+            print(f"[fetch_image_bytes] local path check failed: {err}", flush=True)
+
     try:
         with urllib.request.urlopen(image_url) as response:
             content_type = response.headers.get_content_type() or "image/png"
@@ -1321,34 +1334,50 @@ def retrieve_associative_memory(
 ) -> dict[str, Any] | None:
     """
     Traverse the graph in history.json using current_keywords to find a historical turn
-    that shares keywords but belongs to a different thread or context.
-    Returns the turn record representing the retrieved memory.
+    or user-uploaded inspiration image that shares keywords.
     """
-    if not history or "turns" not in history or not history["turns"]:
+    if not history:
         return None
 
     candidates = []
     current_keywords_set = {k.lower() for k in current_keywords}
 
-    for turn in history["turns"]:
+    # Search normal turns
+    for turn in history.get("turns", []):
         if not isinstance(turn, dict) or "image_id" not in turn:
             continue
 
-        # Exclude active thread's direct turns to fetch external inspirations
         if exclude_thread_id and turn.get("thread_id") == exclude_thread_id:
             continue
 
         turn_keywords = {k.lower() for k in turn.get("keywords", [])}
         overlap = turn_keywords.intersection(current_keywords_set)
         if overlap:
-            candidates.append((len(overlap), turn))
+            # We score it based on overlap length and turn number
+            candidates.append((len(overlap), turn.get("turn", 0), turn))
+
+    # Search user-uploaded inspiration images
+    for insp in history.get("inspiration", []):
+        if not isinstance(insp, dict) or "id" not in insp:
+            continue
+
+        insp_keywords = {k.lower() for k in insp.get("keywords", [])}
+        overlap = insp_keywords.intersection(current_keywords_set)
+        if overlap:
+            # Map id to image_id, and turn to simulated values so caller parses cleanly
+            insp_copy = dict(insp)
+            insp_copy["image_id"] = insp["id"]
+            insp_copy["turn"] = "Inspiration"
+            insp_copy["proposal"] = "User Uploaded Inspiration"
+            # Assign simulated high relevance (e.g. 9999) to prioritize user-uploaded references
+            candidates.append((len(overlap), 9999, insp_copy))
 
     if not candidates:
         return None
 
-    # Sort candidates by overlap descending (and then turn number descending for recent relevance)
-    candidates.sort(key=lambda x: (x[0], x[1].get("turn", 0)), reverse=True)
-    return candidates[0][1]
+    # Sort candidates by overlap descending, then by turn/relevance descending
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return candidates[0][2]
 
 
 def build_initiate_prompt_json(
@@ -2082,12 +2111,49 @@ def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | 
 def rebuild_history_graph(history: dict[str, Any]) -> None:
     """Rebuilds the entire history graph from turns to upgrade to the connected-mesh model."""
     history["graph"] = {"nodes": [], "edges": []}
+    
+    # Process standard turns
     for turn in history.get("turns", []):
         if not isinstance(turn, dict) or "image_id" not in turn:
             continue
         nodes, edges = graph_nodes_for_turn(turn, history)
         history["graph"]["nodes"].extend(nodes)
         history["graph"]["edges"].extend(edges)
+
+    # Process inspiration items
+    for item in history.get("inspiration", []):
+        if not isinstance(item, dict) or "id" not in item:
+            continue
+            
+        insp_id = item["id"]
+        # Add inspiration node
+        if insp_id not in {n["id"] for n in history["graph"]["nodes"]}:
+            history["graph"]["nodes"].append({
+                "id": insp_id,
+                "type": "inspiration",
+                "label": "Inspiration",
+                "url": item.get("image_url", ""),
+            })
+
+        # Link to keywords
+        for keyword in item.get("keywords", []):
+            if not keyword:
+                continue
+            keyword_node_id = f"keyword-{keyword.lower().lstrip('#')}"
+            
+            # Add keyword node if not exists
+            if keyword_node_id not in {n["id"] for n in history["graph"]["nodes"]}:
+                history["graph"]["nodes"].append({
+                    "id": keyword_node_id,
+                    "type": "keyword",
+                    "label": keyword,
+                })
+                
+            history["graph"]["edges"].append({
+                "from": insp_id,
+                "to": keyword_node_id,
+                "relation": "tagged_with",
+            })
 
 
 @app.function(
@@ -2250,236 +2316,276 @@ def get_image(id: str) -> Any:
 @app.function(
     image=image,
     volumes={"/data": data_volume},
-    timeout=60,
-)
-@modal.fastapi_endpoint(method="POST")
-def save_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
-    AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
-    data_volume.commit()
-    return {"ok": True, "message": "Config saved to Modal volume."}
-
-@app.function(
-    image=image,
-    volumes={"/data": data_volume},
+    secrets=[
+        modal.Secret.from_name("google-api-secret"),
+        modal.Secret.from_name("runway-secret"),
+    ],
     timeout=120,
 )
 @modal.fastapi_endpoint(method="POST")
-def replace_image_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     import base64
-    from io import BytesIO
-    from PIL import Image
-
-    image_id = payload.get("image_id")
-    image_base64 = payload.get("image_base64")
-
-    if not image_id or not image_base64:
-        return {"ok": False, "error": "Missing image_id or image_base64."}
+    import json
+    import traceback
+    
+    action = payload.get("action")
+    if not action:
+        return {"ok": False, "error": "Missing action parameter."}
 
     data_volume.reload()
-
-    # Strip data:image/...;base64, prefix if present
-    if "," in image_base64:
-        image_base64 = image_base64.split(",", 1)[1]
-
+    
     try:
-        img_bytes = base64.b64decode(image_base64)
-    except Exception as exc:
-        return {"ok": False, "error": f"Invalid base64 encoding: {exc}"}
+        if action == "save":
+            AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
+                config_data = {k: v for k, v in payload.items() if k != "action"}
+                json.dump(config_data, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+            data_volume.commit()
+            return {"ok": True, "message": "Config saved to Modal volume."}
 
-    try:
-        # Save as WebP
-        IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        webp_path = IMAGE_DIR / f"{image_id}.webp"
+        elif action == "update_category":
+            image_id = payload.get("image_id")
+            category = payload.get("category")
+            if not image_id or category is None:
+                return {"ok": False, "error": "Missing image_id or category."}
+            history = load_history()
+            updated = False
+            for turn in history.get("turns", []):
+                if turn.get("image_id") == image_id:
+                    turn["category"] = category
+                    updated = True
+                    break
+            if not updated:
+                return {"ok": False, "error": f"Turn {image_id} not found."}
+            thread = find_thread_for_image(history, image_id)
+            if thread:
+                thread["category"] = category
+            rebuild_history_graph(history)
+            save_history(history)
+            return {"ok": True, "message": f"Category for turn {image_id} updated to {category}."}
 
-        with Image.open(BytesIO(img_bytes)) as img:
-            # Convert RGBA to RGB
-            if img.mode in ("RGBA", "LA"):
-                background = Image.new("RGBA", img.size, (255, 255, 255, 255))
-                background.paste(img, (0, 0), img)
-                converted = background.convert("RGB")
+        elif action == "replace_image":
+            image_id = payload.get("image_id")
+            image_base64 = payload.get("image_base64")
+            if not image_id or not image_base64:
+                return {"ok": False, "error": "Missing image_id or image_base64."}
+            if "," in image_base64:
+                header, base64_data = image_base64.split(",", 1)
             else:
-                converted = img.convert("RGB")
-            converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
-            width, height = converted.size
+                base64_data = image_base64
+            img_bytes = base64.b64decode(base64_data)
+            
+            IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+            webp_path = IMAGE_DIR / f"{image_id}.webp"
+            from io import BytesIO
+            from PIL import Image
+            with Image.open(BytesIO(img_bytes)) as img:
+                if img.mode in ("RGBA", "LA"):
+                    background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                    background.paste(img, (0, 0), img)
+                    converted = background.convert("RGB")
+                else:
+                    converted = img.convert("RGB")
+                converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                width, height = converted.size
 
-        # Resolve image GET endpoint dynamically
-        try:
-            web_url = get_image.get_web_url()
-        except Exception:
-            web_url = None
+            try:
+                web_url = get_image.get_web_url()
+            except Exception:
+                web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
-        if not web_url:
-            web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+            import time
+            new_url = f"{web_url}?id={image_id}&v={int(time.time())}"
+            history = load_history()
+            updated_any = False
+            for turn in history.get("turns", []):
+                if turn.get("image_id") == image_id:
+                    turn["image_url"] = new_url
+                    turn["image_webp"] = {
+                        "path": f"/data/images/{image_id}.webp",
+                        "url": new_url,
+                        "format": "webp",
+                        "quality": WEBP_QUALITY,
+                        "source_mime_type": payload.get("mime_type", "image/png"),
+                        "size_bytes": webp_path.stat().st_size,
+                        "dimensions": {"width": width, "height": height},
+                    }
+                    updated_any = True
+            if updated_any:
+                save_history(history)
+                return {"ok": True, "message": f"Image {image_id} replaced successfully."}
+            return {"ok": False, "error": "No matching turn found."}
 
-        # Update history turn metadata
-        import time
-        version_ts = int(time.time())
-        new_url = f"{web_url}?id={image_id}&v={version_ts}"
+        elif action == "delete_post":
+            image_id = payload.get("image_id")
+            if not image_id:
+                return {"ok": False, "error": "Missing image_id."}
+            history = load_history()
+            turns = history.get("turns", [])
+            target_turn = None
+            target_idx = -1
+            for i, t in enumerate(turns):
+                if t.get("image_id") == image_id:
+                    target_turn = t
+                    target_idx = i
+                    break
+            if not target_turn:
+                return {"ok": False, "error": f"Post not found for image_id: {image_id}"}
 
-        history = load_history()
-        updated_any = False
-        for turn in history.get("turns", []):
-            if turn.get("image_id") == image_id:
-                turn["image_url"] = new_url
-                turn["image_webp"] = {
-                    "path": f"/data/images/{image_id}.webp",
-                    "url": new_url,
-                    "format": "webp",
-                    "quality": WEBP_QUALITY,
-                    "source_mime_type": payload.get("mime_type", "image/png"),
-                    "size_bytes": webp_path.stat().st_size,
-                    "dimensions": {
-                        "width": width,
-                        "height": height,
-                    },
-                }
-                updated_any = True
+            thread_id = target_turn.get("thread_id") or image_id
+            turns.pop(target_idx)
 
-        if not updated_any:
-            print(f"[replace_image_endpoint] No matching turn found in history for image_id: {image_id}", flush=True)
+            try:
+                webp_path = IMAGE_DIR / f"{image_id}.webp"
+                if webp_path.exists():
+                    webp_path.unlink()
+            except Exception as exc:
+                print(f"[delete_post] Warning: failed to delete file: {exc}", flush=True)
 
-        save_history(history)
-        return {"ok": True, "message": f"Image {image_id} replaced successfully."}
+            thread_turns = [t for t in turns if t.get("thread_id") == thread_id or t.get("image_id") == thread_id]
+            thread_turns.sort(key=lambda t: (t.get("turn", 0), t.get("created_at", "")))
+            new_thread_id = None
+            if thread_turns:
+                was_root = (target_turn.get("action") == "Initiate") or (target_turn.get("parent_image_id") is None)
+                if was_root:
+                    new_root = thread_turns[0]
+                    new_root["parent_image_id"] = None
+                    new_root["action"] = "Initiate"
+                    new_thread_id = new_root["image_id"]
+                    for t in thread_turns:
+                        t["thread_id"] = new_thread_id
+                        if t.get("parent_image_id") == image_id:
+                            t["parent_image_id"] = new_thread_id
+                else:
+                    parent_id = target_turn.get("parent_image_id")
+                    for t in turns:
+                        if t.get("parent_image_id") == image_id:
+                            t["parent_image_id"] = parent_id
+
+            threads = history.get("threads", [])
+            updated_threads = []
+            for thread in threads:
+                tid = thread.get("thread_id")
+                if tid == thread_id:
+                    if not thread_turns:
+                        continue
+                    if new_thread_id:
+                        thread["thread_id"] = new_thread_id
+                        thread["root_image_id"] = new_thread_id
+                    if "posts" in thread:
+                        thread["posts"] = [p for p in thread["posts"] if p != image_id]
+                        if new_thread_id and new_thread_id not in thread["posts"]:
+                            thread["posts"].insert(0, new_thread_id)
+                    thread["updated_at"] = utc_now()
+                    updated_threads.append(thread)
+                else:
+                    updated_threads.append(thread)
+            history["threads"] = updated_threads
+            rebuild_history_graph(history)
+            save_history(history)
+            return {"ok": True, "message": f"Post {image_id} deleted successfully."}
+
+        elif action == "upload_inspiration":
+            image_base64 = payload.get("image_base64")
+            if not image_base64:
+                return {"ok": False, "error": "Missing image_base64."}
+            if "," in image_base64:
+                header, base64_data = image_base64.split(",", 1)
+            else:
+                base64_data = image_base64
+            img_bytes = base64.b64decode(base64_data)
+
+            import time
+            insp_id = f"insp_{int(time.time())}"
+            IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+            webp_path = IMAGE_DIR / f"{insp_id}.webp"
+            from io import BytesIO
+            from PIL import Image
+            with Image.open(BytesIO(img_bytes)) as img:
+                if img.mode in ("RGBA", "LA"):
+                    background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                    background.paste(img, (0, 0), img)
+                    converted = background.convert("RGB")
+                else:
+                    converted = img.convert("RGB")
+                converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+
+            try:
+                web_url = get_image.get_web_url()
+            except Exception:
+                web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+            image_url = f"{web_url}?id={insp_id}"
+
+            prompt = (
+                "Analyze this image and return a JSON list of 3 to 5 visual keywords (e.g. style, theme, artistic movements, design aesthetics, visual elements). "
+                "The response must be a JSON object with a single key 'keywords' containing a list of strings. "
+                "Do not include spaces in the keywords; make them lowercase, single words or merged words starting with '#' (e.g. '#minimalism'). "
+                "Example format: {\"keywords\": [\"#minimalism\", \"#brutalist\", \"#cyberpunk\"]}"
+            )
+            keywords = ["#inspiration", "#design"]
+            try:
+                res = gemini_generate(prompt, image_bytes=img_bytes, image_mime_type=payload.get("mime_type", "image/png"))
+                if "text" in res:
+                    text_content = res["text"].strip()
+                    if text_content.startswith("```"):
+                        lines = text_content.splitlines()
+                        if lines[0].startswith("```json") or lines[0].startswith("```"):
+                            lines = lines[1:-1]
+                        text_content = "\n".join(lines).strip()
+                    import json
+                    parsed = json.loads(text_content)
+                    if isinstance(parsed, dict) and "keywords" in parsed:
+                        keywords = parsed["keywords"]
+            except Exception as exc:
+                print(f"[upload_inspiration] Keyword generation failed: {exc}.", flush=True)
+
+            history = load_history()
+            if "inspiration" not in history:
+                history["inspiration"] = []
+            inspiration_item = {
+                "id": insp_id,
+                "image_url": image_url,
+                "keywords": keywords,
+                "created_at": utc_now()
+            }
+            history["inspiration"].append(inspiration_item)
+            rebuild_history_graph(history)
+            save_history(history)
+            return {"ok": True, "inspiration": inspiration_item}
+
+        elif action == "delete_inspiration":
+            insp_id = payload.get("id")
+            if not insp_id:
+                return {"ok": False, "error": "Missing id."}
+            history = load_history()
+            inspiration = history.get("inspiration", [])
+            target = None
+            for item in inspiration:
+                if item.get("id") == insp_id:
+                    target = item
+                    break
+            if not target:
+                return {"ok": False, "error": f"Inspiration item {insp_id} not found."}
+            inspiration.remove(target)
+            history["inspiration"] = inspiration
+            try:
+                webp_path = IMAGE_DIR / f"{insp_id}.webp"
+                if webp_path.exists():
+                    webp_path.unlink()
+            except Exception as exc:
+                print(f"[delete_inspiration] Warning: failed to delete file: {exc}", flush=True)
+            rebuild_history_graph(history)
+            save_history(history)
+            return {"ok": True, "message": f"Inspiration {insp_id} deleted successfully."}
+
+        else:
+            return {"ok": False, "error": f"Unknown action: {action}"}
+
     except Exception as exc:
-        import traceback
         traceback.print_exc()
         return {"ok": False, "error": str(exc)}
 
-
-@app.function(
-    image=image,
-    volumes={"/data": data_volume},
-    timeout=60,
-)
-@modal.fastapi_endpoint(method="POST")
-def delete_post_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
-    image_id = payload.get("image_id")
-    if not image_id:
-        return {"ok": False, "error": "Missing image_id."}
-
-    data_volume.reload()
-    history = load_history()
-    turns = history.get("turns", [])
-
-    target_turn = None
-    target_idx = -1
-    for i, t in enumerate(turns):
-        if t.get("image_id") == image_id:
-            target_turn = t
-            target_idx = i
-            break
-
-    if not target_turn:
-        return {"ok": False, "error": f"Post not found for image_id: {image_id}"}
-
-    thread_id = target_turn.get("thread_id") or image_id
-
-    # Remove from turns list
-    turns.pop(target_idx)
-
-    # Delete the WebP image file if it exists to clean up disk space
-    try:
-        webp_path = IMAGE_DIR / f"{image_id}.webp"
-        if webp_path.exists():
-            webp_path.unlink()
-    except Exception as exc:
-        print(f"[delete_post_endpoint] Warning: failed to delete file: {exc}", flush=True)
-
-    # Get remaining turns in the same thread
-    thread_turns = [t for t in turns if t.get("thread_id") == thread_id or t.get("image_id") == thread_id]
-    thread_turns.sort(key=lambda t: (t.get("turn", 0), t.get("created_at", "")))
-
-    new_thread_id = None
-    if thread_turns:
-        # Check if the deleted turn was the root/initial post
-        was_root = (target_turn.get("action") == "Initiate") or (target_turn.get("parent_image_id") is None)
-        if was_root:
-            # Promote the second image to be the new initial image
-            new_root = thread_turns[0]
-            new_root["parent_image_id"] = None
-            new_root["action"] = "Initiate"
-            new_thread_id = new_root["image_id"]
-
-            # Update all remaining replies in this thread to reference the new root thread ID
-            for t in thread_turns:
-                t["thread_id"] = new_thread_id
-                if t.get("parent_image_id") == image_id:
-                    t["parent_image_id"] = new_thread_id
-        else:
-            # Reparent any descendants of the deleted reply to its parent
-            parent_id = target_turn.get("parent_image_id")
-            for t in turns:
-                if t.get("parent_image_id") == image_id:
-                    t["parent_image_id"] = parent_id
-
-    # Update threads metadata structure in history
-    threads = history.get("threads", [])
-    updated_threads = []
-    for thread in threads:
-        tid = thread.get("thread_id")
-        if tid == thread_id:
-            # If no posts remain in this thread, delete the thread metadata entirely
-            if not thread_turns:
-                continue
-
-            # If the root/thread ID changed, update thread metadata accordingly
-            if new_thread_id:
-                thread["thread_id"] = new_thread_id
-                thread["root_image_id"] = new_thread_id
-
-            if "posts" in thread:
-                thread["posts"] = [p for p in thread["posts"] if p != image_id]
-                if new_thread_id and new_thread_id not in thread["posts"]:
-                    thread["posts"].insert(0, new_thread_id)
-
-            thread["updated_at"] = utc_now()
-            updated_threads.append(thread)
-        else:
-            updated_threads.append(thread)
-
-    history["threads"] = updated_threads
-
-    # Rebuild the connected-mesh graph to reflect changes
-    rebuild_history_graph(history)
-
-    save_history(history)
-    return {"ok": True, "message": f"Post {image_id} deleted successfully."}
-
-
-@app.function(
-    image=image,
-    volumes={"/data": data_volume},
-    timeout=60,
-)
-@modal.fastapi_endpoint(method="POST")
-def update_category_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
-    image_id = payload.get("image_id")
-    category = payload.get("category")
-    if not image_id or category is None:
-        return {"ok": False, "error": "Missing image_id or category."}
-
-    data_volume.reload()
-    history = load_history()
-    
-    updated = False
-    for turn in history.get("turns", []):
-        if turn.get("image_id") == image_id:
-            turn["category"] = category
-            updated = True
-            break
-            
-    if not updated:
-        return {"ok": False, "error": f"Turn {image_id} not found."}
-        
-    thread = find_thread_for_image(history, image_id)
-    if thread:
-        thread["category"] = category
-        
-    save_history(history)
-    return {"ok": True, "message": f"Category for turn {image_id} updated to {category}."}
 
 
 @app.function(
@@ -2499,59 +2605,6 @@ def pulse_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     orchestrate.spawn(payload)
     
     return {"ok": True, "message": "Pulse started remotely on Modal."}
-
-@app.function(
-    image=image,
-    volumes={"/data": data_volume},
-    timeout=60 * 5,
-)
-@modal.fastapi_endpoint(method="POST")
-def runway_webhook_receiver(payload: dict[str, Any]) -> dict[str, Any]:
-    task_id = payload.get("id") or payload.get("taskId") or payload.get("task_id")
-    status = str(payload.get("status") or payload.get("state") or "").upper()
-    
-    if not task_id:
-        return {"ok": False, "message": "No task_id in payload."}
-
-    data_volume.reload()
-    
-    if status not in {"SUCCEEDED", "SUCCESS", "COMPLETED", "DONE", "FINISHED"}:
-        if status in {"FAILED", "CANCELLED", "CANCELED", "ERROR"}:
-            remove_pending_task(task_id)
-            update_studio_status(f"Runway task {task_id} failed.", active=False)
-        return {"ok": True, "message": f"Ignored status {status}."}
-        
-    pending = remove_pending_task(task_id)
-    if not pending:
-        return {"ok": False, "message": f"No pending task found for {task_id}."}
-
-    try:
-        image_url = runway_image_url(payload)
-        image_webp = save_webp_image(image_url, pending["image_id"])
-
-        history = load_history()
-        
-        record_generated_turn(
-            history,
-            agent=pending["agent"],
-            assessment=pending["assessment"],
-            category=pending["category"],
-            prompt_json=pending["prompt_json"],
-            prompt_text=pending["prompt_text"],
-            image_url=image_url,
-            image_webp=image_webp,
-            image_id=pending["image_id"],
-            parent_image_id=pending["parent_image_id"],
-            thread_id=pending["thread_id"],
-            action=pending["action"],
-            runway_model=pending["runway_model"],
-        )
-        
-        update_studio_status("Idle", active=False)
-        return {"ok": True, "message": "Turn recorded successfully."}
-    except Exception as exc:
-        update_studio_status(f"Error processing webhook: {str(exc)}", active=False)
-        return {"ok": False, "error": str(exc)}
 
 # ── Heartbeat Cron ──────────────────────────────────────────────────────────────
 # Runs every hour. Reads agents_config to find the max heartbeat (1-5 pulses/day),

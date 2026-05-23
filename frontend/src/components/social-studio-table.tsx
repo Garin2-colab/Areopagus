@@ -327,7 +327,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                             value={turn.category || "Illustration"}
                             disabled={isThisUpdatingCategory}
                             onChange={(e) => handleCategoryChange(turn.image_id, e.target.value)}
-                            className="h-8 rounded-lg border border-[#D8D4CC] bg-white px-2 text-xs font-medium text-[#44423E] focus:outline-none focus:ring-1 focus:ring-[#858076] hover:bg-[#F5F2EB]/50 transition-colors disabled:opacity-50"
+                            className="h-8 rounded-lg border border-[#D8D4CC] bg-white px-2 text-xs font-semibold text-[#D45113] focus:outline-none focus:ring-1 focus:ring-[#858076] hover:bg-[#F5F2EB]/50 transition-colors disabled:opacity-50"
                           >
                             {(CATEGORY_OPTIONS.includes(turn.category || "")
                               ? CATEGORY_OPTIONS

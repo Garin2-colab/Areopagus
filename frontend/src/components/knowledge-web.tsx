@@ -37,6 +37,17 @@ type GraphNode =
       fx?: number;
       fy?: number;
       val?: number;
+    }
+  | {
+      id: string;
+      kind: "inspiration";
+      imageUrl: string;
+      label: string;
+      x?: number;
+      y?: number;
+      fx?: number;
+      fy?: number;
+      val?: number;
     };
 
 type GraphLink = {
@@ -48,9 +59,9 @@ const ForceGraph2D = dynamic(async () => (await import("react-force-graph-2d")).
   ssr: false
 });
 
-import type { HistoryTurn, Thread } from "@/lib/history";
+import type { HistoryTurn, Thread, InspirationItem } from "@/lib/history";
 
-function buildGraph(turns: HistoryTurn[], threads: Thread[] = []) {
+function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: InspirationItem[] = []) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
   const keywordNodes = new Map<string, GraphNode>();
@@ -87,6 +98,32 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = []) {
     imageKeywords.set(turn.image_id, [...turn.keywords]);
   }
 
+  for (const item of inspiration) {
+    const inspNode: GraphNode = {
+      id: item.id,
+      kind: "inspiration",
+      imageUrl: item.image_url,
+      label: `Inspiration`
+    };
+    nodes.push(inspNode);
+
+    for (const keyword of item.keywords || []) {
+      if (!keywordNodes.has(keyword)) {
+        const keywordNode: GraphNode = {
+          id: keyword,
+          kind: "keyword",
+          label: keyword
+        };
+        keywordNodes.set(keyword, keywordNode);
+        nodes.push(keywordNode);
+      }
+
+      links.push({ source: keyword, target: item.id });
+    }
+
+    imageKeywords.set(item.id, [...(item.keywords || [])]);
+  }
+
   for (const thread of threads) {
     for (const comment of thread.comments || []) {
       const commentNodeId = `comment-${comment.id}`;
@@ -106,17 +143,30 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = []) {
 type KnowledgeWebProps = {
   turns: HistoryTurn[];
   threads?: Thread[];
+  inspiration?: InspirationItem[];
   onImageSelect: (turnId: string) => void;
   selectedTurnId?: string | null;
   resetToken?: number;
 };
 
-export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnId, resetToken = 0 }: KnowledgeWebProps) {
+export function KnowledgeWeb({
+  turns,
+  threads = [],
+  inspiration = [],
+  onImageSelect,
+  selectedTurnId,
+  resetToken = 0
+}: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
   const graphFrameRef = useRef<HTMLDivElement | null>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
-  const { nodes, links, imageKeywords } = useMemo(() => buildGraph(turns, threads), [turns, threads]);
+  
+  const { nodes, links, imageKeywords } = useMemo(
+    () => buildGraph(turns, threads, inspiration),
+    [turns, threads, inspiration]
+  );
+  
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.kind === "image" && node.id === selectedTurnId) ?? null,
@@ -181,7 +231,12 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
   }, [resetToken]);
 
   useEffect(() => {
-    const urls = Array.from(new Set(turns.map((turn) => turn.image_url)));
+    const urls = Array.from(
+      new Set([
+        ...turns.map((turn) => turn.image_url),
+        ...inspiration.map((item) => item.image_url)
+      ])
+    );
     let cancelled = false;
 
     const preload = async () => {
@@ -218,13 +273,13 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
     return () => {
       cancelled = true;
     };
-  }, [turns]);
+  }, [turns, inspiration]);
 
   const forceGraphData = useMemo(() => {
     return {
       nodes: nodes.map((node, index) => {
         const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
-        const radius = node.kind === "image" ? 220 : 440;
+        const radius = (node.kind === "image" || node.kind === "inspiration") ? 220 : 440;
 
         return {
           ...node,
@@ -274,7 +329,7 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
               const typed = node as GraphNode;
               ctx.fillStyle = color;
               ctx.beginPath();
-              const radius = typed.kind === "image" ? 22 : 12;
+              const radius = (typed.kind === "image" || typed.kind === "inspiration") ? 22 : 12;
               ctx.arc(typed.x ?? 0, typed.y ?? 0, radius, 0, Math.PI * 2, false);
               ctx.fill();
             }}
@@ -283,14 +338,21 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
               const typed = node as GraphNode;
               const hovered = hoverNode?.id === typed.id;
               const selected = selectedNode?.id === typed.id;
-              const radius = typed.kind === "image" ? (hovered || selected ? 18 : 14) : typed.kind === "comment" ? 8 : 6;
+              const radius = (typed.kind === "image" || typed.kind === "inspiration")
+                ? (hovered || selected ? 18 : 14)
+                : typed.kind === "comment" ? 8 : 6;
               const labelScale = Math.max(0.55, 1 / globalScale);
-              const mainLabelOpacity = getLabelOpacity(globalScale, typed.kind === "image" ? 12 : 11, hovered, selected);
+              const mainLabelOpacity = getLabelOpacity(
+                globalScale,
+                (typed.kind === "image" || typed.kind === "inspiration") ? 12 : 11,
+                hovered,
+                selected
+              );
 
               ctx.save();
               ctx.translate(typed.x ?? 0, typed.y ?? 0);
 
-              if (typed.kind === "image") {
+              if (typed.kind === "image" || typed.kind === "inspiration") {
                 const cachedImage = imageCacheRef.current.get(typed.imageUrl);
 
                 ctx.fillStyle = "#FAF9F6";
@@ -312,7 +374,7 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
 
                 ctx.restore();
 
-                ctx.strokeStyle = selected || hovered ? "#252422" : "#858076";
+                ctx.strokeStyle = typed.kind === "inspiration" ? "#D45113" : (selected || hovered ? "#252422" : "#858076");
                 ctx.lineWidth = selected || hovered ? 1.8 : 1;
                 ctx.beginPath();
                 ctx.arc(0, 0, radius + 2, 0, Math.PI * 2);
@@ -389,6 +451,24 @@ export function KnowledgeWeb({ turns, threads = [], onImageSelect, selectedTurnI
               <p className="mt-3 text-sm leading-6 text-[#44423E]">
                 <span className="font-semibold text-[#252422]">{hoverNode.label}</span>: {hoverNode.text}
               </p>
+            ) : hoverNode?.kind === "inspiration" ? (
+              <div className="mt-3 grid gap-4 md:grid-cols-[160px_1fr]">
+                <div className="aspect-square border border-[#D8D4CC] bg-[#FAF9F6] p-4 text-[#252422]">
+                  <div className="flex h-full flex-col justify-between">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#D45113] font-bold">Inspiration</span>
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold truncate text-[#252422]">{hoverNode.id}</div>
+                      <div className="h-px bg-[#D8D4CC]" />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="break-all text-xs font-mono text-[#44423E]">{hoverNode.imageUrl}</p>
+                  <p className="text-sm leading-6 text-[#858076]">
+                    This is a user-uploaded reference inspiration image.
+                  </p>
+                </div>
+              </div>
             ) : (
               <p className="mt-3 text-sm leading-6 text-[#858076]">Select a node to inspect its connected meaning.</p>
             )}

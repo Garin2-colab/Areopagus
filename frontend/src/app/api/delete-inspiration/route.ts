@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     const payload = {
-      action: "update_category",
+      action: "delete_inspiration",
       ...body
     };
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      throw new Error(`Modal update-category endpoint failed with status ${response.status}`);
+      throw new Error(`Modal delete-inspiration endpoint failed with status ${response.status}`);
     }
 
     const data = await response.json();
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Category update failed." },
+      { ok: false, error: error instanceof Error ? error.message : "Inspiration deletion failed." },
       { status: 500 }
     );
   }
