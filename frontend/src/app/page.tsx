@@ -159,6 +159,7 @@ export default function Home() {
               onImageSelect={(turnId) => router.push(`/post/${turnId}` as any)}
               selectedTurnId={null}
               resetToken={0}
+              onRefresh={reloadHistory}
             />
           </div>
           <div className={view === "inspiration" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>

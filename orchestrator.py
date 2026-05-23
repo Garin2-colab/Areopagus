@@ -2586,6 +2586,92 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             save_history(history)
             return {"ok": True, "message": f"Inspiration {insp_id} deleted successfully."}
 
+        elif action == "simplify_keywords":
+            history = load_history()
+            
+            # 1. Collect all unique keywords
+            unique_keywords = set()
+            for turn in history.get("turns", []):
+                for kw in turn.get("keywords", []):
+                    if kw:
+                        unique_keywords.add(kw)
+            for item in history.get("inspiration", []):
+                for kw in item.get("keywords", []):
+                    if kw:
+                        unique_keywords.add(kw)
+                        
+            if not unique_keywords:
+                return {"ok": True, "message": "No keywords to simplify."}
+                
+            # 2. Ask Gemini to map them
+            prompt = (
+                "You are an expert design vocabulary parser. You will be given a JSON list of hashtag keywords.\n"
+                "Analyze each keyword. If it is a compound/merged word representing multiple concepts (e.g., '#impossiblegeometryflux', '#monochromeminimalism', '#silkarchitecture', '#cyberpunkretro'), "
+                "split it into its constituent individual concepts (e.g., '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'; '#silk', '#architecture'; '#cyberpunk', '#retro').\n"
+                "If it is already a single clean concept (e.g., '#minimalism', '#brutalist', '#fashion', '#flux'), keep it as-is.\n"
+                "Avoid returning empty lists or generic words.\n"
+                "Return a JSON object with a single key 'mapping' containing the mapping of old keyword to list of simplified keywords.\n"
+                f"Input list: {json.dumps(list(unique_keywords))}"
+            )
+            
+            mapping = {}
+            try:
+                res = gemini_generate(prompt)
+                if isinstance(res, dict) and "mapping" in res:
+                    mapping = res["mapping"]
+            except Exception as exc:
+                return {"ok": False, "error": f"Failed to simplify keywords: {str(exc)}"}
+                
+            if not mapping:
+                return {"ok": False, "error": "Gemini returned an empty or invalid mapping."}
+                
+            # 3. Apply the mapping to history
+            def map_keywords(kws):
+                new_kws = []
+                for kw in kws:
+                    mapped = mapping.get(kw)
+                    if isinstance(mapped, list):
+                        for m in mapped:
+                            # Normalize
+                            m_cleaned = m.strip().lower()
+                            if not m_cleaned.startswith("#"):
+                                m_cleaned = "#" + m_cleaned
+                            # Remove spaces and filter characters
+                            m_cleaned = re.sub(r"[^a-z0-9#-]", "", m_cleaned.replace(" ", ""))
+                            # Filter out generic words
+                            if m_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"} and m_cleaned not in new_kws:
+                                new_kws.append(m_cleaned)
+                    else:
+                        # Fallback to original
+                        if kw not in new_kws:
+                            new_kws.append(kw)
+                return new_kws
+
+            updated_turns = 0
+            for turn in history.get("turns", []):
+                old_kws = turn.get("keywords", [])
+                new_kws = map_keywords(old_kws)
+                if new_kws != old_kws:
+                    turn["keywords"] = new_kws
+                    updated_turns += 1
+                if isinstance(turn.get("prompt_json"), dict) and "keywords" in turn["prompt_json"]:
+                    turn["prompt_json"]["keywords"] = map_keywords(turn["prompt_json"]["keywords"])
+
+            updated_insp = 0
+            for item in history.get("inspiration", []):
+                old_kws = item.get("keywords", [])
+                new_kws = map_keywords(old_kws)
+                if new_kws != old_kws:
+                    item["keywords"] = new_kws
+                    updated_insp += 1
+
+            if updated_turns > 0 or updated_insp > 0:
+                rebuild_history_graph(history)
+                save_history(history)
+                return {"ok": True, "message": f"Successfully simplified keywords. Updated {updated_turns} turns and {updated_insp} inspiration items."}
+                
+            return {"ok": True, "message": "All keywords are already simplified."}
+
         else:
             return {"ok": False, "error": f"Unknown action: {action}"}
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { Sparkles, Loader2 } from "lucide-react";
 
 
 type GraphNode =
@@ -147,6 +148,7 @@ type KnowledgeWebProps = {
   onImageSelect: (turnId: string) => void;
   selectedTurnId?: string | null;
   resetToken?: number;
+  onRefresh?: () => Promise<void> | void;
 };
 
 export function KnowledgeWeb({
@@ -155,12 +157,45 @@ export function KnowledgeWeb({
   inspiration = [],
   onImageSelect,
   selectedTurnId,
-  resetToken = 0
+  resetToken = 0,
+  onRefresh
 }: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
   const graphFrameRef = useRef<HTMLDivElement | null>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
+  
+  const [simplifying, setSimplifying] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const handleSimplifyKeywords = async () => {
+    setSimplifying(true);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/simplify-keywords", {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setFeedback({ type: "success", message: data.message || "Keywords simplified successfully!" });
+        if (onRefresh) {
+          await onRefresh();
+        }
+      } else {
+        throw new Error(data.error || "Failed to simplify keywords.");
+      }
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "An error occurred."
+      });
+    } finally {
+      setSimplifying(false);
+      setTimeout(() => {
+        setFeedback(null);
+      }, 4000);
+    }
+  };
   
   const { nodes, links, imageKeywords } = useMemo(
     () => buildGraph(turns, threads, inspiration),
@@ -311,6 +346,41 @@ export function KnowledgeWeb({
   return (
     <div className="rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-[#FAF9F6] active:cursor-grabbing">
+        
+        {/* Overlay Toolbar */}
+        <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2">
+          <button
+            type="button"
+            disabled={simplifying}
+            onClick={handleSimplifyKeywords}
+            className="flex items-center gap-2 rounded-full border border-[#D8D4CC] bg-[#FAF9F6]/90 px-4 py-2 text-xs font-semibold text-[#44423E] backdrop-blur-sm transition-all hover:bg-[#FAF9F6] hover:text-[#252422] hover:border-[#858076] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm select-none"
+          >
+            {simplifying ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D45113]" />
+                <span>Simplifying...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5 text-[#D45113]" />
+                <span>Simplify Keywords</span>
+              </>
+            )}
+          </button>
+
+          {feedback && (
+            <div
+              className={`rounded-xl border px-3 py-2 text-xs font-medium shadow-sm transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${
+                feedback.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-red-200 bg-red-50 text-red-800"
+              }`}
+            >
+              {feedback.message}
+            </div>
+          )}
+        </div>
+
         {graphSize.width > 1 && graphSize.height > 1 ? (
           <ForceGraph2D
             ref={graphRef}
