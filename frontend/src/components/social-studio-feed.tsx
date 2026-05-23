@@ -255,17 +255,27 @@ function ThreadPostEntry({
         {/* Image */}
         <div
           onClick={() => onImageClick?.(turn.image_url)}
-          className={`relative overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] cursor-zoom-in hover:border-[#858076] transition-colors ${isRoot ? "aspect-[4/5] w-full max-w-3xl rounded-2xl" : "aspect-square w-[140px] rounded-xl md:w-[240px]"}`}
+          className={`overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] cursor-zoom-in hover:border-[#858076] transition-colors ${
+            isRoot ? "w-full max-w-3xl rounded-2xl" : "relative aspect-square w-[140px] rounded-xl md:w-[240px]"
+          }`}
           title="Click to enlarge"
         >
-          <Image
-            src={turn.image_url}
-            alt={`Post ${turn.image_id}`}
-            fill
-            sizes={isRoot ? "(max-width: 768px) 100vw, 800px" : "240px"}
-            className="object-cover transition-transform duration-300 hover:scale-[1.02]"
-            unoptimized
-          />
+          {isRoot ? (
+            <img
+              src={turn.image_url}
+              alt={`Post ${turn.image_id}`}
+              className="w-full h-auto max-h-[80vh] object-contain transition-transform duration-300 hover:scale-[1.01]"
+            />
+          ) : (
+            <Image
+              src={turn.image_url}
+              alt={`Post ${turn.image_id}`}
+              fill
+              sizes="240px"
+              className="object-cover transition-transform duration-300 hover:scale-[1.02]"
+              unoptimized
+            />
+          )}
         </div>
 
         {/* Text */}

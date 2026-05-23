@@ -14,12 +14,55 @@ type SocialStudioTableProps = {
   onImageClick?: (src: string) => void;
 };
 
+const CATEGORY_OPTIONS = [
+  "Fashion",
+  "Illustration",
+  "Graphic Design",
+  "Architecture",
+  "UX/UI",
+  "Industrial Design"
+];
+
 export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStudioTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [updatingCategoryId, setUpdatingCategoryId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeReplaceIdRef = useRef<string | null>(null);
+
+  const handleCategoryChange = async (imageId: string, newCategory: string) => {
+    setUpdatingCategoryId(imageId);
+    setFeedback(null);
+
+    try {
+      const response = await fetch("/api/update-category", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          image_id: imageId,
+          category: newCategory
+        })
+      });
+
+      const result = await response.json();
+      if (response.ok && result.ok) {
+        setFeedback({ type: "success", message: `Successfully updated category to ${newCategory}` });
+        await onRefresh();
+      } else {
+        throw new Error(result.error || "Failed to update category.");
+      }
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to update category."
+      });
+    } finally {
+      setUpdatingCategoryId(null);
+    }
+  };
 
   // Filter turns by agent name, action, keywords or prompt content
   const filteredTurns = turns.filter((turn) => {
@@ -158,6 +201,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                 <th className="px-3 py-4 font-semibold">Action</th>
                 <th className="px-3 py-4 font-semibold w-1/3">Discourse Content</th>
                 <th className="px-3 py-4 font-semibold">Keywords</th>
+                <th className="px-3 py-4 font-semibold">Category</th>
                 <th className="px-3 py-4 font-semibold">Timestamp</th>
                 <th className="py-4 pl-3 pr-6 font-semibold text-right">Actions</th>
               </tr>
@@ -165,13 +209,14 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
             <tbody className="divide-y divide-[#D8D4CC]/40">
               {filteredTurns.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-[#858076]">
+                  <td colSpan={9} className="py-12 text-center text-[#858076]">
                     No matching turns found.
                   </td>
                 </tr>
               ) : (
                 filteredTurns.map((turn) => {
                   const isThisReplacing = replacingId === turn.image_id;
+                  const isThisUpdatingCategory = updatingCategoryId === turn.image_id;
                   return (
                     <tr
                       key={turn.image_id}
@@ -234,6 +279,30 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                             <span className="text-[9px] text-[#858076] font-mono self-center">
                               +{turn.keywords.length - 3}
                             </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-3 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={turn.category || "Illustration"}
+                            disabled={isThisUpdatingCategory}
+                            onChange={(e) => handleCategoryChange(turn.image_id, e.target.value)}
+                            className="h-8 rounded-lg border border-[#D8D4CC] bg-white px-2 text-xs font-medium text-[#44423E] focus:outline-none focus:ring-1 focus:ring-[#858076] hover:bg-[#F5F2EB]/50 transition-colors disabled:opacity-50"
+                          >
+                            {(CATEGORY_OPTIONS.includes(turn.category || "")
+                              ? CATEGORY_OPTIONS
+                              : [turn.category || "Illustration", ...CATEGORY_OPTIONS.filter((c) => c !== (turn.category || "Illustration"))]
+                            ).map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+                          {isThisUpdatingCategory && (
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border border-zinc-400 border-t-transparent" />
                           )}
                         </div>
                       </td>

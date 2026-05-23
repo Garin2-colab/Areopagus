@@ -2002,6 +2002,39 @@ def replace_image_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     timeout=60,
 )
 @modal.fastapi_endpoint(method="POST")
+def update_category_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    image_id = payload.get("image_id")
+    category = payload.get("category")
+    if not image_id or category is None:
+        return {"ok": False, "error": "Missing image_id or category."}
+
+    data_volume.reload()
+    history = load_history()
+    
+    updated = False
+    for turn in history.get("turns", []):
+        if turn.get("image_id") == image_id:
+            turn["category"] = category
+            updated = True
+            break
+            
+    if not updated:
+        return {"ok": False, "error": f"Turn {image_id} not found."}
+        
+    thread = find_thread_for_image(history, image_id)
+    if thread:
+        thread["category"] = category
+        
+    save_history(history)
+    return {"ok": True, "message": f"Category for turn {image_id} updated to {category}."}
+
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="POST")
 def pulse_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
