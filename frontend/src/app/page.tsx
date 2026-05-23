@@ -29,7 +29,7 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedPin = localStorage.getItem("areopagus_admin_pin");
-      const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "4826";
+      const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "5995";
       if (storedPin === targetPin) {
         setIsAuthorized(true);
       } else {
@@ -41,7 +41,7 @@ export default function Home() {
   }, [settingsOpen]);
 
   const handleVerifyPin = () => {
-    const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "4826";
+    const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "5995";
     if (pinInput === targetPin) {
       setIsAuthorized(true);
       setPinError(false);
