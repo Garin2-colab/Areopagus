@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, compressImage } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudioStatus } from "@/lib/useStudioStatus";
 
@@ -269,43 +269,56 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64Data = event.target?.result as string;
-        try {
-          const response = await fetch("/api/replace-image", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              image_id: `ref_style_${agentId}_${index}`,
-              image_base64: base64Data,
-              mime_type: file.type,
-            }),
-          });
-          const result = await response.json();
-          if (!response.ok || !result.ok) {
-            throw new Error(result.error || "Upload failed");
-          }
+      try {
+        const base64Data = await compressImage(file);
+        const response = await fetch("/api/replace-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_id: `ref_style_${agentId}_${index}`,
+            image_base64: base64Data,
+            mime_type: "image/jpeg",
+          }),
+        });
 
-          const uploadedUrl = result.url || `/api/image?id=ref_style_${agentId}_${index}&v=${Math.floor(Date.now() / 1000)}`;
-
-          setAgents((current) =>
-            current.map((agent) => {
-              if (agent.id !== agentId) return agent;
-              const nextRefs = [...(agent.referenceImages || [])];
-              while (nextRefs.length <= index) {
-                nextRefs.push("");
+        if (!response.ok) {
+          let errMsg = `Upload failed with status ${response.status}`;
+          try {
+            const errorData = await response.json();
+            errMsg = errorData.error || errMsg;
+          } catch {
+            try {
+              const txt = await response.text();
+              if (txt && txt.length < 200) {
+                errMsg = txt;
               }
-              nextRefs[index] = uploadedUrl;
-              return { ...agent, referenceImages: nextRefs };
-            })
-          );
-        } catch (err) {
-          console.error("Style upload failed:", err);
-          alert(err instanceof Error ? err.message : "Upload failed");
+            } catch {}
+          }
+          throw new Error(errMsg);
         }
-      };
-      reader.readAsDataURL(file);
+
+        const result = await response.json();
+        if (!result.ok) {
+          throw new Error(result.error || "Upload failed");
+        }
+
+        const uploadedUrl = result.url || `/api/image?id=ref_style_${agentId}_${index}&v=${Math.floor(Date.now() / 1000)}`;
+
+        setAgents((current) =>
+          current.map((agent) => {
+            if (agent.id !== agentId) return agent;
+            const nextRefs = [...(agent.referenceImages || [])];
+            while (nextRefs.length <= index) {
+              nextRefs.push("");
+            }
+            nextRefs[index] = uploadedUrl;
+            return { ...agent, referenceImages: nextRefs };
+          })
+        );
+      } catch (err) {
+        console.error("Style upload failed:", err);
+        alert(err instanceof Error ? err.message : "Upload failed");
+      }
     };
     fileInput.click();
   };

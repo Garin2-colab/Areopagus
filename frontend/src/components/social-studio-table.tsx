@@ -7,6 +7,7 @@ import { type HistoryTurn } from "@/lib/history";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
+import { compressImage } from "@/lib/utils";
 
 type SocialStudioTableProps = {
   turns: HistoryTurn[];
@@ -128,42 +129,52 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
     setReplacingId(imageId);
     setFeedback(null);
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64Data = e.target?.result as string;
+    try {
+      const base64Data = await compressImage(file);
+      const response = await fetch("/api/replace-image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          image_id: imageId,
+          image_base64: base64Data,
+          mime_type: "image/jpeg"
+        })
+      });
 
-      try {
-        const response = await fetch("/api/replace-image", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            image_id: imageId,
-            image_base64: base64Data,
-            mime_type: file.type
-          })
-        });
-
-        const result = await response.json();
-        if (response.ok && result.ok) {
-          showFeedback("success", `Successfully replaced image for turn: ${imageId}`);
-          await onRefresh();
-        } else {
-          throw new Error(result.error || "Failed to upload image.");
+      if (!response.ok) {
+        let errMsg = `Upload failed with status ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errMsg = errorData.error || errMsg;
+        } catch {
+          try {
+            const txt = await response.text();
+            if (txt && txt.length < 200) {
+              errMsg = txt;
+            }
+          } catch {}
         }
-      } catch (err) {
-        showFeedback("error", err instanceof Error ? err.message : "Failed to replace image.");
-      } finally {
-        setReplacingId(null);
-        activeReplaceIdRef.current = null;
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
+        throw new Error(errMsg);
       }
-    };
 
-    reader.readAsDataURL(file);
+      const result = await response.json();
+      if (result.ok) {
+        showFeedback("success", `Successfully replaced image for turn: ${imageId}`);
+        await onRefresh();
+      } else {
+        throw new Error(result.error || "Failed to upload image.");
+      }
+    } catch (err) {
+      showFeedback("error", err instanceof Error ? err.message : "Failed to replace image.");
+    } finally {
+      setReplacingId(null);
+      activeReplaceIdRef.current = null;
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   const triggerReplacement = (imageId: string) => {

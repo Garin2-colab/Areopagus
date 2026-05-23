@@ -4,6 +4,7 @@ import React, { useRef, useState } from "react";
 import { Upload, Trash2, Loader2, Image as ImageIcon, AlertCircle } from "lucide-react";
 import type { InspirationItem } from "@/lib/history";
 import { Button } from "@/components/ui/button";
+import { compressImage } from "@/lib/utils";
 
 type InspirationManagerProps = {
   inspiration: InspirationItem[];
@@ -29,21 +30,8 @@ export function InspirationManager({ inspiration, onRefresh, onImageClick }: Ins
     setUploadError(null);
 
     try {
-      // 1. Convert file to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            resolve(reader.result);
-          } else {
-            reject(new Error("Failed to read file as base64 string."));
-          }
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-
-      const base64Data = await base64Promise;
+      // 1. Compress file client-side to keep payload size optimal
+      const base64Data = await compressImage(file);
 
       // 2. Post to Next.js API route
       const response = await fetch("/api/upload-inspiration", {
@@ -53,13 +41,24 @@ export function InspirationManager({ inspiration, onRefresh, onImageClick }: Ins
         },
         body: JSON.stringify({
           image_base64: base64Data,
-          mime_type: file.type,
+          mime_type: "image/jpeg",
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+        let errMsg = `Upload failed with status ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errMsg = errorData.error || errMsg;
+        } catch {
+          try {
+            const txt = await response.text();
+            if (txt && txt.length < 200) {
+              errMsg = txt;
+            }
+          } catch {}
+        }
+        throw new Error(errMsg);
       }
 
       const result = await response.json();
