@@ -138,6 +138,14 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     }
   }
 
+  // Assign initial coordinates to prevent 0,0 clumping singularity
+  nodes.forEach((node, index) => {
+    const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
+    const radius = (node.kind === "image" || node.kind === "inspiration") ? 100 : 200;
+    node.x = Math.cos(angle) * radius;
+    node.y = Math.sin(angle) * radius;
+  });
+
   return { nodes, links, imageKeywords };
 }
 
@@ -147,7 +155,6 @@ type KnowledgeWebProps = {
   inspiration?: InspirationItem[];
   onImageSelect: (id: string, kind: "image" | "inspiration") => void;
   selectedTurnId?: string | null;
-  resetToken?: number;
   onRefresh?: () => Promise<void> | void;
 };
 
@@ -157,7 +164,6 @@ export function KnowledgeWeb({
   inspiration = [],
   onImageSelect,
   selectedTurnId,
-  resetToken = 0,
   onRefresh
 }: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
@@ -228,79 +234,13 @@ export function KnowledgeWeb({
     return () => observer.disconnect();
   }, []);
 
-  const hasCenteredRef = useRef(false);
-  const prevNodesLengthRef = useRef(0);
-
   useEffect(() => {
-    if (!graphRef.current || graphSize.width <= 1 || graphSize.height <= 1) return;
-
-    const nodesLength = nodes.length;
-    const sizeChanged = !hasCenteredRef.current;
-    const dataChanged = nodesLength !== prevNodesLengthRef.current;
-
-    if (sizeChanged || dataChanged) {
-      hasCenteredRef.current = true;
-      prevNodesLengthRef.current = nodesLength;
-
-      const settleGraph = () => {
-        const forceGraph = graphRef.current;
-        if (forceGraph) {
-          // Adjust forces for a beautiful, organic neural network look
-          forceGraph.d3Force("charge")?.strength(-350);
-          forceGraph.d3Force("link")?.distance(140);
-          forceGraph.d3Force("center")?.x(0)?.y(0);
-
-          // Break the 0,0 clumping singularity if nodes settled at the center while hidden
-          const graphData = forceGraph.getGraphData();
-          if (graphData && graphData.nodes) {
-            const hasClump = graphData.nodes.some((node: any) => !node.x || Math.abs(node.x) < 5);
-            if (hasClump) {
-              graphData.nodes.forEach((node: any, index: number) => {
-                const angle = (index / Math.max(graphData.nodes.length, 1)) * Math.PI * 2;
-                const radius = (node.kind === "image" || node.kind === "inspiration") ? 50 : 100;
-                node.x = Math.cos(angle) * radius;
-                node.y = Math.sin(angle) * radius;
-                node.vx = 0;
-                node.vy = 0;
-              });
-            }
-          }
-        }
-        graphRef.current?.d3ReheatSimulation?.();
-        graphRef.current?.centerAt?.(0, 0, 0);
-        graphRef.current?.zoomToFit?.(400, 90);
-      };
-
-      const timer = window.setTimeout(settleGraph, 100);
-      return () => window.clearTimeout(timer);
-    }
-  }, [graphSize.height, graphSize.width, nodes.length]);
-
-  useEffect(() => {
-    if (!graphRef.current || resetToken === 0) return;
-
-    const triggerReset = () => {
-      const forceGraph = graphRef.current;
-      if (forceGraph) {
-        const graphData = forceGraph.getGraphData();
-        if (graphData && graphData.nodes) {
-          graphData.nodes.forEach((node: any, index: number) => {
-            const angle = (index / Math.max(graphData.nodes.length, 1)) * Math.PI * 2;
-            const radius = (node.kind === "image" || node.kind === "inspiration") ? 50 : 100;
-            node.x = Math.cos(angle) * radius;
-            node.y = Math.sin(angle) * radius;
-            node.vx = 0;
-            node.vy = 0;
-          });
-        }
-      }
-      graphRef.current?.d3ReheatSimulation?.();
-      graphRef.current?.centerAt?.(0, 0, 0);
-      graphRef.current?.zoomToFit?.(400, 90);
-    };
-
-    triggerReset();
-  }, [resetToken]);
+    if (!graphRef.current) return;
+    const timer = setTimeout(() => {
+      graphRef.current?.zoomToFit(400, 90);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const urls = Array.from(
@@ -348,10 +288,7 @@ export function KnowledgeWeb({
   }, [turns, inspiration]);
 
   const forceGraphData = useMemo(() => {
-    return {
-      nodes: nodes.map((node) => ({ ...node })),
-      links: links.map((link) => ({ ...link }))
-    };
+    return { nodes, links };
   }, [links, nodes]);
 
   const handleBackgroundClick = () => {

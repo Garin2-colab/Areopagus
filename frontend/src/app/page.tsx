@@ -151,47 +151,48 @@ export default function Home() {
           <div className={view === "micro" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
             <SocialStudioFeed turns={turns} threads={threads} onImageClick={setLightboxSrc} />
           </div>
-          <div className={view === "macro" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
-            <KnowledgeWeb
-              turns={turns}
-              threads={threads}
-              inspiration={inspiration}
-              onImageSelect={(id, kind) => {
-                if (kind === "inspiration") {
-                  setView("inspiration");
-                  setTimeout(() => {
-                    const el = document.getElementById(`inspiration-${id}`);
-                    if (el) {
-                      el.scrollIntoView({ behavior: "smooth", block: "center" });
-                      el.classList.add("ring-2", "ring-[#D45113]");
-                      setTimeout(() => el.classList.remove("ring-2", "ring-[#D45113]"), 2000);
+          {view === "macro" && (
+            <div className="mt-0 block animate-in fade-in-50 duration-200">
+              <KnowledgeWeb
+                turns={turns}
+                threads={threads}
+                inspiration={inspiration}
+                onImageSelect={(id, kind) => {
+                  if (kind === "inspiration") {
+                    setView("inspiration");
+                    setTimeout(() => {
+                      const el = document.getElementById(`inspiration-${id}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.classList.add("ring-2", "ring-[#D45113]");
+                        setTimeout(() => el.classList.remove("ring-2", "ring-[#D45113]"), 2000);
+                      }
+                    }, 150);
+                  } else {
+                    setView("micro");
+                    let rootId = id;
+                    const turn = turns.find((t) => t.image_id === id);
+                    if (turn && turn.thread_id) {
+                      const thread = threads.find((t) => t.thread_id === turn.thread_id);
+                      if (thread && thread.root_image_id) {
+                        rootId = thread.root_image_id;
+                      }
                     }
-                  }, 150);
-                } else {
-                  setView("micro");
-                  let rootId = id;
-                  const turn = turns.find((t) => t.image_id === id);
-                  if (turn && turn.thread_id) {
-                    const thread = threads.find((t) => t.thread_id === turn.thread_id);
-                    if (thread && thread.root_image_id) {
-                      rootId = thread.root_image_id;
-                    }
+                    setTimeout(() => {
+                      const el = document.getElementById(`feed-post-${rootId}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.classList.add("ring-2", "ring-[#D45113]", "scale-[1.01]");
+                        setTimeout(() => el.classList.remove("ring-2", "ring-[#D45113]", "scale-[1.01]"), 2000);
+                      }
+                    }, 150);
                   }
-                  setTimeout(() => {
-                    const el = document.getElementById(`feed-post-${rootId}`);
-                    if (el) {
-                      el.scrollIntoView({ behavior: "smooth", block: "center" });
-                      el.classList.add("ring-2", "ring-[#D45113]", "scale-[1.01]");
-                      setTimeout(() => el.classList.remove("ring-2", "ring-[#D45113]", "scale-[1.01]"), 2000);
-                    }
-                  }, 150);
-                }
-              }}
-              selectedTurnId={null}
-              resetToken={0}
-              onRefresh={reloadHistory}
-            />
-          </div>
+                }}
+                selectedTurnId={null}
+                onRefresh={reloadHistory}
+              />
+            </div>
+          )}
           <div className={view === "inspiration" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
             <InspirationManager
               inspiration={inspiration}
