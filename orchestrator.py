@@ -410,13 +410,47 @@ def remove_pending_task(task_id: str) -> dict[str, Any] | None:
 
 def update_studio_status(message: str, active: bool = True, agent_name: str | None = None) -> dict[str, Any]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Load existing status and history log list
+    history = []
+    if STUDIO_STATUS_PATH.exists():
+        try:
+            with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
+                old_status = json.load(fh)
+                history = old_status.get("history", [])
+        except Exception:
+            pass
+
+    # If new pulse is starting, reset log history
+    if message == "Pulse started":
+        history = []
+
+    # Format the new log entry
+    entry = {
+        "message": message,
+        "active": active,
+        "timestamp": utc_now(),
+    }
+    if agent_name:
+        entry["agent_name"] = agent_name
+
+    # Only append if history is empty or if this message is new
+    if not history or history[-1].get("message") != message:
+        history.append(entry)
+
+    # Limit history to the last 100 logs to keep status.json reasonably sized
+    if len(history) > 100:
+        history = history[-100:]
+
     status = {
         "message": message,
         "active": active,
         "updated_at": utc_now(),
+        "history": history,
     }
     if agent_name:
         status["agent_name"] = agent_name
+
     with STUDIO_STATUS_PATH.open("w", encoding="utf-8") as fh:
         json.dump(status, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
@@ -2019,6 +2053,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     recent_turns=recent_turns,
                     schema_template=schema_template,
                 )
+                update_studio_status(f"{agent_name} complete: {assessment.get('action')}", active=True, agent_name=agent_name)
                 recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
                 results.append(
                     {
@@ -2031,6 +2066,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
             except Exception as exc:
                 print(f"[orchestrate] ERROR for agent {agent_name}: {exc}", flush=True)
                 traceback.print_exc()
+                update_studio_status(f"Error for agent {agent_name}: {str(exc)}", active=True, agent_name=agent_name)
                 skipped_agents.append(
                     {
                         "agent_id": agent.get("id"),

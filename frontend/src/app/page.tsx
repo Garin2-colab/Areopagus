@@ -129,7 +129,7 @@ export default function Home() {
             <SheetDescription>Adjust app behavior and review agent settings.</SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-6">
-            <ManagementSidebar onPulseStart={startPolling} />
+            <ManagementSidebar onPulseStart={startPolling} status={status} />
           </div>
         </SheetContent>
       </Sheet>

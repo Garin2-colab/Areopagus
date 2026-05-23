@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { StudioStatus } from "@/lib/useStudioStatus";
 
 type ModelName = "GPT-Image-2" | "Gemini-3-Pro";
 
@@ -164,9 +166,10 @@ function nextAgentIndex(agents: AgentRecord[]) {
 
 type ManagementSidebarProps = {
   onPulseStart?: () => void | Promise<void>;
+  status?: StudioStatus | null;
 };
 
-export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
+export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarProps) {
   const nextAgentNumber = useRef(nextAgentIndex(DEFAULT_AGENTS));
   const agentsRef = useRef(DEFAULT_AGENTS);
   const [agents, setAgents] = useState<AgentRecord[]>(DEFAULT_AGENTS);
@@ -345,149 +348,218 @@ export function ManagementSidebar({ onPulseStart }: ManagementSidebarProps) {
       </CardHeader>
  
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
-        {agents.map((agent, index) => (
-          <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/80 bg-white shadow-none">
-            <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
-                <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => removeAgent(agent.id)}
-                className="h-8 rounded-full text-xs text-[#D45113] hover:bg-[#D45113]/10 hover:text-[#B33E0A] px-4 transition-colors font-semibold"
-                aria-label={`Remove ${agent.name}`}
-              >
-                Delete
-              </Button>
-            </CardHeader>
+        <Tabs defaultValue="agents" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-[#F5F2EB]/70 p-1 mb-6 border border-[#D8D4CC]/50">
+            <TabsTrigger
+              value="agents"
+              className="rounded-xl text-xs font-semibold py-2 transition-all data-[state=active]:bg-white data-[state=active]:text-[#252422] data-[state=active]:shadow-sm text-[#858076] hover:text-[#252422]"
+            >
+              Agents Configuration
+            </TabsTrigger>
+            <TabsTrigger
+              value="logs"
+              className="rounded-xl text-xs font-semibold py-2 transition-all data-[state=active]:bg-white data-[state=active]:text-[#252422] data-[state=active]:shadow-sm text-[#858076] hover:text-[#252422]"
+            >
+              Execution Logs
+            </TabsTrigger>
+          </TabsList>
 
-            <CardContent className="space-y-4 px-4 py-4">
-              <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Name</p>
-                <Input
-                  value={agent.name}
-                  onChange={(event) => updateAgent(agent.id, { name: event.target.value })}
-                  placeholder="Agent name"
-                />
-              </div>
+          <TabsContent value="agents" className="space-y-4 outline-none">
+            {agents.map((agent, index) => (
+              <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/80 bg-white shadow-none">
+                <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
+                    <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => removeAgent(agent.id)}
+                    className="h-8 rounded-full text-xs text-[#D45113] hover:bg-[#D45113]/10 hover:text-[#B33E0A] px-4 transition-colors font-semibold"
+                    aria-label={`Remove ${agent.name}`}
+                  >
+                    Delete
+                  </Button>
+                </CardHeader>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Persona</p>
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-[#858076]/70">Markdown supported</p>
+                <CardContent className="space-y-4 px-4 py-4">
+                  <div className="space-y-2">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Name</p>
+                    <Input
+                      value={agent.name}
+                      onChange={(event) => updateAgent(agent.id, { name: event.target.value })}
+                      placeholder="Agent name"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Persona</p>
+                      <p className="text-[10px] uppercase tracking-[0.28em] text-[#858076]/70">Markdown supported</p>
+                    </div>
+                    <Textarea
+                      value={agent.persona}
+                      onChange={(event) => updateAgent(agent.id, { persona: event.target.value })}
+                      placeholder="Describe the agent's worldview, tone, and editing preferences."
+                      className="min-h-[164px]"
+                    />
+                    <p className="text-xs leading-5 text-[#858076]">
+                      Use Markdown for bullets, emphasis, and short sections. This keeps long personas readable.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Style References (2x5 Grid)</p>
+                      <p className="text-[10px] uppercase tracking-[0.28em] text-[#858076]/70">Click a slot to upload</p>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      {Array.from({ length: 10 }).map((_, i) => {
+                        const imgUrl = agent.referenceImages?.[i];
+                        const hasImage = typeof imgUrl === "string" && imgUrl.trim().length > 0;
+                        const displayUrl = hasImage ? sanitizeClientImageUrl(imgUrl) : null;
+
+                        return (
+                          <div
+                            key={i}
+                            className={cn(
+                              "group relative aspect-square w-full rounded-xl overflow-hidden border flex items-center justify-center transition-colors cursor-pointer",
+                              hasImage
+                                ? "border-[#D8D4CC] bg-[#F5F2EB]/50"
+                                : "border-dashed border-[#D8D4CC] hover:border-[#858076] hover:bg-[#F5F2EB]/40 bg-white"
+                            )}
+                            onClick={() => {
+                              if (!hasImage) {
+                                handleUploadStyle(agent.id, i);
+                              }
+                            }}
+                          >
+                            {displayUrl ? (
+                              <>
+                                <img
+                                  src={displayUrl}
+                                  alt={`Style Ref ${i + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleClearStyle(agent.id, i);
+                                  }}
+                                  className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] uppercase tracking-wider text-[#F97316] font-bold transition-opacity"
+                                >
+                                  Clear
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[#858076] group-hover:text-[#252422] text-sm font-semibold">+</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Model Selection & Save</p>
+                    <div className="flex gap-2">
+                      <select
+                        value={agent.model}
+                        onChange={(event) => updateAgent(agent.id, { model: event.target.value as ModelName })}
+                        className="flex-1 rounded-2xl border border-[#D8D4CC] bg-white px-3 py-2 text-sm text-[#252422] focus:border-[#858076] focus:text-[#252422] focus:outline-none"
+                      >
+                        <option value="GPT-Image-2">GPT-Image-2</option>
+                        <option value="Gemini-3-Pro">Gemini-3-Pro</option>
+                      </select>
+                      <Button
+                        type="button"
+                        onClick={saveCurrentAgents}
+                        className="rounded-2xl border border-[#D8D4CC] bg-[#252422] px-4 text-[#FAF9F6] hover:bg-black hover:text-white"
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Heartbeat</p>
+                      <span className="text-xs text-[#252422] font-semibold">
+                        {agent.heartbeatMinutes === 0 ? "disabled" : `${agent.heartbeatMinutes} times per day`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={15}
+                      step={1}
+                      value={agent.heartbeatMinutes}
+                      onChange={(event) => updateAgent(agent.id, { heartbeatMinutes: parseInt(event.target.value, 10) })}
+                      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#EFECE7] accent-[#252422]"
+                    />
+                    <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-[#858076]">
+                      <span>none</span>
+                      <span>15x/day</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="logs" className="outline-none">
+            {status?.history && status.history.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[#D8D4CC]/50 pb-2 mb-3">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Pulse Status History</p>
+                  <span className={cn(
+                    "w-2.5 h-2.5 rounded-full",
+                    status.active ? "bg-green-500 animate-pulse" : "bg-[#858076]/40"
+                  )} />
                 </div>
-                <Textarea
-                  value={agent.persona}
-                  onChange={(event) => updateAgent(agent.id, { persona: event.target.value })}
-                  placeholder="Describe the agent's worldview, tone, and editing preferences."
-                  className="min-h-[164px]"
-                />
-                <p className="text-xs leading-5 text-[#858076]">
-                  Use Markdown for bullets, emphasis, and short sections. This keeps long personas readable.
-                </p>
-              </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Style References (2x5 Grid)</p>
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-[#858076]/70">Click a slot to upload</p>
-                </div>
-                <div className="grid grid-cols-5 gap-2">
-                  {Array.from({ length: 10 }).map((_, i) => {
-                    const imgUrl = agent.referenceImages?.[i];
-                    const hasImage = typeof imgUrl === "string" && imgUrl.trim().length > 0;
-                    const displayUrl = hasImage ? sanitizeClientImageUrl(imgUrl) : null;
-
+                <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
+                  {[...status.history].reverse().map((log, index) => {
+                    const isError = log.message.toLowerCase().includes("error") || log.message.toLowerCase().includes("fail");
                     return (
                       <div
-                        key={i}
+                        key={index}
                         className={cn(
-                          "group relative aspect-square w-full rounded-xl overflow-hidden border flex items-center justify-center transition-colors cursor-pointer",
-                          hasImage
-                            ? "border-[#D8D4CC] bg-[#F5F2EB]/50"
-                            : "border-dashed border-[#D8D4CC] hover:border-[#858076] hover:bg-[#F5F2EB]/40 bg-white"
+                          "p-3 rounded-2xl border text-xs leading-relaxed transition-colors",
+                          isError
+                            ? "bg-[#FEF2F2] border-[#FCA5A5] text-[#991B1B]"
+                            : log.active
+                              ? "bg-[#F0FDF4] border-[#BBF7D0] text-[#166534]"
+                              : "bg-white border-[#D8D4CC]/60 text-[#44423E]"
                         )}
-                        onClick={() => {
-                          if (!hasImage) {
-                            handleUploadStyle(agent.id, i);
-                          }
-                        }}
                       >
-                        {displayUrl ? (
-                          <>
-                            <img
-                              src={displayUrl}
-                              alt={`Style Ref ${i + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClearStyle(agent.id, i);
-                              }}
-                              className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] uppercase tracking-wider text-[#F97316] font-bold transition-opacity"
-                            >
-                              Clear
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-[#858076] group-hover:text-[#252422] text-sm font-semibold">+</span>
-                        )}
+                        <div className="flex items-center justify-between gap-2 mb-1 border-b border-[#D8D4CC]/20 pb-1">
+                          <span className="font-semibold uppercase tracking-[0.05em] text-[10px] text-[#252422]">
+                            {log.agent_name || "System"}
+                          </span>
+                          <span className="text-[10px] text-[#858076]/80">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="font-mono text-[10px] leading-relaxed whitespace-pre-wrap">{log.message}</p>
                       </div>
                     );
                   })}
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Model Selection & Save</p>
-                <div className="flex gap-2">
-                  <select
-                    value={agent.model}
-                    onChange={(event) => updateAgent(agent.id, { model: event.target.value as ModelName })}
-                    className="flex-1 rounded-2xl border border-[#D8D4CC] bg-white px-3 py-2 text-sm text-[#252422] focus:border-[#858076] focus:text-[#252422] focus:outline-none"
-                  >
-                    <option value="GPT-Image-2">GPT-Image-2</option>
-                    <option value="Gemini-3-Pro">Gemini-3-Pro</option>
-                  </select>
-                  <Button
-                    type="button"
-                    onClick={saveCurrentAgents}
-                    className="rounded-2xl border border-[#D8D4CC] bg-[#252422] px-4 text-[#FAF9F6] hover:bg-black hover:text-white"
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Save
-                  </Button>
-                </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center border border-dashed border-[#D8D4CC] rounded-[1.5rem] bg-white">
+                <p className="text-sm font-semibold text-[#44423E] mb-1">No logs available</p>
+                <p className="text-xs text-[#858076] max-w-[280px]">
+                  Trigger a manual Pulse or wait for the automatic heartbeat scheduler to see agent execution logs.
+                </p>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Heartbeat</p>
-                  <span className="text-xs text-[#252422] font-semibold">
-                    {agent.heartbeatMinutes === 0 ? "disabled" : `${agent.heartbeatMinutes} times per day`}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={15}
-                  step={1}
-                  value={agent.heartbeatMinutes}
-                  onChange={(event) => updateAgent(agent.id, { heartbeatMinutes: parseInt(event.target.value, 10) })}
-                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#EFECE7] accent-[#252422]"
-                />
-                <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-[#858076]">
-                  <span>none</span>
-                  <span>15x/day</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
