@@ -13,3 +13,4 @@ node_modules/
 frontend/.env.local
 agents_config.json
 frontend/src/data/history.json
+scratch/
