@@ -19,9 +19,10 @@ function getMutateUrl() {
     return referenceUrl;
   }
 
-  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--([a-zA-Z0-9-]+)-[a-zA-Z0-9-]+\.modal\.run/);
+  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--/);
   if (match) {
-    return `https://${match[1]}--${match[2]}-mutate-history-endpoint.modal.run`;
+    const username = match[1];
+    return `https://${username}--areopagus-mutate-history-endpoint.modal.run`;
   }
 
   return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
@@ -42,9 +43,10 @@ function getModalImageUrl() {
     return referenceUrl;
   }
 
-  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--([a-zA-Z0-9-]+)-[a-zA-Z0-9-]+\.modal\.run/);
+  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--/);
   if (match) {
-    return `https://${match[1]}--${match[2]}-get-image.modal.run`;
+    const username = match[1];
+    return `https://${username}--areopagus-get-image.modal.run`;
   }
 
   return "https://heebok-lee--areopagus-get-image.modal.run";
