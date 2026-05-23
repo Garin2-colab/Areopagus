@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Settings2 } from "lucide-react";
+import { Settings2, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 import { ManagementSidebar } from "@/components/management-sidebar";
 import { SocialStudioFeed } from "@/components/social-studio-feed";
@@ -19,6 +21,35 @@ import { useStudioStatus } from "@/lib/useStudioStatus";
 export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [view, setView] = useState<"micro" | "macro" | "table">("micro");
+  const [pinInput, setPinInput] = useState("");
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [pinError, setPinError] = useState(false);
+
+  // Check localStorage on mount or when sheet opens
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedPin = localStorage.getItem("areopagus_admin_pin");
+      const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "4826";
+      if (storedPin === targetPin) {
+        setIsAuthorized(true);
+      } else {
+        setIsAuthorized(false);
+        setPinInput("");
+        setPinError(false);
+      }
+    }
+  }, [settingsOpen]);
+
+  const handleVerifyPin = () => {
+    const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "4826";
+    if (pinInput === targetPin) {
+      setIsAuthorized(true);
+      setPinError(false);
+      localStorage.setItem("areopagus_admin_pin", pinInput);
+    } else {
+      setPinError(true);
+    }
+  };
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -128,9 +159,56 @@ export default function Home() {
             <SheetTitle>Agent Management</SheetTitle>
             <SheetDescription>Adjust app behavior and review agent settings.</SheetDescription>
           </SheetHeader>
-          <div className="px-4 pb-6">
-            <ManagementSidebar onPulseStart={startPolling} status={status} />
-          </div>
+          {!isAuthorized ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-6">
+              <div className="w-12 h-12 rounded-full bg-[#D45113]/10 flex items-center justify-center text-[#D45113]">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-base font-semibold text-[#252422]">Access Code Required</h3>
+                <p className="text-xs text-[#858076] max-w-[280px]">
+                  Please enter the passcode to configure autonomous agents and trigger manual pulses.
+                </p>
+              </div>
+              
+              <div className="w-full max-w-[240px] space-y-4">
+                <Input
+                  type="password"
+                  value={pinInput}
+                  onChange={(e) => {
+                    setPinError(false);
+                    setPinInput(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleVerifyPin();
+                    }
+                  }}
+                  placeholder="••••"
+                  className={cn(
+                    "text-center text-lg tracking-[0.5em] font-semibold h-12 rounded-2xl border-[#D8D4CC] bg-white text-[#252422] focus:border-[#858076] focus:outline-none",
+                    pinError && "border-red-500 focus:border-red-500 bg-red-50"
+                  )}
+                  maxLength={10}
+                />
+                
+                {pinError && (
+                  <p className="text-[11px] font-semibold text-red-600">Incorrect access code. Try again.</p>
+                )}
+
+                <Button
+                  onClick={handleVerifyPin}
+                  className="w-full h-11 rounded-full bg-[#252422] text-[#FAF9F6] hover:bg-black font-semibold text-xs transition-colors"
+                >
+                  Verify Access Code
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 pb-6">
+              <ManagementSidebar onPulseStart={startPolling} status={status} />
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 
