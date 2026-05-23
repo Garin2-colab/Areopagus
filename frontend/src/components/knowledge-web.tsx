@@ -138,7 +138,11 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     }
   }
 
-  return { nodes, links, imageKeywords };
+  // Filter out links that reference non-existent nodes (e.g. deleted posts)
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const validLinks = links.filter((link) => nodeIds.has(link.source) && nodeIds.has(link.target));
+
+  return { nodes, links: validLinks, imageKeywords };
 }
 
 type KnowledgeWebProps = {
