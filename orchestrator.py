@@ -2355,6 +2355,106 @@ def replace_image_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     timeout=60,
 )
 @modal.fastapi_endpoint(method="POST")
+def delete_post_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    image_id = payload.get("image_id")
+    if not image_id:
+        return {"ok": False, "error": "Missing image_id."}
+
+    data_volume.reload()
+    history = load_history()
+    turns = history.get("turns", [])
+
+    target_turn = None
+    target_idx = -1
+    for i, t in enumerate(turns):
+        if t.get("image_id") == image_id:
+            target_turn = t
+            target_idx = i
+            break
+
+    if not target_turn:
+        return {"ok": False, "error": f"Post not found for image_id: {image_id}"}
+
+    thread_id = target_turn.get("thread_id") or image_id
+
+    # Remove from turns list
+    turns.pop(target_idx)
+
+    # Delete the WebP image file if it exists to clean up disk space
+    try:
+        webp_path = IMAGE_DIR / f"{image_id}.webp"
+        if webp_path.exists():
+            webp_path.unlink()
+    except Exception as exc:
+        print(f"[delete_post_endpoint] Warning: failed to delete file: {exc}", flush=True)
+
+    # Get remaining turns in the same thread
+    thread_turns = [t for t in turns if t.get("thread_id") == thread_id or t.get("image_id") == thread_id]
+    thread_turns.sort(key=lambda t: (t.get("turn", 0), t.get("created_at", "")))
+
+    new_thread_id = None
+    if thread_turns:
+        # Check if the deleted turn was the root/initial post
+        was_root = (target_turn.get("action") == "Initiate") or (target_turn.get("parent_image_id") is None)
+        if was_root:
+            # Promote the second image to be the new initial image
+            new_root = thread_turns[0]
+            new_root["parent_image_id"] = None
+            new_root["action"] = "Initiate"
+            new_thread_id = new_root["image_id"]
+
+            # Update all remaining replies in this thread to reference the new root thread ID
+            for t in thread_turns:
+                t["thread_id"] = new_thread_id
+                if t.get("parent_image_id") == image_id:
+                    t["parent_image_id"] = new_thread_id
+        else:
+            # Reparent any descendants of the deleted reply to its parent
+            parent_id = target_turn.get("parent_image_id")
+            for t in turns:
+                if t.get("parent_image_id") == image_id:
+                    t["parent_image_id"] = parent_id
+
+    # Update threads metadata structure in history
+    threads = history.get("threads", [])
+    updated_threads = []
+    for thread in threads:
+        tid = thread.get("thread_id")
+        if tid == thread_id:
+            # If no posts remain in this thread, delete the thread metadata entirely
+            if not thread_turns:
+                continue
+
+            # If the root/thread ID changed, update thread metadata accordingly
+            if new_thread_id:
+                thread["thread_id"] = new_thread_id
+                thread["root_image_id"] = new_thread_id
+
+            if "posts" in thread:
+                thread["posts"] = [p for p in thread["posts"] if p != image_id]
+                if new_thread_id and new_thread_id not in thread["posts"]:
+                    thread["posts"].insert(0, new_thread_id)
+
+            thread["updated_at"] = utc_now()
+            updated_threads.append(thread)
+        else:
+            updated_threads.append(thread)
+
+    history["threads"] = updated_threads
+
+    # Rebuild the connected-mesh graph to reflect changes
+    rebuild_history_graph(history)
+
+    save_history(history)
+    return {"ok": True, "message": f"Post {image_id} deleted successfully."}
+
+
+@app.function(
+    image=image,
+    volumes={"/data": data_volume},
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="POST")
 def update_category_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     image_id = payload.get("image_id")
     category = payload.get("category")

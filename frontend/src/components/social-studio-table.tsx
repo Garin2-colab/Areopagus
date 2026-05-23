@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
-import { Upload, Eye, Search, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, Eye, Search, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { type HistoryTurn } from "@/lib/history";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -26,10 +26,47 @@ const CATEGORY_OPTIONS = [
 export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStudioTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingCategoryId, setUpdatingCategoryId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeReplaceIdRef = useRef<string | null>(null);
+
+  const handleDelete = async (imageId: string) => {
+    if (!window.confirm("Are you sure you want to delete this post?")) {
+      return;
+    }
+
+    setDeletingId(imageId);
+    setFeedback(null);
+
+    try {
+      const response = await fetch("/api/delete-post", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          image_id: imageId
+        })
+      });
+
+      const result = await response.json();
+      if (response.ok && result.ok) {
+        setFeedback({ type: "success", message: `Successfully deleted post: ${imageId}` });
+        await onRefresh();
+      } else {
+        throw new Error(result.error || "Failed to delete post.");
+      }
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to delete post."
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleCategoryChange = async (imageId: string, newCategory: string) => {
     setUpdatingCategoryId(imageId);
@@ -348,6 +385,20 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
                                 <Upload className="h-3.5 w-3.5" />
                                 Replace
                               </span>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={deletingId === turn.image_id}
+                            onClick={() => handleDelete(turn.image_id)}
+                            className="h-8 w-8 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                            title="Delete post"
+                          >
+                            {deletingId === turn.image_id ? (
+                              <span className="h-3.5 w-3.5 animate-spin rounded-full border border-rose-500 border-t-transparent" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
                             )}
                           </Button>
                         </div>
