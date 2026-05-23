@@ -184,12 +184,10 @@ export default function Home() {
                       handleVerifyPin();
                     }
                   }}
-                  placeholder="••••"
                   className={cn(
                     "text-center text-lg tracking-[0.5em] font-semibold h-12 rounded-2xl border-[#D8D4CC] bg-white text-[#252422] focus:border-[#858076] focus:outline-none",
                     pinError && "border-red-500 focus:border-red-500 bg-red-50"
                   )}
-                  maxLength={10}
                 />
                 
                 {pinError && (
