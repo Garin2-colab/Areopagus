@@ -1472,7 +1472,7 @@ Rules:
 - Keep the same top-level keys from the schema template.
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
-- keywords must be exactly 5 hash-tagged strings.
+- keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
 - Inside the "style" object, dynamically select the most appropriate "aspect_ratio" for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
 - reference_image_id: You must decide whether to use a style/composition reference image for this generation or generate completely from scratch.
   - If you want to use your baseline style image as a reference, set reference_image_id to "profile".
@@ -1649,7 +1649,7 @@ Rules:
 - Keep the same top-level keys from the schema template.
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should explain what changed from the selected prompt and why.
-- keywords must be exactly 5 hash-tagged strings.
+- keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
 - Inside the "style" object, dynamically select the most appropriate "aspect_ratio" for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
 - Make the image feel like a reply rather than a new standalone thread.
 - reference_image_id: You must decide whether to use a reference image for this generation or generate from scratch/external web.
@@ -2518,13 +2518,15 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             image_url = f"{web_url}?id={insp_id}"
 
             prompt = (
-                "Analyze this image and return a JSON object containing exactly 5 to 8 highly descriptive keywords. "
+                "Analyze this image and return a JSON object containing exactly 5 to 8 highly descriptive, simple, and intuitive keywords. "
                 "The keywords must be visually descriptive (e.g., describing specific textures, lighting, color palettes, geometric structures, design styles, artistic movements, visual elements) "
                 "and conceptually/metaphorically related (e.g., evoking specific moods, thematic concepts, design philosophies, metaphors). "
                 "NEVER use generic or lazy words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'. "
-                "Each keyword must start with a '#', contain only lowercase letters, and have no spaces (merge multiple words together, e.g. '#kineticsculpture' or '#retrofuturism'). "
+                "Each keyword must start with a '#', contain only lowercase letters, and have no spaces. "
+                "Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. "
+                "Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). "
                 "The response must be a JSON object with a single key 'keywords' containing the list of strings. "
-                "Example format: {\"keywords\": [\"#kineticsculpture\", \"#biomimicry\", \"#gothicanatomy\", \"#monochromeminimalism\", \"#spectralprojection\"]}"
+                "Example format: {\"keywords\": [\"#kinetic\", \"#sculpture\", \"#biomimicry\", \"#gothic\", \"#anatomy\"]}"
             )
             keywords = ["#visualconcept", "#creativeideation", "#designmetaphor", "#aestheticreference", "#conceptualmotif"]
             try:
