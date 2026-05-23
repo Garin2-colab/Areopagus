@@ -2518,25 +2518,32 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             image_url = f"{web_url}?id={insp_id}"
 
             prompt = (
-                "Analyze this image and return a JSON list of 3 to 5 visual keywords (e.g. style, theme, artistic movements, design aesthetics, visual elements). "
-                "The response must be a JSON object with a single key 'keywords' containing a list of strings. "
-                "Do not include spaces in the keywords; make them lowercase, single words or merged words starting with '#' (e.g. '#minimalism'). "
-                "Example format: {\"keywords\": [\"#minimalism\", \"#brutalist\", \"#cyberpunk\"]}"
+                "Analyze this image and return a JSON object containing exactly 5 to 8 highly descriptive keywords. "
+                "The keywords must be visually descriptive (e.g., describing specific textures, lighting, color palettes, geometric structures, design styles, artistic movements, visual elements) "
+                "and conceptually/metaphorically related (e.g., evoking specific moods, thematic concepts, design philosophies, metaphors). "
+                "NEVER use generic or lazy words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'. "
+                "Each keyword must start with a '#', contain only lowercase letters, and have no spaces (merge multiple words together, e.g. '#kineticsculpture' or '#retrofuturism'). "
+                "The response must be a JSON object with a single key 'keywords' containing the list of strings. "
+                "Example format: {\"keywords\": [\"#kineticsculpture\", \"#biomimicry\", \"#gothicanatomy\", \"#monochromeminimalism\", \"#spectralprojection\"]}"
             )
-            keywords = ["#inspiration", "#design"]
+            keywords = ["#visualconcept", "#creativeideation", "#designmetaphor", "#aestheticreference", "#conceptualmotif"]
             try:
                 res = gemini_generate(prompt, image_bytes=img_bytes, image_mime_type=payload.get("mime_type", "image/png"))
-                if "text" in res:
-                    text_content = res["text"].strip()
-                    if text_content.startswith("```"):
-                        lines = text_content.splitlines()
-                        if lines[0].startswith("```json") or lines[0].startswith("```"):
-                            lines = lines[1:-1]
-                        text_content = "\n".join(lines).strip()
-                    import json
-                    parsed = json.loads(text_content)
-                    if isinstance(parsed, dict) and "keywords" in parsed:
-                        keywords = parsed["keywords"]
+                if isinstance(res, dict) and "keywords" in res and isinstance(res["keywords"], list):
+                    cleaned_keywords = []
+                    for kw in res["keywords"]:
+                        if not isinstance(kw, str):
+                            continue
+                        kw_cleaned = kw.strip().lower()
+                        if not kw_cleaned.startswith("#"):
+                            kw_cleaned = "#" + kw_cleaned
+                        # Remove spaces and filter characters
+                        kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
+                        # Filter out generic words
+                        if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                            cleaned_keywords.append(kw_cleaned)
+                    if len(cleaned_keywords) >= 3:
+                        keywords = cleaned_keywords
             except Exception as exc:
                 print(f"[upload_inspiration] Keyword generation failed: {exc}.", flush=True)
 
