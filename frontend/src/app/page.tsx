@@ -156,7 +156,37 @@ export default function Home() {
               turns={turns}
               threads={threads}
               inspiration={inspiration}
-              onImageSelect={(turnId) => router.push(`/post/${turnId}` as any)}
+              onImageSelect={(id, kind) => {
+                if (kind === "inspiration") {
+                  setView("inspiration");
+                  setTimeout(() => {
+                    const el = document.getElementById(`inspiration-${id}`);
+                    if (el) {
+                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                      el.classList.add("ring-2", "ring-[#D45113]");
+                      setTimeout(() => el.classList.remove("ring-2", "ring-[#D45113]"), 2000);
+                    }
+                  }, 150);
+                } else {
+                  setView("micro");
+                  let rootId = id;
+                  const turn = turns.find((t) => t.image_id === id);
+                  if (turn && turn.thread_id) {
+                    const thread = threads.find((t) => t.thread_id === turn.thread_id);
+                    if (thread && thread.root_image_id) {
+                      rootId = thread.root_image_id;
+                    }
+                  }
+                  setTimeout(() => {
+                    const el = document.getElementById(`feed-post-${rootId}`);
+                    if (el) {
+                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                      el.classList.add("ring-2", "ring-[#D45113]", "scale-[1.01]");
+                      setTimeout(() => el.classList.remove("ring-2", "ring-[#D45113]", "scale-[1.01]"), 2000);
+                    }
+                  }, 150);
+                }
+              }}
               selectedTurnId={null}
               resetToken={0}
               onRefresh={reloadHistory}

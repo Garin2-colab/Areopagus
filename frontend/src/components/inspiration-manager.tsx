@@ -189,7 +189,11 @@ export function InspirationManager({ inspiration, onRefresh, onImageClick }: Ins
                 </tr>
               ) : (
                 inspiration.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#F5F2EB]/30 transition-colors">
+                  <tr
+                    key={item.id}
+                    id={`inspiration-${item.id}`}
+                    className="hover:bg-[#F5F2EB]/30 transition-colors transition-all duration-300"
+                  >
                     {/* Preview Thumbnail */}
                     <td className="py-3 pl-6 pr-3">
                       <div

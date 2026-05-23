@@ -145,7 +145,7 @@ type KnowledgeWebProps = {
   turns: HistoryTurn[];
   threads?: Thread[];
   inspiration?: InspirationItem[];
-  onImageSelect: (turnId: string) => void;
+  onImageSelect: (id: string, kind: "image" | "inspiration") => void;
   selectedTurnId?: string | null;
   resetToken?: number;
   onRefresh?: () => Promise<void> | void;
@@ -479,8 +479,8 @@ export function KnowledgeWeb({
             }}
             onNodeClick={(node: unknown) => {
               const typed = node as GraphNode;
-              if (typed.kind === "image") {
-                onImageSelect(typed.id);
+              if (typed.kind === "image" || typed.kind === "inspiration") {
+                onImageSelect(typed.id, typed.kind);
               }
             }}
           />

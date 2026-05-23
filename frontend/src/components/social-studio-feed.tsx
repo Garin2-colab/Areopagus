@@ -74,7 +74,11 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
 
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
         {feedThreads.map((thread) => (
-          <div key={thread.thread_id} className="overflow-hidden rounded-[1.6rem] border border-[#D8D4CC]/60 bg-white">
+          <div
+            key={thread.thread_id}
+            id={`feed-post-${thread.root.turn.image_id}`}
+            className="overflow-hidden rounded-[1.6rem] border border-[#D8D4CC]/60 bg-white transition-all duration-300"
+          >
             <CompactRootPost
               turn={thread.root.turn}
               categoryFrequency={categoryFrequency}
