@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
@@ -138,14 +138,6 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     }
   }
 
-  // Assign initial coordinates to prevent 0,0 clumping singularity
-  nodes.forEach((node, index) => {
-    const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
-    const radius = (node.kind === "image" || node.kind === "inspiration") ? 100 : 200;
-    node.x = Math.cos(angle) * radius;
-    node.y = Math.sin(angle) * radius;
-  });
-
   return { nodes, links, imageKeywords };
 }
 
@@ -170,6 +162,7 @@ export function KnowledgeWeb({
   const graphFrameRef = useRef<HTMLDivElement | null>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
+  const forcesConfigured = useRef(false);
   
   const [simplifying, setSimplifying] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -214,6 +207,7 @@ export function KnowledgeWeb({
     [nodes, selectedTurnId]
   );
 
+  // Measure container
   useEffect(() => {
     const frame = graphFrameRef.current;
     if (!frame) return;
@@ -234,14 +228,27 @@ export function KnowledgeWeb({
     return () => observer.disconnect();
   }, []);
 
+  // Configure D3 forces once after the ForceGraph2D mounts
+  // This runs via a ref callback, ensuring the graph instance is ready
   useEffect(() => {
-    if (!graphRef.current) return;
-    const timer = setTimeout(() => {
-      graphRef.current?.zoomToFit(400, 90);
-    }, 200);
-    return () => clearTimeout(timer);
-  }, []);
+    if (!graphRef.current || forcesConfigured.current) return;
+    forcesConfigured.current = true;
 
+    const fg = graphRef.current;
+
+    // Obsidian-style forces:
+    // - moderate charge repulsion to keep nodes apart
+    // - short link distance for tight hub-spoke clusters
+    // - gentle center force to prevent drift
+    fg.d3Force("charge")?.strength(-120);
+    fg.d3Force("link")?.distance(50);
+    fg.d3Force("center")?.strength(0.05);
+
+    // Reheat so the new force parameters take effect
+    fg.d3ReheatSimulation?.();
+  });
+
+  // Preload images (only refresh canvas visuals, don't reheat physics)
   useEffect(() => {
     const urls = Array.from(
       new Set([
@@ -274,9 +281,9 @@ export function KnowledgeWeb({
         )
       );
 
+      // Only repaint the canvas to show loaded images — do NOT reheat physics
       if (!cancelled) {
         graphRef.current?.refresh?.();
-        graphRef.current?.d3ReheatSimulation?.();
       }
     };
 
@@ -287,16 +294,24 @@ export function KnowledgeWeb({
     };
   }, [turns, inspiration]);
 
+  // Build graphData with cloned nodes so D3 can freely mutate positions
   const forceGraphData = useMemo(() => {
-    return { nodes, links };
+    return {
+      nodes: nodes.map((node) => ({ ...node })),
+      links: links.map((link) => ({ ...link }))
+    };
   }, [links, nodes]);
 
-  const handleBackgroundClick = () => {
+  const handleBackgroundClick = useCallback(() => {
     requestAnimationFrame(() => {
-      graphRef.current?.centerAt?.(0, 0, 250);
-      graphRef.current?.zoomToFit?.(250, 90);
+      graphRef.current?.zoomToFit?.(250, 60);
     });
-  };
+  }, []);
+
+  // Zoom to fit once the simulation settles
+  const handleEngineStop = useCallback(() => {
+    graphRef.current?.zoomToFit?.(400, 60);
+  }, []);
 
   const getLabelOpacity = (globalScale: number, baseSize: number, hovered: boolean, selected: boolean) => {
     if (hovered || selected) return 1;
@@ -357,10 +372,22 @@ export function KnowledgeWeb({
             nodeRelSize={4}
             enableZoomInteraction
             enablePanInteraction
+
+            // Physics: pre-settle 50 ticks before first paint, then run 300 more
+            warmupTicks={50}
+            cooldownTicks={300}
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.3}
+
+            // Links
             linkWidth={0.6}
             linkColor={() => "rgba(133, 128, 118, 0.35)"}
             linkDirectionalParticles={0}
+
+            // Events
             onBackgroundClick={handleBackgroundClick}
+            onEngineStop={handleEngineStop}
+
             nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
               const typed = node as GraphNode;
               ctx.fillStyle = color;
