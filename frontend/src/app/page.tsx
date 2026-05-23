@@ -72,7 +72,7 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchHistory()
+    fetchHistory(true)
       .then((data) => {
         if (cancelled) return;
         setHistory(data);
