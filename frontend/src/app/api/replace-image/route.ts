@@ -8,34 +8,46 @@ function getMutateUrl() {
   const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
   const apiUrl = (process.env.MODAL_API_URL || "").trim();
   const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
+  const historyUrl = (process.env.MODAL_HISTORY_URL || "").trim();
 
-  const referenceUrl = saveUrl || apiUrl || statusUrl;
-  if (!referenceUrl) return null;
+  const referenceUrl = saveUrl || apiUrl || statusUrl || historyUrl;
+  if (!referenceUrl) {
+    return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
+  }
 
-  return referenceUrl
-    .replace("-save-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-history-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-status-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-pulse-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-get-image.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-delete-post-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-replace-image-endpoint.modal.run", "-mutate-history-endpoint.modal.run")
-    .replace("-update-category-endpoint.modal.run", "-mutate-history-endpoint.modal.run");
+  if (referenceUrl.includes("mutate-history-endpoint")) {
+    return referenceUrl;
+  }
+
+  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--([a-zA-Z0-9-]+)-[a-zA-Z0-9-]+\.modal\.run/);
+  if (match) {
+    return `https://${match[1]}--${match[2]}-mutate-history-endpoint.modal.run`;
+  }
+
+  return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
 }
 
 function getModalImageUrl() {
   const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
   const apiUrl = (process.env.MODAL_API_URL || "").trim();
   const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
+  const historyUrl = (process.env.MODAL_HISTORY_URL || "").trim();
 
-  const referenceUrl = saveUrl || apiUrl || statusUrl;
-  if (!referenceUrl) return null;
+  const referenceUrl = saveUrl || apiUrl || statusUrl || historyUrl;
+  if (!referenceUrl) {
+    return "https://heebok-lee--areopagus-get-image.modal.run";
+  }
 
-  return referenceUrl
-    .replace("-save-endpoint.modal.run", "-get-image.modal.run")
-    .replace("-history-endpoint.modal.run", "-get-image.modal.run")
-    .replace("-status-endpoint.modal.run", "-get-image.modal.run")
-    .replace("-pulse-endpoint.modal.run", "-get-image.modal.run");
+  if (referenceUrl.includes("get-image")) {
+    return referenceUrl;
+  }
+
+  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--([a-zA-Z0-9-]+)-[a-zA-Z0-9-]+\.modal\.run/);
+  if (match) {
+    return `https://${match[1]}--${match[2]}-get-image.modal.run`;
+  }
+
+  return "https://heebok-lee--areopagus-get-image.modal.run";
 }
 
 export async function POST(request: Request) {
