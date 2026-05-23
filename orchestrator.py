@@ -132,6 +132,21 @@ def load_history() -> dict[str, Any]:
     history.setdefault("graph", {"nodes": [], "edges": []})
     history["graph"].setdefault("nodes", [])
     history["graph"].setdefault("edges", [])
+
+    # Check if we should upgrade the graph nodes to the connected-mesh schema
+    has_connected_mesh = False
+    for node in history["graph"].get("nodes", []):
+        if isinstance(node, dict) and str(node.get("id", "")).startswith("keyword-"):
+            has_connected_mesh = True
+            break
+    if not has_connected_mesh and len(history.get("turns", [])) > 0:
+        print("[load_history] Upgrading graph nodes to connected-mesh schema...", flush=True)
+        rebuild_history_graph(history)
+        with HISTORY_PATH.open("w", encoding="utf-8") as fh:
+            json.dump(history, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        data_volume.commit()
+
     return history
 
 
@@ -437,6 +452,7 @@ def gemini_generate(
     *,
     image_bytes: bytes | None = None,
     image_mime_type: str | None = None,
+    extra_images: list[tuple[bytes, str]] | None = None,
     model: str = GEMINI_MODEL,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -463,6 +479,18 @@ def gemini_generate(
                 }
             }
         )
+
+    if extra_images:
+        for img_bytes, img_mime in extra_images:
+            if img_bytes:
+                payload["contents"][0]["parts"].append(
+                    {
+                        "inline_data": {
+                            "mime_type": img_mime or "image/png",
+                            "data": base64.b64encode(img_bytes).decode("ascii"),
+                        }
+                    }
+                )
 
     request = urllib.request.Request(
         url=f"{GEMINI_API_BASE}/models/{model}:generateContent?key={gemini_api_key()}",
@@ -992,6 +1020,20 @@ def build_runway_reference_images(
             add_reference(prompt_img, "ReferenceImage")
             add_reference(prompt_img, "AgentPrompt")
 
+    # Attach inspiration reference image if set
+    inspiration_id = None
+    if prompt_json and isinstance(prompt_json, dict):
+        inspiration_id = prompt_json.get("inspiration_image_id")
+    if inspiration_id:
+        target_url = None
+        if history and isinstance(history.get("turns"), list):
+            for turn in history["turns"]:
+                if turn.get("image_id") == inspiration_id:
+                    target_url = turn.get("image_url")
+                    break
+        if target_url:
+            add_reference(target_url, "InspirationRef")
+
     # Always attach the other style reference images so they can be tagged as @AgentRef<index> in prompt fields
     if isinstance(agent_refs, list):
         for index, reference in enumerate(agent_refs, start=1):
@@ -1165,12 +1207,50 @@ Rules:
     return assessment
 
 
+def retrieve_associative_memory(
+    history: dict[str, Any],
+    current_keywords: list[str],
+    exclude_thread_id: str | None = None
+) -> dict[str, Any] | None:
+    """
+    Traverse the graph in history.json using current_keywords to find a historical turn
+    that shares keywords but belongs to a different thread or context.
+    Returns the turn record representing the retrieved memory.
+    """
+    if not history or "turns" not in history or not history["turns"]:
+        return None
+
+    candidates = []
+    current_keywords_set = {k.lower() for k in current_keywords}
+
+    for turn in history["turns"]:
+        if not isinstance(turn, dict) or "image_id" not in turn:
+            continue
+
+        # Exclude active thread's direct turns to fetch external inspirations
+        if exclude_thread_id and turn.get("thread_id") == exclude_thread_id:
+            continue
+
+        turn_keywords = {k.lower() for k in turn.get("keywords", [])}
+        overlap = turn_keywords.intersection(current_keywords_set)
+        if overlap:
+            candidates.append((len(overlap), turn))
+
+    if not candidates:
+        return None
+
+    # Sort candidates by overlap descending (and then turn number descending for recent relevance)
+    candidates.sort(key=lambda x: (x[0], x[1].get("turn", 0)), reverse=True)
+    return candidates[0][1]
+
+
 def build_initiate_prompt_json(
     agent: dict[str, Any],
     recent_turns: list[dict[str, Any]],
     assessment: dict[str, Any],
     schema_template: dict[str, Any],
     turn_number: int,
+    history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # Download baseline agent reference image bytes if configured
     image_bytes = None
@@ -1181,6 +1261,33 @@ def build_initiate_prompt_json(
             image_bytes, image_mime_type = fetch_image_bytes(prompt_img_url)
         except Exception as e:
             print(f"[warning] Failed to fetch agent prompt image: {e}", flush=True)
+
+    # Walk graph to fetch inspiration memory
+    extra_images = []
+    inspiration_image_id = None
+    inspiration_meta = None
+    if history and recent_turns:
+        recent_keywords = []
+        recent_thread_ids = set()
+        for turn in recent_turns:
+            recent_keywords.extend(turn.get("keywords", []))
+            if turn.get("thread_id"):
+                recent_thread_ids.add(turn["thread_id"])
+        
+        if recent_keywords:
+            memory = retrieve_associative_memory(history, recent_keywords)
+            # Ensure it is not from the immediate active thread contexts
+            if memory and memory.get("thread_id") not in recent_thread_ids:
+                inspiration_url = memory.get("image_url")
+                if inspiration_url:
+                    try:
+                        mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
+                        extra_images.append((mem_bytes, mem_mime))
+                        inspiration_image_id = memory.get("image_id")
+                        inspiration_meta = memory
+                        print(f"[inspiration] Initiator recalled Turn {memory.get('turn')} ({inspiration_image_id}) via keywords {memory.get('keywords')}", flush=True)
+                    except Exception as e:
+                        print(f"[warning] Failed to fetch inspiration image for initiation: {e}", flush=True)
 
     style_slots = agent_style_slots(agent)
     agent_profile = {
@@ -1197,6 +1304,17 @@ You are drafting a brand-new Areopagus thread.
 """
     if prompt_img_url:
         prompt += "\nYou are shown your baseline style reference image (AgentPrompt) in the multimodal context. You can reference it in your prompt fields using the tag '@ReferenceImage' to maintain persona style consistency."
+
+    if inspiration_image_id and inspiration_meta:
+        prompt += f"""
+NOTE: An associative memory from the Knowledge Web has been recalled:
+- Inspiration Turn: Turn {inspiration_meta.get('turn')}
+- Inspiration Image ID: {inspiration_image_id}
+- Inspiration Keywords: {inspiration_meta.get('keywords')}
+- Inspiration Proposal: "{inspiration_meta.get('proposal')}"
+
+This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+"""
 
     prompt += f"""
 
@@ -1216,7 +1334,7 @@ Schema template:
 
 Rules:
 - Keep the same top-level keys from the schema template.
-- Add turn, debate_context, proposal, keywords, and reference_image_id.
+- Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 hash-tagged strings.
 - reference_image_id: You must decide whether to use a style/composition reference image for this generation or generate completely from scratch.
@@ -1225,6 +1343,7 @@ Rules:
   - If you want to generate completely from scratch without image references, set reference_image_id to null.
 - If reference_image_id is NOT null, you must reference '@ReferenceImage' in at least one description field (e.g. style or scene_description). If it is null, do NOT use the '@ReferenceImage' tag.
 - If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
+- inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
 """
     if prompt_img_url:
@@ -1236,6 +1355,7 @@ Rules:
         prompt,
         image_bytes=image_bytes,
         image_mime_type=image_mime_type,
+        extra_images=extra_images if extra_images else None,
         model=agent_gemini_model(agent)
     )
     prompt_json = sanitize_for_runway(prompt_json)
@@ -1249,6 +1369,8 @@ Rules:
         prompt_json["keywords"] = ["#areopagus", "#civic", "#ritual", "#studio", "#architecture"]
     prompt_json["keywords"] = dedupe_keywords(prompt_json["keywords"])
     prompt_json["turn"] = turn_number
+    if "inspiration_image_id" not in prompt_json:
+        prompt_json["inspiration_image_id"] = inspiration_image_id
     return prompt_json
 
 
@@ -1309,6 +1431,7 @@ def build_pivot_prompt_json(
     assessment: dict[str, Any],
     schema_template: dict[str, Any],
     turn_number: int,
+    history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     selected_prompt = prompt_payload_for_turn(selected_turn)
     
@@ -1320,6 +1443,27 @@ def build_pivot_prompt_json(
             image_bytes, image_mime_type = fetch_image_bytes(selected_turn["image_url"])
         except Exception as e:
             print(f"[warning] Failed to fetch image bytes for selected turn pivot: {e}", flush=True)
+
+    # Walk graph to fetch inspiration memory based on selected_turn's keywords
+    extra_images = []
+    inspiration_image_id = None
+    inspiration_meta = None
+    if history and selected_turn:
+        selected_keywords = selected_turn.get("keywords", [])
+        exclude_thread_id = selected_turn.get("thread_id")
+        if selected_keywords:
+            memory = retrieve_associative_memory(history, selected_keywords, exclude_thread_id=exclude_thread_id)
+            if memory:
+                inspiration_url = memory.get("image_url")
+                if inspiration_url:
+                    try:
+                        mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
+                        extra_images.append((mem_bytes, mem_mime))
+                        inspiration_image_id = memory.get("image_id")
+                        inspiration_meta = memory
+                        print(f"[inspiration] Pivot recalled Turn {memory.get('turn')} ({inspiration_image_id}) via keywords {memory.get('keywords')}", flush=True)
+                    except Exception as e:
+                        print(f"[warning] Failed to fetch inspiration image for pivot: {e}", flush=True)
 
     style_slots = agent_style_slots(agent)
     agent_profile = {
@@ -1334,6 +1478,20 @@ def build_pivot_prompt_json(
     prompt = f"""
 You are refining the most recent Areopagus prompt into a reply image.
 You are shown the actual generated image of the parent post (selected turn) in the multimodal context.
+"""
+
+    if inspiration_image_id and inspiration_meta:
+        prompt += f"""
+NOTE: An associative memory from the Knowledge Web has been recalled:
+- Inspiration Turn: Turn {inspiration_meta.get('turn')}
+- Inspiration Image ID: {inspiration_image_id}
+- Inspiration Keywords: {inspiration_meta.get('keywords')}
+- Inspiration Proposal: "{inspiration_meta.get('proposal')}"
+
+This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+"""
+
+    prompt += f"""
 
 Agent profile:
 {json.dumps(agent_profile, indent=2, ensure_ascii=False)}
@@ -1352,7 +1510,7 @@ Schema template:
 
 Rules:
 - Keep the same top-level keys from the schema template.
-- Add turn, debate_context, proposal, keywords, and reference_image_id.
+- Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 hash-tagged strings.
 - Make the image feel like a reply rather than a new standalone thread.
@@ -1364,6 +1522,7 @@ Rules:
   - If you want to generate completely from scratch without using any image references, set reference_image_id to null.
 - If reference_image_id is NOT null, you MUST reference '@ReferenceImage' in at least one description field (e.g. style, scene_description, subject, or camera) to direct the Runway/Gemini image-to-image/reference-image logic. If it is null, do NOT use the '@ReferenceImage' tag.
 - If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
+- inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
 - Return JSON only.
 """
 
@@ -1371,6 +1530,7 @@ Rules:
         prompt,
         image_bytes=image_bytes,
         image_mime_type=image_mime_type,
+        extra_images=extra_images if extra_images else None,
         model=agent_gemini_model(agent)
     )
     prompt_json = sanitize_for_runway(prompt_json)
@@ -1384,6 +1544,8 @@ Rules:
         prompt_json["keywords"] = ["#areopagus", "#reply", "#pivot", "#architecture", "#revision"]
     prompt_json["keywords"] = dedupe_keywords(prompt_json["keywords"])
     prompt_json["turn"] = turn_number
+    if "inspiration_image_id" not in prompt_json:
+        prompt_json["inspiration_image_id"] = inspiration_image_id
     return prompt_json
 
 
@@ -1480,7 +1642,7 @@ def record_generated_turn(
     }
     turn_record["prompt_json"]["category"] = category
 
-    nodes, edges = graph_nodes_for_turn(turn_record)
+    nodes, edges = graph_nodes_for_turn(turn_record, history)
     history.setdefault("turns", []).append(turn_record)
     history.setdefault("graph", {}).setdefault("nodes", []).extend(nodes)
     history.setdefault("graph", {}).setdefault("edges", []).extend(edges)
@@ -1544,7 +1706,7 @@ def dispatch_agent_action(
         selected_turn = recent_turns[-1]
 
     if action == "Initiate":
-        prompt_json = build_initiate_prompt_json(agent, recent_turns, assessment, schema_template, turn_number)
+        prompt_json = build_initiate_prompt_json(agent, recent_turns, assessment, schema_template, turn_number, history)
         category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
         prompt_json["category"] = category
         reference_images = build_runway_reference_images(
@@ -1603,7 +1765,7 @@ def dispatch_agent_action(
     if action == "Pivot":
         if selected_turn is None:
             raise RuntimeError("Pivot requested but no recent post was available to refine.")
-        prompt_json = build_pivot_prompt_json(agent, selected_turn, recent_turns, assessment, schema_template, turn_number)
+        prompt_json = build_pivot_prompt_json(agent, selected_turn, recent_turns, assessment, schema_template, turn_number, history)
         category = str(selected_turn.get("category") or "")
         if not category:
             thread = find_thread_for_image(history, str(selected_turn.get("image_id", "")))
@@ -1691,52 +1853,112 @@ def dispatch_agent_action(
     }
 
 
-def graph_nodes_for_turn(turn_record: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def graph_nodes_for_turn(turn_record: dict[str, Any], history: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     turn_id = f"turn-{turn_record['turn']}"
     image_id = turn_record["image_id"]
+    agent_id = turn_record.get("agent_id") or "agent"
+    agent_name = turn_record.get("agent_name") or agent_id
+    category = turn_record.get("category") or "Illustration"
 
-    nodes = [
-        {
+    # Identify existing node IDs in the graph to avoid duplicates
+    existing_node_ids = set()
+    if history and "graph" in history and "nodes" in history["graph"]:
+        for node in history["graph"]["nodes"]:
+            if isinstance(node, dict) and "id" in node:
+                existing_node_ids.add(node["id"])
+
+    nodes = []
+    edges = []
+
+    # 1. Turn Node
+    if turn_id not in existing_node_ids:
+        nodes.append({
             "id": turn_id,
             "type": "turn",
             "label": f"Turn {turn_record['turn']}",
             "created_at": turn_record["created_at"],
-        },
-        {
+        })
+
+    # 2. Image Node
+    if image_id not in existing_node_ids:
+        nodes.append({
             "id": image_id,
             "type": "image",
             "label": image_id,
             "url": turn_record["image_url"],
-        },
-    ]
+        })
 
+    # 3. Agent Node (Unified)
+    agent_node_id = f"agent-{agent_id}"
+    if agent_node_id not in existing_node_ids:
+        nodes.append({
+            "id": agent_node_id,
+            "type": "agent",
+            "label": agent_name,
+        })
+
+    # 4. Category Node (Unified)
+    category_node_id = f"category-{category.lower().replace(' ', '-')}"
+    if category_node_id not in existing_node_ids:
+        nodes.append({
+            "id": category_node_id,
+            "type": "category",
+            "label": category,
+        })
+
+    # Base Edges
+    edges.append({
+        "from": turn_id,
+        "to": image_id,
+        "relation": "generated_image",
+    })
+    edges.append({
+        "from": image_id,
+        "to": agent_node_id,
+        "relation": "created_by",
+    })
+    edges.append({
+        "from": image_id,
+        "to": category_node_id,
+        "relation": "belongs_to_category",
+    })
+
+    # Parent-Child Linkage
+    parent_image_id = turn_record.get("parent_image_id")
+    if parent_image_id:
+        edges.append({
+            "from": parent_image_id,
+            "to": image_id,
+            "relation": "pivoted_to",
+        })
+
+    # 5. Unified Keyword Nodes
     for keyword in turn_record["keywords"]:
-        nodes.append(
-            {
-                "id": f"{image_id}:{keyword}",
+        keyword_node_id = f"keyword-{keyword.lower().lstrip('#')}"
+        if keyword_node_id not in existing_node_ids and keyword_node_id not in {n["id"] for n in nodes}:
+            nodes.append({
+                "id": keyword_node_id,
                 "type": "keyword",
                 "label": keyword,
-            }
-        )
-
-    edges = [
-        {
-            "from": turn_id,
-            "to": image_id,
-            "relation": "generated_image",
-        }
-    ]
-
-    for keyword in turn_record["keywords"]:
-        edges.append(
-            {
-                "from": image_id,
-                "to": f"{image_id}:{keyword}",
-                "relation": "tagged_with",
-            }
-        )
+            })
+        edges.append({
+            "from": image_id,
+            "to": keyword_node_id,
+            "relation": "tagged_with",
+        })
 
     return nodes, edges
+
+
+def rebuild_history_graph(history: dict[str, Any]) -> None:
+    """Rebuilds the entire history graph from turns to upgrade to the connected-mesh model."""
+    history["graph"] = {"nodes": [], "edges": []}
+    for turn in history.get("turns", []):
+        if not isinstance(turn, dict) or "image_id" not in turn:
+            continue
+        nodes, edges = graph_nodes_for_turn(turn, history)
+        history["graph"]["nodes"].extend(nodes)
+        history["graph"]["edges"].extend(edges)
 
 
 @app.function(
