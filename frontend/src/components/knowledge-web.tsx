@@ -246,9 +246,25 @@ export function KnowledgeWeb({
         const forceGraph = graphRef.current;
         if (forceGraph) {
           // Adjust forces for a beautiful, organic neural network look
-          forceGraph.d3Force("charge")?.strength(-150);
-          forceGraph.d3Force("link")?.distance(80)?.strength(1.2);
+          forceGraph.d3Force("charge")?.strength(-350);
+          forceGraph.d3Force("link")?.distance(140);
           forceGraph.d3Force("center")?.x(0)?.y(0);
+
+          // Break the 0,0 clumping singularity if nodes settled at the center while hidden
+          const graphData = forceGraph.getGraphData();
+          if (graphData && graphData.nodes) {
+            const hasClump = graphData.nodes.some((node: any) => !node.x || Math.abs(node.x) < 5);
+            if (hasClump) {
+              graphData.nodes.forEach((node: any, index: number) => {
+                const angle = (index / Math.max(graphData.nodes.length, 1)) * Math.PI * 2;
+                const radius = (node.kind === "image" || node.kind === "inspiration") ? 50 : 100;
+                node.x = Math.cos(angle) * radius;
+                node.y = Math.sin(angle) * radius;
+                node.vx = 0;
+                node.vy = 0;
+              });
+            }
+          }
         }
         graphRef.current?.d3ReheatSimulation?.();
         graphRef.current?.centerAt?.(0, 0, 0);
@@ -264,8 +280,22 @@ export function KnowledgeWeb({
     if (!graphRef.current || resetToken === 0) return;
 
     const triggerReset = () => {
+      const forceGraph = graphRef.current;
+      if (forceGraph) {
+        const graphData = forceGraph.getGraphData();
+        if (graphData && graphData.nodes) {
+          graphData.nodes.forEach((node: any, index: number) => {
+            const angle = (index / Math.max(graphData.nodes.length, 1)) * Math.PI * 2;
+            const radius = (node.kind === "image" || node.kind === "inspiration") ? 50 : 100;
+            node.x = Math.cos(angle) * radius;
+            node.y = Math.sin(angle) * radius;
+            node.vx = 0;
+            node.vy = 0;
+          });
+        }
+      }
       graphRef.current?.d3ReheatSimulation?.();
-      graphRef.current?.centerAt?.(0, 0, 250);
+      graphRef.current?.centerAt?.(0, 0, 0);
       graphRef.current?.zoomToFit?.(400, 90);
     };
 
