@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     });
     
     if (!response.ok) {
-      throw new Error(`Modal save endpoint failed with status ${response.status}`);
+      throw new Error(`Modal save endpoint failed with status ${response.status} (URL: ${mutateUrl})`);
     }
     
     const data = await response.json();
