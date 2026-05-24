@@ -189,6 +189,7 @@ export default function Home() {
                   }
                 }}
                 selectedTurnId={null}
+                activeNodes={status?.active_nodes ?? []}
                 onRefresh={reloadHistory}
               />
             </div>

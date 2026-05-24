@@ -435,7 +435,7 @@ def remove_pending_task(task_id: str) -> dict[str, Any] | None:
 
 
 
-def update_studio_status(message: str, active: bool = True, agent_name: str | None = None) -> dict[str, Any]:
+def update_studio_status(message: str, active: bool = True, agent_name: str | None = None, active_nodes: list[str] | None = None) -> dict[str, Any]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     
     # Load existing status and history log list
@@ -477,6 +477,8 @@ def update_studio_status(message: str, active: bool = True, agent_name: str | No
     }
     if agent_name:
         status["agent_name"] = agent_name
+    if active_nodes is not None:
+        status["active_nodes"] = active_nodes
 
     with STUDIO_STATUS_PATH.open("w", encoding="utf-8") as fh:
         json.dump(status, fh, indent=2, ensure_ascii=False)
@@ -2198,12 +2200,24 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
             agent_name = str(agent.get("name", agent.get("id", "Agent")))
             print(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})", flush=True)
             try:
-                update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name)
+                # Collect node IDs the agent is examining during scoring
+                scoring_nodes = [t.get("image_id") for t in recent_turns if t.get("image_id")]
+                for t in recent_turns:
+                    scoring_nodes.extend(t.get("keywords", []))
+                update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name, active_nodes=scoring_nodes)
                 assessment = assess_agent_interest(agent, recent_turns)
+
+                # Build focused active_nodes for the selected action
+                selected_id = assessment.get("selected_image_id", "")
+                selected_turn = next((t for t in recent_turns if t.get("image_id") == selected_id), None)
+                focus_nodes = [selected_id] if selected_id else []
+                if selected_turn:
+                    focus_nodes.extend(selected_turn.get("keywords", []))
+
                 if normalize_action(assessment.get("action")) in {"Initiate", "Pivot"}:
-                    update_studio_status(f"{agent_name} is generating image...", active=True, agent_name=agent_name)
+                    update_studio_status(f"{agent_name} is generating image...", active=True, agent_name=agent_name, active_nodes=focus_nodes)
                 else:
-                    update_studio_status(f"{agent_name} is writing critique...", active=True, agent_name=agent_name)
+                    update_studio_status(f"{agent_name} is writing critique...", active=True, agent_name=agent_name, active_nodes=focus_nodes)
                 action_result = dispatch_agent_action(
                     history=history,
                     agent=agent,
@@ -2211,7 +2225,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     recent_turns=recent_turns,
                     schema_template=schema_template,
                 )
-                update_studio_status(f"{agent_name} complete: {assessment.get('action')}", active=True, agent_name=agent_name)
+                update_studio_status(f"{agent_name} complete: {assessment.get('action')}", active=True, agent_name=agent_name, active_nodes=[])
                 recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
                 results.append(
                     {
@@ -2240,6 +2254,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     f"{agent_name} is waiting {round(jitter_seconds, 2)}s before the next agent...",
                     active=True,
                     agent_name=agent_name,
+                    active_nodes=[],
                 )
                 jitter_log.append(
                     {
@@ -2251,7 +2266,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                 time.sleep(jitter_seconds)
 
         save_history(history)
-        update_studio_status("Pulse complete", active=False)
+        update_studio_status("Pulse complete", active=False, active_nodes=[])
         return {
             "history_path": str(HISTORY_PATH),
             "agents_config_path": str(AGENTS_CONFIG_PATH),

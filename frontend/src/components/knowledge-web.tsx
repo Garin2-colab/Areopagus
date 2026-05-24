@@ -140,6 +140,7 @@ type KnowledgeWebProps = {
   inspiration?: InspirationItem[];
   onImageSelect: (id: string, kind: "image" | "inspiration") => void;
   selectedTurnId?: string | null;
+  activeNodes?: string[];
   onRefresh?: () => Promise<void> | void;
 };
 
@@ -149,6 +150,7 @@ export function KnowledgeWeb({
   inspiration = [],
   onImageSelect,
   selectedTurnId,
+  activeNodes = [],
   onRefresh
 }: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
@@ -156,6 +158,9 @@ export function KnowledgeWeb({
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
   const forcesConfigured = useRef(false);
+
+  // O(1) lookup set for active (highlighted) nodes
+  const activeNodeSet = useMemo(() => new Set(activeNodes), [activeNodes]);
   
   const [simplifying, setSimplifying] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -319,41 +324,7 @@ export function KnowledgeWeb({
   return (
     <div className="rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-[#FAF9F6] active:cursor-grabbing">
-        
-        {/* Overlay Toolbar */}
-        <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2">
-          <button
-            type="button"
-            disabled={simplifying}
-            onClick={handleSimplifyKeywords}
-            className="flex items-center gap-2 rounded-full border border-[#D8D4CC] bg-[#FAF9F6]/90 px-4 py-2 text-xs font-semibold text-[#44423E] backdrop-blur-sm transition-all hover:bg-[#FAF9F6] hover:text-[#252422] hover:border-[#858076] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm select-none"
-          >
-            {simplifying ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D45113]" />
-                <span>Simplifying...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-3.5 w-3.5 text-[#D45113]" />
-                <span>Simplify Keywords</span>
-              </>
-            )}
-          </button>
 
-          {feedback && (
-            <div
-              className={`flex items-center gap-1.5 text-xs font-semibold animate-in fade-in duration-200 ${
-                feedback.type === "success"
-                  ? "text-emerald-600"
-                  : "text-rose-600"
-              }`}
-            >
-              {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-              <span>{feedback.message}</span>
-            </div>
-          )}
-        </div>
 
         {graphSize.width > 1 && graphSize.height > 1 ? (
           <ForceGraph2D
@@ -373,8 +344,21 @@ export function KnowledgeWeb({
             d3VelocityDecay={0.3}
 
             // Links
-            linkWidth={0.6}
-            linkColor={() => "rgba(133, 128, 118, 0.35)"}
+            linkWidth={(link: unknown) => {
+              const l = link as { source: any; target: any };
+              const sId = typeof l.source === "object" ? l.source.id : l.source;
+              const tId = typeof l.target === "object" ? l.target.id : l.target;
+              return (activeNodeSet.size > 0 && activeNodeSet.has(sId) && activeNodeSet.has(tId)) ? 1.8 : 0.6;
+            }}
+            linkColor={(link: unknown) => {
+              const l = link as { source: any; target: any };
+              const sId = typeof l.source === "object" ? l.source.id : l.source;
+              const tId = typeof l.target === "object" ? l.target.id : l.target;
+              if (activeNodeSet.size > 0 && activeNodeSet.has(sId) && activeNodeSet.has(tId)) {
+                return "rgba(212, 81, 19, 0.6)";
+              }
+              return "rgba(133, 128, 118, 0.35)";
+            }}
             linkDirectionalParticles={0}
 
             // Events
@@ -394,6 +378,7 @@ export function KnowledgeWeb({
               const typed = node as GraphNode;
               const hovered = hoverNode?.id === typed.id;
               const selected = selectedNode?.id === typed.id;
+              const isActive = activeNodeSet.size > 0 && activeNodeSet.has(typed.id);
               const radius = (typed.kind === "image" || typed.kind === "inspiration")
                 ? (hovered || selected ? 18 : 14)
                 : typed.kind === "comment" ? 8 : 6;
@@ -401,12 +386,14 @@ export function KnowledgeWeb({
               const mainLabelOpacity = getLabelOpacity(
                 globalScale,
                 (typed.kind === "image" || typed.kind === "inspiration") ? 12 : 11,
-                hovered,
+                hovered || isActive,
                 selected
               );
 
               ctx.save();
               ctx.translate(typed.x ?? 0, typed.y ?? 0);
+
+
 
               if (typed.kind === "image" || typed.kind === "inspiration") {
                 const cachedImage = imageCacheRef.current.get(typed.imageUrl);
@@ -430,8 +417,8 @@ export function KnowledgeWeb({
 
                 ctx.restore();
 
-                ctx.strokeStyle = typed.kind === "inspiration" ? "#D45113" : (selected || hovered ? "#252422" : "#858076");
-                ctx.lineWidth = selected || hovered ? 1.8 : 1;
+                ctx.strokeStyle = isActive ? "#D45113" : (typed.kind === "inspiration" ? "#D45113" : (selected || hovered ? "#252422" : "#858076"));
+                ctx.lineWidth = isActive ? 2.5 : (selected || hovered ? 1.8 : 1);
                 ctx.beginPath();
                 ctx.arc(0, 0, radius + 2, 0, Math.PI * 2);
                 ctx.stroke();
@@ -447,13 +434,13 @@ export function KnowledgeWeb({
                   ctx.fillText(keywords, radius + 8, 20);
                 }
               } else {
-                ctx.fillStyle = selected || hovered ? "#252422" : typed.kind === "comment" ? "#6366f1" : "#858076";
+                ctx.fillStyle = isActive ? "#D45113" : (selected || hovered ? "#252422" : typed.kind === "comment" ? "#6366f1" : "#858076");
                 ctx.beginPath();
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.fillStyle = `rgba(68,66,62,${mainLabelOpacity})`;
-                ctx.font = `${11 * labelScale}px Arial`;
+                ctx.fillStyle = isActive ? `rgba(212,81,19,${mainLabelOpacity})` : `rgba(68,66,62,${mainLabelOpacity})`;
+                ctx.font = `${isActive ? "bold " : ""}${11 * labelScale}px Arial`;
                 ctx.fillText(typed.label, 10, 4);
               }
 

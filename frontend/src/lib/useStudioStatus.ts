@@ -15,6 +15,7 @@ export type StudioStatus = {
   updated_at: string;
   agent_name?: string;
   history?: LogEntry[];
+  active_nodes?: string[];
 };
 
 const POLL_INTERVAL_MS = 3000;
