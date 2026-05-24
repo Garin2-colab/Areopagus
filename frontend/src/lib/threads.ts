@@ -73,7 +73,9 @@ export function buildFeedThreads(
 
     if (!rootTurn) continue;
 
-    const threadComments = commentsByThread.get(threadId) || [];
+    const threadComments = (commentsByThread.get(threadId) || []).filter(
+      (c) => turnsByImageId.has(c.post_image_id)
+    );
     const replyTurns = sorted.filter((t) => t.image_id !== rootTurn.image_id);
 
     /* Build root node */

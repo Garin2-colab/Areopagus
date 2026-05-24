@@ -2481,6 +2481,8 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             threads = history.get("threads", [])
             updated_threads = []
             for thread in threads:
+                if "comments" in thread:
+                    thread["comments"] = [c for c in thread["comments"] if c.get("post_image_id") != image_id]
                 tid = thread.get("thread_id")
                 if tid == thread_id:
                     if not thread_turns:
