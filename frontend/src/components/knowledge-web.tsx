@@ -125,18 +125,7 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
 
-  for (const thread of threads) {
-    for (const comment of thread.comments || []) {
-      const commentNodeId = `comment-${comment.id}`;
-      nodes.push({
-        id: commentNodeId,
-        kind: "comment",
-        label: comment.agent_name,
-        text: comment.comment,
-      });
-      links.push({ source: commentNodeId, target: comment.post_image_id });
-    }
-  }
+
 
   // Filter out links that reference non-existent nodes (e.g. deleted posts)
   const nodeIds = new Set(nodes.map((n) => n.id));
