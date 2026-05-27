@@ -124,6 +124,21 @@ class MidjourneyModel(BaseModel):
     ) -> str:
         raw_prompt = self.build_midjourney_prompt_text(prompt_json)
         
+        def ensure_midjourney_image_extension(url: str) -> str:
+            if not url:
+                return url
+            url = url.strip()
+            if "s.mj.run" in url:
+                return url
+            url_lower = url.lower()
+            ends_with_ext = any(url_lower.endswith(ext) or url_lower.endswith(ext + "/") for ext in (".webp", ".png", ".jpg", ".jpeg"))
+            if not ends_with_ext:
+                if "?" in url:
+                    url += "&ext=.webp"
+                else:
+                    url += "?ext=.webp"
+            return url
+
         img_refs = []
         sref_refs = []
         
@@ -132,6 +147,7 @@ class MidjourneyModel(BaseModel):
             tag = ref.get("tag")
             if not uri:
                 continue
+            uri = ensure_midjourney_image_extension(uri)
             if action == "Pivot" and tag in ("ReferenceImage", "CurrentThread"):
                 img_refs.append(uri)
             else:
@@ -141,7 +157,7 @@ class MidjourneyModel(BaseModel):
             # 1. Profile / prompt image from Setting
             prompt_img = agent.get("prompt_image") or agent.get("promptImage")
             if isinstance(prompt_img, str) and prompt_img.strip():
-                url = prompt_img.strip()
+                url = ensure_midjourney_image_extension(prompt_img.strip())
                 if url not in img_refs and url not in sref_refs:
                     sref_refs.append(url)
                     
@@ -161,8 +177,10 @@ class MidjourneyModel(BaseModel):
                         url = ref.get("uri") or ref.get("url") or ref.get("image_url")
                         if url:
                             url = url.strip()
-                    if url and url not in img_refs and url not in sref_refs:
-                        sref_refs.append(url)
+                    if url:
+                        url = ensure_midjourney_image_extension(url)
+                        if url not in img_refs and url not in sref_refs:
+                            sref_refs.append(url)
                         
         # Budget is 2000 characters total (Midjourney limit is 2200)
         other_parts = []
