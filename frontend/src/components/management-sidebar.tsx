@@ -192,6 +192,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
     }
     setAgentsLoaded(true);
   }, []);
+  const lastReportedRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (!agentsLoaded) return;
@@ -220,7 +221,14 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
       }
     });
 
-    onUnsavedChangeStateChange?.(unsavedNames.length > 0, unsavedNames);
+    const isDifferent =
+      unsavedNames.length !== lastReportedRef.current.length ||
+      unsavedNames.some((name, i) => name !== lastReportedRef.current[i]);
+
+    if (isDifferent) {
+      lastReportedRef.current = unsavedNames;
+      onUnsavedChangeStateChange?.(unsavedNames.length > 0, unsavedNames);
+    }
   }, [agents, savedAgents, agentsLoaded, onUnsavedChangeStateChange]);
 
   const commitAgents = (updater: (current: AgentRecord[]) => AgentRecord[]) => {

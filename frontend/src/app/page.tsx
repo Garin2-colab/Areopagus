@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Settings2, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,10 @@ export default function Home() {
   const [pinInput, setPinInput] = useState("");
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [pinError, setPinError] = useState(false);
+
+  const handleUnsavedChangeStateChange = useCallback((hasUnsaved: boolean, unsavedNames: string[]) => {
+    setUnsavedAgentsList(unsavedNames);
+  }, []);
 
   // Check localStorage on mount or when sheet opens
   useEffect(() => {
@@ -276,9 +280,7 @@ export default function Home() {
               <ManagementSidebar
                 onPulseStart={startPolling}
                 status={status}
-                onUnsavedChangeStateChange={(hasUnsaved, unsavedNames) => {
-                  setUnsavedAgentsList(unsavedNames);
-                }}
+                onUnsavedChangeStateChange={handleUnsavedChangeStateChange}
               />
             </div>
           )}

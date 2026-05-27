@@ -20,6 +20,7 @@ import {
   flattenThread,
   type FeedThread,
   type FlatEntry,
+  type ThreadNode,
 } from "@/lib/threads";
 
 /* ── Agent color assignment ─────────────────────────────────────── */
@@ -45,6 +46,22 @@ type SocialStudioFeedProps = {
   threads?: Thread[];
   onImageClick?: (src: string) => void;
 };
+
+function countCommentsAndReplies(thread: FeedThread) {
+  let commentsCount = 0;
+  let repliesCount = 0;
+
+  function walk(node: ThreadNode) {
+    commentsCount += node.comments.length;
+    repliesCount += node.replies.length;
+    for (const reply of node.replies) {
+      walk(reply);
+    }
+  }
+
+  walk(thread.root);
+  return { comments: commentsCount, replies: repliesCount };
+}
 
 /* ── Component ──────────────────────────────────────────────────── */
 
@@ -73,19 +90,24 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
       </CardHeader>
 
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
-        {feedThreads.map((thread) => (
-          <div
-            key={thread.thread_id}
-            id={`feed-post-${thread.root.turn.image_id}`}
-            className="overflow-hidden rounded-[1.6rem] border border-[#D8D4CC]/60 bg-white transition-all duration-300"
-          >
-            <CompactRootPost
-              turn={thread.root.turn}
-              categoryFrequency={categoryFrequency}
-              onImageClick={onImageClick}
-            />
-          </div>
-        ))}
+        {feedThreads.map((thread) => {
+          const counts = countCommentsAndReplies(thread);
+          const totalComments = counts.comments + counts.replies;
+          return (
+            <div
+              key={thread.thread_id}
+              id={`feed-post-${thread.root.turn.image_id}`}
+              className="overflow-hidden rounded-[1.6rem] border border-[#D8D4CC]/60 bg-white transition-all duration-300"
+            >
+              <CompactRootPost
+                turn={thread.root.turn}
+                categoryFrequency={categoryFrequency}
+                onImageClick={onImageClick}
+                commentCount={totalComments}
+              />
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
@@ -97,10 +119,12 @@ function CompactRootPost({
   turn,
   categoryFrequency,
   onImageClick,
+  commentCount = 0,
 }: {
   turn: PostTurn;
   categoryFrequency: Map<string, number>;
   onImageClick?: (src: string) => void;
+  commentCount?: number;
 }) {
   const timestamp = formatTimestamp(turn.created_at);
   const category = getTurnCategory(turn, categoryFrequency);
@@ -166,6 +190,14 @@ function CompactRootPost({
             <span className="text-sm font-semibold text-[#44423E]">{agentName}</span>
             <span className="text-xs text-[#858076]">·</span>
             <span className="text-xs text-[#858076]">{timestamp}</span>
+            {commentCount > 0 && (
+              <>
+                <span className="text-xs text-[#858076]">·</span>
+                <span className="text-[11px] font-semibold text-[#D45113] bg-[#D45113]/5 px-2 py-0.5 rounded-full">
+                  {commentCount} {commentCount === 1 ? "comment" : "comments"}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Category / Keywords */}

@@ -116,10 +116,38 @@ export function buildFeedThreads(
     rootNode.comments.push(...orphanComments);
 
     const meta = threadMetaMap.get(threadId);
+    
+    // Find the latest activity timestamp (max of root, replies, comments, and meta.updated_at)
+    const rootTime = new Date(rootTurn.created_at).getTime();
+    let latestTime = isNaN(rootTime) ? Date.now() : rootTime;
+
+    if (meta?.updated_at) {
+      const metaTime = new Date(meta.updated_at).getTime();
+      if (!isNaN(metaTime)) {
+        latestTime = Math.max(latestTime, metaTime);
+      }
+    }
+    for (const comment of threadComments) {
+      if (comment.created_at) {
+        const commentTime = new Date(comment.created_at).getTime();
+        if (!isNaN(commentTime)) {
+          latestTime = Math.max(latestTime, commentTime);
+        }
+      }
+    }
+    for (const reply of replyTurns) {
+      if (reply.created_at) {
+        const replyTime = new Date(reply.created_at).getTime();
+        if (!isNaN(replyTime)) {
+          latestTime = Math.max(latestTime, replyTime);
+        }
+      }
+    }
+
     feedThreads.push({
       thread_id: threadId,
       root: rootNode,
-      updated_at: meta?.updated_at || rootTurn.created_at,
+      updated_at: new Date(latestTime).toISOString(),
     });
   }
 
