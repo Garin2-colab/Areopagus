@@ -9,6 +9,7 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+import urllib.parse
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -762,7 +763,6 @@ Concept direction:
 
 def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
     if "id=" in image_url:
-        import urllib.parse
         try:
             parsed = urllib.parse.urlparse(image_url)
             query = urllib.parse.parse_qs(parsed.query)
@@ -780,7 +780,13 @@ def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
             print(f"[fetch_image_bytes] local path check failed: {err}", flush=True)
 
     try:
-        with urllib.request.urlopen(image_url) as response:
+        req = urllib.request.Request(
+            image_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+        )
+        with urllib.request.urlopen(req) as response:
             content_type = response.headers.get_content_type() or "image/png"
             return response.read(), content_type
     except urllib.error.HTTPError as exc:
