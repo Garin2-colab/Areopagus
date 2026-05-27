@@ -27,6 +27,37 @@ function getMutateUrl() {
   return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
 }
 
+export async function GET() {
+  try {
+    const mutateUrl = getMutateUrl();
+    if (!mutateUrl) {
+      console.warn("MODAL_SAVE_URL is not configured.");
+      return NextResponse.json({ ok: false, error: "Cloud URL not configured" }, { status: 404 });
+    }
+
+    const response = await fetch(mutateUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ action: "load_agents" }),
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Modal save endpoint failed with status ${response.status} (URL: ${mutateUrl})`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Load failed." },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -63,3 +94,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

@@ -2149,6 +2149,14 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             data_volume.commit()
             return {"ok": True, "message": "Config saved to Modal volume."}
 
+        elif action == "load_agents":
+            if AGENTS_CONFIG_PATH.exists():
+                with AGENTS_CONFIG_PATH.open("r", encoding="utf-8") as fh:
+                    config = json.load(fh)
+                return {"ok": True, "config": config}
+            return {"ok": True, "config": None}
+
+
         elif action == "update_category":
             image_id = payload.get("image_id")
             category = payload.get("category")

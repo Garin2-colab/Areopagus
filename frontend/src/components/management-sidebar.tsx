@@ -181,16 +181,55 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
   const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const storedAgents = loadStoredAgents();
-    if (storedAgents) {
-      nextAgentNumber.current = nextAgentIndex(storedAgents);
-      agentsRef.current = storedAgents;
-      setAgents(storedAgents);
-      setSavedAgents(storedAgents);
-    } else {
-      setSavedAgents(DEFAULT_AGENTS);
+    let active = true;
+    async function initAgents() {
+      try {
+        const response = await fetch("/api/save");
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok && data.config && Array.isArray(data.config.agents)) {
+            const loaded = data.config.agents
+              .map((agent: any, idx: number) => normalizeStoredAgent(agent, idx))
+              .filter((agent: any): agent is AgentRecord => agent !== null);
+            if (loaded.length > 0 && active) {
+              nextAgentNumber.current = nextAgentIndex(loaded);
+              agentsRef.current = loaded;
+              setAgents(loaded);
+              setSavedAgents(loaded);
+              
+              const payload: StoredAgentsPayload = {
+                updatedAt: new Date().toISOString(),
+                personaCount: loaded.length,
+                agents: loaded
+              };
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+              setAgentsLoaded(true);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load agents from server, falling back to localStorage:", err);
+      }
+
+      if (!active) return;
+
+      const storedAgents = loadStoredAgents();
+      if (storedAgents) {
+        nextAgentNumber.current = nextAgentIndex(storedAgents);
+        agentsRef.current = storedAgents;
+        setAgents(storedAgents);
+        setSavedAgents(storedAgents);
+      } else {
+        setSavedAgents(DEFAULT_AGENTS);
+      }
+      setAgentsLoaded(true);
     }
-    setAgentsLoaded(true);
+
+    initAgents();
+    return () => {
+      active = false;
+    };
   }, []);
   const lastReportedRef = useRef<string[]>([]);
 
@@ -373,8 +412,8 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
 
         const uploadedUrl = result.url || `/api/image?id=ref_style_${agentId}_${index}&v=${Math.floor(Date.now() / 1000)}`;
 
-        setAgents((current) =>
-          current.map((agent) => {
+        setAgents((current) => {
+          const next = current.map((agent) => {
             if (agent.id !== agentId) return agent;
             const nextRefs = [...(agent.referenceImages || [])];
             while (nextRefs.length <= index) {
@@ -382,8 +421,12 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
             }
             nextRefs[index] = uploadedUrl;
             return { ...agent, referenceImages: nextRefs };
-          })
-        );
+          });
+          saveAgents(next);
+          setSavedAgents(next);
+          agentsRef.current = next;
+          return next;
+        });
       } catch (err) {
         console.error("Style upload failed:", err);
         alert(err instanceof Error ? err.message : "Upload failed");
@@ -393,16 +436,20 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
   };
 
   const handleClearStyle = (agentId: string, index: number) => {
-    setAgents((current) =>
-      current.map((agent) => {
+    setAgents((current) => {
+      const next = current.map((agent) => {
         if (agent.id !== agentId) return agent;
         const nextRefs = [...(agent.referenceImages || [])];
         if (index < nextRefs.length) {
           nextRefs[index] = "";
         }
         return { ...agent, referenceImages: nextRefs };
-      })
-    );
+      });
+      saveAgents(next);
+      setSavedAgents(next);
+      agentsRef.current = next;
+      return next;
+    });
   };
 
   return (
