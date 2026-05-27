@@ -121,6 +121,7 @@ class MidjourneyModel(BaseModel):
         prompt_json: dict[str, Any],
         reference_images: list[dict[str, Any]],
         action: str,
+        agent: dict[str, Any] | None = None,
     ) -> str:
         raw_prompt = self.build_midjourney_prompt_text(prompt_json)
         
@@ -137,6 +138,33 @@ class MidjourneyModel(BaseModel):
             else:
                 sref_refs.append(uri)
                 
+        if agent:
+            # 1. Profile / prompt image from Setting
+            prompt_img = agent.get("prompt_image") or agent.get("promptImage")
+            if isinstance(prompt_img, str) and prompt_img.strip():
+                url = prompt_img.strip()
+                if url not in img_refs and url not in sref_refs:
+                    sref_refs.append(url)
+                    
+            # 2. referenceImages from Setting
+            agent_refs = agent.get("referenceImages") or agent.get("reference_images") or []
+            if isinstance(agent_refs, str):
+                agent_refs = [agent_refs]
+            elif isinstance(agent_refs, dict):
+                agent_refs = [agent_refs]
+                
+            if isinstance(agent_refs, list):
+                for ref in agent_refs:
+                    url = None
+                    if isinstance(ref, str):
+                        url = ref.strip()
+                    elif isinstance(ref, dict):
+                        url = ref.get("uri") or ref.get("url") or ref.get("image_url")
+                        if url:
+                            url = url.strip()
+                    if url and url not in img_refs and url not in sref_refs:
+                        sref_refs.append(url)
+                        
         parts = []
         
         if img_refs:
@@ -245,7 +273,7 @@ Return JSON only:
             model="gpt_image_2"
         )
 
-        prompt_text = self.format_midjourney_prompt(prompt_json, refs, action)
+        prompt_text = self.format_midjourney_prompt(prompt_json, refs, action, agent=agent)
         print(f"[midjourney] Formatted prompt: {prompt_text}", flush=True)
         
         res = self.userapi_request("POST", "/midjourney/v2/imagine", {"prompt": prompt_text})
