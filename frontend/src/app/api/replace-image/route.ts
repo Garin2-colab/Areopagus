@@ -92,8 +92,9 @@ export async function POST(request: Request) {
 
       const modalImageBase = getModalImageUrl();
       if (modalImageBase) {
+        const base = modalImageBase.endsWith("/") ? modalImageBase : `${modalImageBase}/`;
         const v = Math.floor(Date.now() / 1000);
-        data.url = `${modalImageBase}?id=${encodeURIComponent(body.image_id)}&v=${v}`;
+        data.url = `${base}?id=${encodeURIComponent(body.image_id)}&v=${v}`;
       }
     }
 

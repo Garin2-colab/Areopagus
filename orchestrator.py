@@ -619,9 +619,11 @@ def save_mp4_video(video_url: str, image_id: str, aspect_ratio: str = "16:9") ->
     if not web_url:
         web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
+    web_url = web_url.rstrip("/")
+
     return {
         "path": str(mp4_path),
-        "url": f"{web_url}?id={image_id}",
+        "url": f"{web_url}/?id={image_id}",
         "format": "mp4",
         "source_mime_type": source_mime_type or "video/mp4",
         "size_bytes": mp4_path.stat().st_size,
@@ -827,9 +829,11 @@ def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
     if not web_url:
         web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
+    web_url = web_url.rstrip("/")
+
     return {
         "path": str(webp_path),
-        "url": f"{web_url}?id={image_id}",
+        "url": f"{web_url}/?id={image_id}",
         "format": "webp",
         "quality": WEBP_QUALITY,
         "source_mime_type": source_mime_type,
@@ -2139,8 +2143,10 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             except Exception:
                 web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
+            web_url = web_url.rstrip("/")
+
             import time
-            new_url = f"{web_url}?id={image_id}&v={int(time.time())}"
+            new_url = f"{web_url}/?id={image_id}&v={int(time.time())}"
             history = load_history()
             updated_any = False
             for turn in history.get("turns", []):
@@ -2265,7 +2271,9 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
                 web_url = get_image.get_web_url()
             except Exception:
                 web_url = "https://heebok-lee--areopagus-get-image.modal.run"
-            image_url = f"{web_url}?id={insp_id}"
+            
+            web_url = web_url.rstrip("/")
+            image_url = f"{web_url}/?id={insp_id}"
 
             prompt = (
                 "Analyze this image and return a JSON object containing exactly 5 to 8 highly descriptive, simple, and intuitive keywords. "
