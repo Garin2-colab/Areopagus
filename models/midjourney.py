@@ -17,8 +17,7 @@ class MidjourneyModel(BaseModel):
         return "midjourney"
 
     def _get_api_key(self) -> str:
-        from orchestrator import userapi_api_key
-        return userapi_api_key()
+        return os.environ.get("USERAPI_API_KEY", "").strip()
 
     def userapi_request(
         self,
