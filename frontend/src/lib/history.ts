@@ -109,7 +109,7 @@ function resolveHistorySource() {
   throw new Error("MODAL_API_URL is not configured.");
 }
 
-function sanitizeImageUrls(url: string | undefined): string {
+function sanitizeImageUrls(url: string | undefined, format?: string): string {
   if (!url) return "";
   if (url.includes("-get-image.modal.run") || url.includes("-get-image-dev.modal.run")) {
     const match = url.match(/[?&]id=([^&]+)/);
@@ -117,7 +117,8 @@ function sanitizeImageUrls(url: string | undefined): string {
       const vMatch = url.match(/[?&]v=([^&]+)/);
       const vParam = vMatch ? `&v=${vMatch[1]}` : "";
       const devParam = url.includes("-dev.modal.run") ? "&dev=true" : "";
-      return `/api/image?id=${match[1]}${vParam}${devParam}`;
+      const formatParam = format ? `&format=${format}` : "";
+      return `/api/image?id=${match[1]}${vParam}${devParam}${formatParam}`;
     }
   }
   return url;
@@ -152,14 +153,15 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
   const data = (await response.json()) as HistoryData;
   
   const turns = (Array.isArray(data.turns) ? data.turns : []).map(turn => {
+    const format = turn.image_webp?.format;
     const turnCopy = { 
       ...turn, 
-      image_url: sanitizeImageUrls(turn.image_url) 
+      image_url: sanitizeImageUrls(turn.image_url, format) 
     };
     if (turnCopy.image_webp) {
       turnCopy.image_webp = {
         ...turnCopy.image_webp,
-        url: sanitizeImageUrls(turnCopy.image_webp.url)
+        url: sanitizeImageUrls(turnCopy.image_webp.url, format)
       };
     }
     return turnCopy;

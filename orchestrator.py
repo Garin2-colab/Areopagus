@@ -583,67 +583,47 @@ def gemini_generate(
     return extract_json_object(text)
 
 
-def runway_request(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    data = None if payload is None else json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url=f"{RUNWAY_API_BASE}{path}",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {runway_api_key()}",
-            "X-Runway-Version": "2024-11-06",
-            "Content-Type": "application/json",
-        },
-        method=method,
-    )
+# Runway, Midjourney, and Seedance helper functions have been modularized and moved to the models/ package.
+
+
+
+def save_mp4_video(video_url: str, image_id: str, aspect_ratio: str = "16:9") -> dict[str, Any]:
+    video_bytes, source_mime_type = fetch_image_bytes(video_url)
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    mp4_path = IMAGE_DIR / f"{image_id}.mp4"
+
+    with open(mp4_path, "wb") as f:
+        f.write(video_bytes)
+
+    ratios = {
+        "1:1": (480, 480),
+        "4:3": (640, 480),
+        "3:4": (360, 480),
+        "16:9": (854, 480),
+        "9:16": (270, 480),
+        "21:9": (1120, 480),
+    }
+    width, height = ratios.get(aspect_ratio, (854, 480))
 
     try:
-        with urllib.request.urlopen(request) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        raise RuntimeError(
-            f"HTTP {exc.code} calling Runway {path}: {exc.reason}. Response: {body or '<empty>'}"
-        ) from None
+        web_url = get_image.get_web_url()
+    except Exception:
+        web_url = None
 
+    if not web_url:
+        web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
-def runway_create_text_to_image(
-    prompt_text: str,
-    *,
-    model: str = RUNWAY_MODEL,
-    reference_images: list[dict[str, Any]] | None = None,
-    aspect_ratio: str | None = None,
-) -> dict[str, Any]:
-    # gpt_image_2 allows 32K chars, gemini_image3_pro allows 5.5K.
-    # Use 5000 as a safe max that works for all models.
-    max_len = 5000 if model in ("gpt_image_2", "gemini_image3_pro") else 950
-    safe_prompt = prompt_text[:max_len]
-    ratio_val = runway_ratio_for_model(model, aspect_ratio or "1:1")
-    payload: dict[str, Any] = {
-        "model": model,
-        "promptText": safe_prompt,
-        "ratio": ratio_val,
+    return {
+        "path": str(mp4_path),
+        "url": f"{web_url}?id={image_id}",
+        "format": "mp4",
+        "source_mime_type": source_mime_type or "video/mp4",
+        "size_bytes": mp4_path.stat().st_size,
+        "dimensions": {
+            "width": width,
+            "height": height,
+        },
     }
-    if "gemini" not in model.lower():
-        payload["quality"] = RUNWAY_QUALITY
-    if reference_images:
-        payload["referenceImages"] = reference_images
-
-    print(f"Sending to Runway: Model=[{model}], Ratio=[{ratio_val}] (Requested AspectRatio=[{aspect_ratio}]), PromptLength=[{len(safe_prompt)}]", flush=True)
-
-    return runway_request(
-        "POST",
-        "/v1/text_to_image",
-        payload,
-    )
-
-
-def runway_get_task(task_id: str) -> dict[str, Any]:
-    return runway_request("GET", f"/v1/tasks/{task_id}")
-
-
-def is_runway_safety_failure(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return "safety" in message or "moderation" in message or "input_preprocessing" in message
 
 
 def normalize_keyword(keyword: str) -> str:
@@ -775,56 +755,6 @@ Concept direction:
     return prompt_json
 
 
-def runway_image_url(task: Any) -> str:
-    candidates: list[Any] = []
-
-    if isinstance(task, dict):
-        for key in ("image_url", "url", "output"):
-            value = task.get(key)
-            if value is not None:
-                candidates.append(value)
-    else:
-        for attr in ("image_url", "url", "output"):
-            value = getattr(task, attr, None)
-            if value is not None:
-                candidates.append(value)
-
-        images = getattr(task, "images", None)
-        if images:
-            candidates.extend(images)
-
-    for candidate in candidates:
-        if isinstance(candidate, str) and candidate.startswith("http"):
-            return candidate
-
-        if isinstance(candidate, list) and candidate:
-            first = candidate[0]
-            if isinstance(first, str) and first.startswith("http"):
-                return first
-            if isinstance(first, dict):
-                for key in ("image_url", "url"):
-                    value = first.get(key)
-                    if isinstance(value, str) and value.startswith("http"):
-                        return value
-            for attr in ("image_url", "url"):
-                value = getattr(first, attr, None)
-                if isinstance(value, str) and value.startswith("http"):
-                    return value
-
-        if isinstance(candidate, dict):
-            for key in ("image_url", "url"):
-                value = candidate.get(key)
-                if isinstance(value, str) and value.startswith("http"):
-                    return value
-
-        for attr in ("image_url", "url"):
-            value = getattr(candidate, attr, None)
-            if isinstance(value, str) and value.startswith("http"):
-                return value
-
-    raise ValueError("Could not extract an image URL from the Runway task response.")
-
-
 def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
     if "id=" in image_url:
         import urllib.parse
@@ -833,6 +763,11 @@ def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
             query = urllib.parse.parse_qs(parsed.query)
             image_id = query.get("id", [None])[0]
             if image_id:
+                if image_id.endswith(".webp") or image_id.endswith(".mp4"):
+                    image_id = image_id.rsplit(".", 1)[0]
+                mp4_path = IMAGE_DIR / f"{image_id}.mp4"
+                if mp4_path.exists():
+                    return mp4_path.read_bytes(), "video/mp4"
                 local_path = IMAGE_DIR / f"{image_id}.webp"
                 if local_path.exists():
                     return local_path.read_bytes(), "image/webp"
@@ -860,7 +795,15 @@ def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
     webp_path = IMAGE_DIR / f"{image_id}.webp"
 
     with Image.open(BytesIO(image_bytes)) as source:
-        converted = ImageOps.fit(source.convert("RGB"), (1080, 1080), method=Image.Resampling.LANCZOS)
+        # Preserve original aspect ratio but scale down so the maximum dimension is 1080
+        w, h = source.size
+        if w > h:
+            target_w = 1080
+            target_h = int(1080 * (h / w))
+        else:
+            target_h = 1080
+            target_w = int(1080 * (w / h))
+        converted = source.convert("RGB").resize((target_w, target_h), Image.Resampling.LANCZOS)
         converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
         width, height = converted.size
 
@@ -974,25 +917,8 @@ def agent_gemini_model(agent: dict[str, Any]) -> str:
     return GEMINI_MODEL
 
 
-def agent_runway_model(agent: dict[str, Any]) -> str:
-    raw_model = agent.get("selected_model") or agent.get("model") or RUNWAY_MODEL
-    model = str(raw_model).strip().lower().replace("-", "_").replace(" ", "_")
+# agent_runway_model has been replaced by the models.get_model registry pattern
 
-    aliases = {
-        "gpt_image_2": "gpt_image_2",
-        "gptimage2": "gpt_image_2",
-        "gpt_image2": "gpt_image_2",
-        "gemini_image3_pro": "gemini_image3_pro",
-        "gemini_3_pro": "gemini_image3_pro",
-        "gemini3pro": "gemini_image3_pro",
-        "gemini_3pro": "gemini_image3_pro",
-    }
-
-    if model in aliases:
-        return aliases[model]
-
-    # Enforce only 'gpt_image_2' or 'gemini_image3_pro'
-    return "gpt_image_2"
 
 
 def extract_aspect_ratio(prompt_json: Any) -> str:
@@ -1010,17 +936,8 @@ def extract_aspect_ratio(prompt_json: Any) -> str:
     return ratio
 
 
-def runway_ratio_for_model(model: str, aspect_ratio: str = RUNWAY_ASPECT_RATIO) -> str:
-    model_ratios = RUNWAY_RATIO_BY_MODEL.get(model)
-    if model_ratios and aspect_ratio in model_ratios:
-        return model_ratios[aspect_ratio]
-    if model_ratios and "1:1" in model_ratios:
-        return model_ratios["1:1"]
-    return "1024:1024"
+# runway_ratio_for_model and runway_reference_limit are modularized inside runway.py
 
-
-def runway_reference_limit(model: str) -> int:
-    return 14 if model == RUNWAY_GEMINI_IMAGE_MODEL else 16
 
 
 def agent_style_slots(agent: dict[str, Any]) -> list[str]:
@@ -1040,172 +957,8 @@ def agent_style_slots(agent: dict[str, Any]) -> list[str]:
     return slots
 
 
-def build_runway_reference_images(
-    agent: dict[str, Any],
-    *,
-    prompt_json: dict[str, Any] | None = None,
-    selected_turn: dict[str, Any] | None = None,
-    history: dict[str, Any] | None = None,
-    model: str = RUNWAY_MODEL,
-) -> list[dict[str, Any]]:
-    references: list[dict[str, Any]] = []
+# build_runway_reference_images and associated helpers are modularized inside models package
 
-    def add_reference(uri: Any, tag: str) -> None:
-        if not isinstance(uri, str) or not uri.strip():
-            return
-        references.append({"uri": uri.strip(), "tag": tag})
-
-    ref_decision = None
-    if prompt_json and isinstance(prompt_json, dict):
-        ref_decision = prompt_json.get("reference_image_id")
-
-    # Gather agent's custom style references
-    agent_refs = agent.get("referenceImages") or agent.get("reference_images") or []
-    if isinstance(agent_refs, dict):
-        agent_refs = [agent_refs]
-
-    # Map primary visual reference image
-    if ref_decision is not None:
-        if ref_decision in ("selected", "CurrentThread", "ReferenceImage"):
-            if selected_turn:
-                add_reference(selected_turn.get("image_url"), "ReferenceImage")
-                add_reference(selected_turn.get("image_url"), "CurrentThread")
-        elif ref_decision in ("profile", "AgentPrompt"):
-            prompt_img = agent.get("prompt_image") or agent.get("promptImage")
-            if prompt_img:
-                add_reference(prompt_img, "ReferenceImage")
-                add_reference(prompt_img, "AgentPrompt")
-        elif isinstance(ref_decision, str) and ref_decision.strip():
-            # Check if ref_decision targets one of the AgentRef<index> slots
-            matched_style = None
-            if ref_decision.lower().startswith("agentref"):
-                try:
-                    idx = int(ref_decision[8:]) - 1
-                    if isinstance(agent_refs, list) and 0 <= idx < len(agent_refs):
-                        ref_item = agent_refs[idx]
-                        if isinstance(ref_item, str):
-                            matched_style = ref_item
-                        elif isinstance(ref_item, dict):
-                            matched_style = ref_item.get("uri") or ref_item.get("url") or ref_item.get("image_url")
-                except Exception:
-                    pass
-
-            if matched_style:
-                add_reference(matched_style, "ReferenceImage")
-                add_reference(matched_style, ref_decision)
-            else:
-                # Search history turns for a match
-                target_url = None
-                if history and isinstance(history.get("turns"), list):
-                    for turn in history["turns"]:
-                        if turn.get("image_id") == ref_decision:
-                            target_url = turn.get("image_url")
-                            break
-                if target_url:
-                    add_reference(target_url, "ReferenceImage")
-    else:
-        # Fallback (backward compatibility): attach default references
-        if selected_turn:
-            add_reference(selected_turn.get("image_url"), "ReferenceImage")
-            add_reference(selected_turn.get("image_url"), "CurrentThread")
-        
-        prompt_img = agent.get("prompt_image") or agent.get("promptImage")
-        if prompt_img:
-            add_reference(prompt_img, "ReferenceImage")
-            add_reference(prompt_img, "AgentPrompt")
-
-    # Attach inspiration reference image if set
-    inspiration_id = None
-    if prompt_json and isinstance(prompt_json, dict):
-        inspiration_id = prompt_json.get("inspiration_image_id")
-    if inspiration_id:
-        target_url = None
-        if history and isinstance(history.get("turns"), list):
-            for turn in history["turns"]:
-                if turn.get("image_id") == inspiration_id:
-                    target_url = turn.get("image_url")
-                    break
-        if target_url:
-            add_reference(target_url, "InspirationRef")
-
-    # Always attach the other style reference images so they can be tagged as @AgentRef<index> in prompt fields
-    if isinstance(agent_refs, list):
-        for index, reference in enumerate(agent_refs, start=1):
-            if isinstance(reference, str):
-                add_reference(reference, f"AgentRef{index}")
-            elif isinstance(reference, dict):
-                add_reference(
-                    reference.get("uri") or reference.get("url") or reference.get("image_url"),
-                    reference.get("tag") or f"AgentRef{index}",
-                )
-
-    unique: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for reference in references:
-        uri = reference["uri"]
-        if uri in seen:
-            continue
-        seen.add(uri)
-        unique.append(reference)
-
-    return unique[:runway_reference_limit(model)]
-
-
-def format_prompt_reference_tags(reference_images: list[dict[str, Any]]) -> str:
-    tags = [reference.get("tag") for reference in reference_images if isinstance(reference.get("tag"), str) and reference.get("tag")]
-    return ", ".join(f"@{tag}" for tag in tags)
-
-
-def stringify_prompt_value(value: Any) -> str:
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, list):
-        parts = [stringify_prompt_value(item) for item in value]
-        return ", ".join(part for part in parts if part)
-    if isinstance(value, dict):
-        parts: list[str] = []
-        for key, item in value.items():
-            rendered = stringify_prompt_value(item)
-            if rendered:
-                parts.append(f"{key}: {rendered}")
-        return "; ".join(parts)
-    return ""
-
-
-def build_runway_prompt_text(
-    prompt_json: dict[str, Any],
-    *,
-    model: str,
-    agent: dict[str, Any],
-    assessment: dict[str, Any],
-    recent_turns: list[dict[str, Any]],
-    action: str,
-    selected_turn: dict[str, Any] | None = None,
-    reference_images: list[dict[str, Any]] | None = None,
-) -> str:
-    reference_images = reference_images or []
-    reference_tags = format_prompt_reference_tags(reference_images)
-
-    if model == RUNWAY_GEMINI_IMAGE_MODEL:
-        lines = [
-            f"Scene: {stringify_prompt_value(prompt_json.get('scene_description', ''))}",
-            f"Subject: {stringify_prompt_value(prompt_json.get('subject', {}))}",
-            f"Attire: {stringify_prompt_value(prompt_json.get('attire', {}))}",
-            f"Lighting and effects: {stringify_prompt_value(prompt_json.get('lighting_and_effects', {}))}",
-            f"Environment: {stringify_prompt_value(prompt_json.get('environment', {}))}",
-            f"Color palette: {stringify_prompt_value(prompt_json.get('color_palette', {}))}",
-            f"Style: {stringify_prompt_value(prompt_json.get('style', {}))}",
-            f"Camera: {stringify_prompt_value(prompt_json.get('camera', {}))}",
-        ]
-        prompt_str = "\n".join(line for line in lines if line)
-        if len(prompt_str) > 5000:
-            prompt_str = prompt_str[:5000]
-        return prompt_str
-
-    prompt_str = json.dumps(prompt_json, ensure_ascii=False, indent=2)
-    if len(prompt_str) > 5000:
-        prompt_str = prompt_str[:5000]
-    return prompt_str
 
 
 def clamp_interest_score(value: Any) -> int:
@@ -1808,28 +1561,6 @@ def record_generated_turn(
     return turn_record
 
 
-def poll_runway_task(task_id: str, max_wait: int = 600) -> dict[str, Any]:
-    """Poll Runway GET /v1/tasks/{id} until SUCCEEDED or FAILED."""
-    # Sleep initially since image generation takes at least 10-12 seconds
-    time.sleep(12)
-    elapsed = 12
-
-    while elapsed < max_wait:
-        task = runway_get_task(task_id)
-        status = str(task.get("status") or "").upper()
-        print(f"[poll_runway_task] task={task_id} status={status} elapsed={elapsed}s", flush=True)
-        if status == "SUCCEEDED":
-            return task
-        if status == "FAILED":
-            failure = task.get("failure") or task.get("error") or "Unknown failure"
-            raise RuntimeError(f"Runway task {task_id} FAILED: {failure}")
-        
-        polling_delay = 8
-        time.sleep(polling_delay)
-        elapsed += polling_delay
-    raise RuntimeError(f"Runway task {task_id} timed out after {max_wait}s")
-
-
 def dispatch_agent_action(
     history: dict[str, Any],
     agent: dict[str, Any],
@@ -1839,7 +1570,6 @@ def dispatch_agent_action(
 ) -> dict[str, Any]:
     action = normalize_action(assessment.get("action"))
     turn_number = next_turn_number(history)
-    runway_model = agent_runway_model(agent)
     selected_turn_number = assessment.get("selected_turn")
     selected_turn = None
     if selected_turn_number is not None:
@@ -1850,142 +1580,111 @@ def dispatch_agent_action(
     if selected_turn is None and recent_turns:
         selected_turn = recent_turns[-1]
 
-    if action == "Initiate":
-        prompt_json = build_initiate_prompt_json(agent, recent_turns, assessment, schema_template, turn_number, history)
-        category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
-        prompt_json["category"] = category
-        reference_images = build_runway_reference_images(
-            agent,
-            prompt_json=prompt_json,
-            history=history,
-            model=runway_model,
-        )
-        prompt_text = build_runway_prompt_text(
-            prompt_json,
-            model=runway_model,
-            agent=agent,
-            assessment=assessment,
-            recent_turns=recent_turns,
-            action=action,
-            reference_images=reference_images,
-        )
-        print(f"[dispatch] Initiate: model={runway_model} prompt_len={len(prompt_text)}", flush=True)
-        aspect_ratio = extract_aspect_ratio(prompt_json)
-        runway_task = runway_create_text_to_image(
-            prompt_text,
-            model=runway_model,
-            reference_images=reference_images,
-            aspect_ratio=aspect_ratio,
-        )
-        task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
-        if not task_id:
-            raise RuntimeError(f"No task ID returned from Runway. Response: {runway_task}")
-        print(f"[dispatch] Runway task created: {task_id}", flush=True)
+    if action in ("Initiate", "Pivot"):
+        from models import get_model
+        raw_model = agent.get("selected_model") or agent.get("model") or "gpt_image_2"
+        model_handler = get_model(raw_model)
+        runway_model = model_handler.get_canonical_name(raw_model)
 
-        completed_task = poll_runway_task(task_id)
-        raw_image_url = runway_image_url(completed_task)
-
-        image_id = new_image_id("thread", str(agent.get("id", "agent")), turn_number)
-        thread_id = image_id
-        image_webp = save_webp_image(raw_image_url, image_id)
-        data_volume.commit()
-
-        turn_record = record_generated_turn(
-            history,
-            agent=agent,
-            assessment=assessment,
-            category=category,
-            prompt_json=prompt_json,
-            prompt_text=prompt_text,
-            image_url=raw_image_url,
-            image_webp=image_webp,
-            image_id=image_id,
-            parent_image_id=None,
-            thread_id=thread_id,
-            action=action,
-            runway_model=runway_model,
-        )
-        return {
-            "status": "completed",
-            "action": action,
-            "task_id": task_id,
-            "image_id": image_id,
-            "turn": turn_record.get("turn"),
-        }
-
-    if action == "Pivot":
-        if selected_turn is None:
-            raise RuntimeError("Pivot requested but no recent post was available to refine.")
-        prompt_json = build_pivot_prompt_json(agent, selected_turn, recent_turns, assessment, schema_template, turn_number, history)
-        category = str(selected_turn.get("category") or "")
-        if not category:
-            thread = find_thread_for_image(history, str(selected_turn.get("image_id", "")))
-            category = str(thread.get("category") if thread else "")
-        if not category:
+        if action == "Initiate":
+            prompt_json = build_initiate_prompt_json(agent, recent_turns, assessment, schema_template, turn_number, history)
             category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
-        prompt_json["category"] = category
-        reference_images = build_runway_reference_images(
-            agent,
-            prompt_json=prompt_json,
-            selected_turn=selected_turn,
-            history=history,
-            model=runway_model,
-        )
-        prompt_text = build_runway_prompt_text(
-            prompt_json,
-            model=runway_model,
-            agent=agent,
-            assessment=assessment,
-            recent_turns=recent_turns,
-            action=action,
-            selected_turn=selected_turn,
-            reference_images=reference_images,
-        )
-        print(f"[dispatch] Pivot: model={runway_model} prompt_len={len(prompt_text)}", flush=True)
-        aspect_ratio = extract_aspect_ratio(prompt_json)
-        runway_task = runway_create_text_to_image(
-            prompt_text,
-            model=runway_model,
-            reference_images=reference_images,
-            aspect_ratio=aspect_ratio,
-        )
-        task_id = str(runway_task.get("id") or runway_task.get("taskId") or runway_task.get("task_id") or "")
-        if not task_id:
-            raise RuntimeError(f"No task ID returned from Runway. Response: {runway_task}")
-        print(f"[dispatch] Runway task created: {task_id}", flush=True)
+            prompt_json["category"] = category
 
-        completed_task = poll_runway_task(task_id)
-        raw_image_url = runway_image_url(completed_task)
+            task_id, raw_image_url, prompt_text = model_handler.generate(
+                prompt_json=prompt_json,
+                reference_images=[],
+                action=action,
+                agent=agent,
+                turn_number=turn_number,
+                recent_turns=recent_turns,
+                assessment=assessment,
+            )
 
-        parent_image_id = str(selected_turn.get("image_id", ""))
-        thread = find_thread_for_image(history, parent_image_id)
-        thread_id = str(thread.get("thread_id")) if thread and thread.get("thread_id") else parent_image_id
-        image_id = new_image_id("reply", str(agent.get("id", "agent")), turn_number)
-        image_webp = save_webp_image(raw_image_url, image_id)
-        data_volume.commit()
+            image_id = new_image_id("thread", str(agent.get("id", "agent")), turn_number)
+            thread_id = image_id
+            
+            aspect_ratio = extract_aspect_ratio(prompt_json)
+            image_webp = model_handler.save_media(raw_image_url, image_id, aspect_ratio=aspect_ratio)
+            data_volume.commit()
 
-        turn_record = record_generated_turn(
-            history,
-            agent=agent,
-            assessment=assessment,
-            category=category or "Illustration",
-            prompt_json=prompt_json,
-            prompt_text=prompt_text,
-            image_url=raw_image_url,
-            image_webp=image_webp,
-            image_id=image_id,
-            parent_image_id=parent_image_id,
-            thread_id=thread_id,
-            action=action,
-            runway_model=runway_model,
-        )
-        return {
-            "status": "completed",
-            "action": action,
-            "task_id": task_id,
-            "image_id": image_id,
-            "turn": turn_record.get("turn"),
-        }
+            turn_record = record_generated_turn(
+                history,
+                agent=agent,
+                assessment=assessment,
+                category=category,
+                prompt_json=prompt_json,
+                prompt_text=prompt_text,
+                image_url=raw_image_url,
+                image_webp=image_webp,
+                image_id=image_id,
+                parent_image_id=None,
+                thread_id=thread_id,
+                action=action,
+                runway_model=runway_model,
+            )
+            return {
+                "status": "completed",
+                "action": action,
+                "task_id": task_id,
+                "image_id": image_id,
+                "turn": turn_record.get("turn"),
+            }
+
+        else:  # Pivot
+            if selected_turn is None:
+                raise RuntimeError("Pivot requested but no recent post was available to refine.")
+            prompt_json = build_pivot_prompt_json(agent, selected_turn, recent_turns, assessment, schema_template, turn_number, history)
+            category = str(selected_turn.get("category") or "")
+            if not category:
+                thread = find_thread_for_image(history, str(selected_turn.get("image_id", "")))
+                category = str(thread.get("category") if thread else "")
+            if not category:
+                category = classify_initiation_category(agent=agent, assessment=assessment, prompt_json=prompt_json)
+            prompt_json["category"] = category
+
+            task_id, raw_image_url, prompt_text = model_handler.generate(
+                prompt_json=prompt_json,
+                reference_images=[],
+                action=action,
+                agent=agent,
+                turn_number=turn_number,
+                recent_turns=recent_turns,
+                assessment=assessment,
+            )
+
+            parent_image_id = str(selected_turn.get("image_id", ""))
+            thread = find_thread_for_image(history, parent_image_id)
+            thread_id = str(thread.get("thread_id")) if thread and thread.get("thread_id") else parent_image_id
+            image_id = new_image_id("reply", str(agent.get("id", "agent")), turn_number)
+
+            aspect_ratio = extract_aspect_ratio(prompt_json)
+            image_webp = model_handler.save_media(raw_image_url, image_id, aspect_ratio=aspect_ratio)
+            data_volume.commit()
+
+            turn_record = record_generated_turn(
+                history,
+                agent=agent,
+                assessment=assessment,
+                category=category or "Illustration",
+                prompt_json=prompt_json,
+                prompt_text=prompt_text,
+                image_url=raw_image_url,
+                image_webp=image_webp,
+                image_id=image_id,
+                parent_image_id=parent_image_id,
+                thread_id=thread_id,
+                action=action,
+                runway_model=runway_model,
+            )
+            return {
+                "status": "completed",
+                "action": action,
+                "task_id": task_id,
+                "image_id": image_id,
+                "turn": turn_record.get("turn"),
+            }
+
     if selected_turn is None:
         raise RuntimeError("Critique requested but no recent post was available to comment on.")
 
@@ -2164,6 +1863,7 @@ def rebuild_history_graph(history: dict[str, Any]) -> None:
     secrets=[
         modal.Secret.from_name("google-api-secret"),
         modal.Secret.from_name("runway-secret"),
+        modal.Secret.from_dotenv(),
     ],
     timeout=60 * 30,
 )
@@ -2321,11 +2021,25 @@ def status_endpoint() -> dict[str, Any]:
 def get_image(id: str) -> Any:
     from fastapi.responses import FileResponse
     data_volume.reload()
-    if not id.endswith(".webp"):
-        id += ".webp"
-    path = IMAGE_DIR / id
-    if path.exists():
-        return FileResponse(path, media_type="image/webp")
+    
+    mp4_path = IMAGE_DIR / f"{id}.mp4"
+    if mp4_path.exists():
+        return FileResponse(mp4_path, media_type="video/mp4")
+        
+    clean_id = id
+    for ext in (".webp", ".mp4", ".png", ".jpg", ".jpeg"):
+        if clean_id.endswith(ext):
+            clean_id = clean_id[:-len(ext)]
+            break
+            
+    mp4_path = IMAGE_DIR / f"{clean_id}.mp4"
+    if mp4_path.exists():
+        return FileResponse(mp4_path, media_type="video/mp4")
+        
+    webp_path = IMAGE_DIR / f"{clean_id}.webp"
+    if webp_path.exists():
+        return FileResponse(webp_path, media_type="image/webp")
+        
     return {"error": "Not found", "status_code": 404}
 
 @app.function(
@@ -2334,6 +2048,7 @@ def get_image(id: str) -> Any:
     secrets=[
         modal.Secret.from_name("google-api-secret"),
         modal.Secret.from_name("runway-secret"),
+        modal.Secret.from_dotenv(),
     ],
     timeout=120,
 )
@@ -2765,6 +2480,11 @@ def _heartbeat_interval_seconds(times_per_day: int) -> float:
 @app.function(
     image=image,
     volumes={"/data": data_volume},
+    secrets=[
+        modal.Secret.from_name("google-api-secret"),
+        modal.Secret.from_name("runway-secret"),
+        modal.Secret.from_dotenv(),
+    ],
     timeout=60 * 15,  # 15 min — enough for multi-agent orchestration
     schedule=modal.Cron("*/30 * * * *"),  # Every 30 minutes to support high-frequency heartbeat targets
 )

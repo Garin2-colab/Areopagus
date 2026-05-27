@@ -277,20 +277,36 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
 
                       {/* Image Thumbnail */}
                       <td className="px-3 py-3">
-                        <div
-                          onClick={() => onImageClick?.(turn.image_url)}
-                          className="relative h-12 w-12 overflow-hidden rounded-lg border border-[#D8D4CC] bg-[#F5F2EB] cursor-zoom-in hover:border-[#858076] transition-colors"
-                          title="Click to enlarge"
-                        >
-                          <Image
-                            src={turn.image_url}
-                            alt={`Turn ${turn.turn}`}
-                            fill
-                            sizes="48px"
-                            className="object-cover transition-transform duration-300 hover:scale-105"
-                            unoptimized
-                          />
-                        </div>
+                        {(() => {
+                          const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
+                          return (
+                            <div
+                              onClick={() => onImageClick?.(turn.image_url)}
+                              className="relative h-12 w-12 overflow-hidden rounded-lg border border-[#D8D4CC] bg-[#F5F2EB] cursor-zoom-in hover:border-[#858076] transition-colors"
+                              title="Click to enlarge"
+                            >
+                              {isVideo ? (
+                                <video
+                                  src={turn.image_url}
+                                  className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                                  muted
+                                  playsInline
+                                  autoPlay
+                                  loop
+                                />
+                              ) : (
+                                <Image
+                                  src={turn.image_url}
+                                  alt={`Turn ${turn.turn}`}
+                                  fill
+                                  sizes="48px"
+                                  className="object-cover transition-transform duration-300 hover:scale-105"
+                                  unoptimized
+                                />
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Agent Badge */}

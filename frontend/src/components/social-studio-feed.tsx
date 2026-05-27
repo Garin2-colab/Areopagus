@@ -114,25 +114,41 @@ function CompactRootPost({
       className="group block cursor-pointer border-b border-[#D8D4CC]/40 p-4 transition-colors hover:bg-[#F5F2EB]/50 md:p-5 last:border-b-0"
     >
       <article className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        {/* Small Image */}
-        <div
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onImageClick?.(turn.image_url);
-          }}
-          className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC] bg-[#F5F2EB] sm:w-[120px] cursor-zoom-in hover:border-[#858076] transition-colors"
-          title="Click to enlarge"
-        >
-          <Image
-            src={turn.image_url}
-            alt={`Post ${turn.image_id}`}
-            fill
-            sizes="(max-width: 640px) 100vw, 120px"
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
-            unoptimized
-          />
-        </div>
+        {/* Small Image / Video */}
+        {(() => {
+          const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
+          return (
+            <div
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onImageClick?.(turn.image_url);
+              }}
+              className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC] bg-[#F5F2EB] sm:w-[120px] cursor-zoom-in hover:border-[#858076] transition-colors"
+              title="Click to enlarge"
+            >
+              {isVideo ? (
+                <video
+                  src={turn.image_url}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                  muted
+                  playsInline
+                  autoPlay
+                  loop
+                />
+              ) : (
+                <Image
+                  src={turn.image_url}
+                  alt={`Post ${turn.image_id}`}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 120px"
+                  className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                  unoptimized
+                />
+              )}
+            </div>
+          );
+        })()}
 
         {/* Details */}
         <div className="flex flex-1 flex-col justify-center">
@@ -256,22 +272,40 @@ function ThreadPostEntry({
           )}
         </div>
 
-        {/* Image */}
-        <div
-          onClick={() => onImageClick?.(turn.image_url)}
-          className={`overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] cursor-zoom-in hover:border-[#858076] transition-colors ${
-            isRoot ? "w-full max-w-3xl rounded-2xl" : "w-[140px] md:w-[240px] rounded-xl"
-          }`}
-          title="Click to enlarge"
-        >
-          <img
-            src={turn.image_url}
-            alt={`Post ${turn.image_id}`}
-            className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${
-              isRoot ? "max-h-[80vh]" : ""
-            }`}
-          />
-        </div>
+        {/* Image / Video */}
+        {(() => {
+          const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
+          return (
+            <div
+              onClick={() => onImageClick?.(turn.image_url)}
+              className={`overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] cursor-zoom-in hover:border-[#858076] transition-colors ${
+                isRoot ? "w-full max-w-3xl rounded-2xl" : "w-[140px] md:w-[240px] rounded-xl"
+              }`}
+              title="Click to enlarge"
+            >
+              {isVideo ? (
+                <video
+                  src={turn.image_url}
+                  muted
+                  playsInline
+                  autoPlay
+                  loop
+                  className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${
+                    isRoot ? "max-h-[80vh]" : ""
+                  }`}
+                />
+              ) : (
+                <img
+                  src={turn.image_url}
+                  alt={`Post ${turn.image_id}`}
+                  className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${
+                    isRoot ? "max-h-[80vh]" : ""
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })()}
 
         {/* Text */}
         <p className={`mt-4 text-[#44423E] font-medium ${isRoot ? "text-base leading-7 max-w-3xl" : "text-sm leading-6 max-w-2xl"}`}>

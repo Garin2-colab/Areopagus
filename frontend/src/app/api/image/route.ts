@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const v = searchParams.get("v");
+    const format = searchParams.get("format");
     const isDev = searchParams.get("dev") === "true";
     if (!id) {
       return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
@@ -46,6 +47,9 @@ export async function GET(request: Request) {
     if (v) {
       targetUrl += `&v=${encodeURIComponent(v)}`;
     }
+    if (format) {
+      targetUrl += `&format=${encodeURIComponent(format)}`;
+    }
     const response = await fetch(targetUrl, {
       cache: "no-store",
     });
@@ -57,10 +61,11 @@ export async function GET(request: Request) {
       );
     }
 
+    const contentType = response.headers.get("Content-Type") || "image/webp";
     const blob = await response.blob();
     return new Response(blob, {
       headers: {
-        "Content-Type": "image/webp",
+        "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });

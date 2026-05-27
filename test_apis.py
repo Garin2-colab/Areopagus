@@ -25,6 +25,10 @@ def runway_api_key() -> str:
     return os.environ["RUNWAYML_API_SECRET"].strip()
 
 
+def userapi_key() -> str:
+    return os.environ.get("USERAPI_API_KEY", "").strip()
+
+
 def request_json(url: str, *, method: str = "GET", payload: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -85,11 +89,48 @@ def runway_organization_balance() -> dict[str, Any]:
     )
 
 
+def userapi_hello() -> dict[str, Any]:
+    api_key = userapi_key()
+    if not api_key:
+        return {"error": "USERAPI_API_KEY environment variable is missing."}
+    
+    url = "https://api.userapi.ai/midjourney/v2/status?hash=invalid-hash-test"
+    try:
+        res = request_json(url, headers={"api-key": api_key})
+        return {"status": "authenticated", "response": res}
+    except Exception as exc:
+        err_msg = str(exc)
+        if "401" in err_msg or "403" in err_msg or "unauthorized" in err_msg.lower():
+            raise RuntimeError(f"UserAPI unauthorized. Key prefix: {api_key[:5] if api_key else ''}... Error: {err_msg}")
+        return {"status": "authenticated", "note": "Key is authenticated, returned expected error for dummy hash.", "error_details": err_msg}
+
+
+def kie_key() -> str:
+    return os.environ.get("KIE_API_KEY", "").strip() or os.environ.get("KIE_TOKEN", "").strip()
+
+
+def kie_hello() -> dict[str, Any]:
+    api_key = kie_key()
+    if not api_key:
+        return {"error": "KIE_API_KEY environment variable is missing."}
+    
+    url = "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=invalid-task-id-test"
+    try:
+        res = request_json(url, headers={"Authorization": f"Bearer {api_key}"})
+        return {"status": "authenticated", "response": res}
+    except Exception as exc:
+        err_msg = str(exc)
+        if "401" in err_msg or "403" in err_msg or "unauthorized" in err_msg.lower():
+            raise RuntimeError(f"Kie API unauthorized. Key prefix: {api_key[:5] if api_key else ''}... Error: {err_msg}")
+        return {"status": "authenticated", "note": "Key is authenticated, returned expected error for dummy task.", "error_details": err_msg}
+
+
 @app.function(
     image=image,
     secrets=[
         modal.Secret.from_name("google-api-secret"),
         modal.Secret.from_name("runway-secret"),
+        modal.Secret.from_dotenv(),
     ],
     timeout=60 * 10,
 )
@@ -105,6 +146,16 @@ def ping_apis() -> dict[str, Any]:
         result["runway_organization"] = runway_organization_balance()
     except Exception as exc:  # pragma: no cover - surfaced to the caller
         result["runway_error"] = str(exc)
+
+    try:
+        result["userapi_status"] = userapi_hello()
+    except Exception as exc:
+        result["userapi_error"] = str(exc)
+
+    try:
+        result["kie_status"] = kie_hello()
+    except Exception as exc:
+        result["kie_error"] = str(exc)
 
     return result
 
