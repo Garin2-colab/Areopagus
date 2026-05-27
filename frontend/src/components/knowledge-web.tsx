@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 
 type GraphNode =
@@ -199,11 +201,42 @@ export function KnowledgeWeb({
     [turns, threads, inspiration]
   );
   
+  const router = useRouter();
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.kind === "image" && node.id === selectedTurnId) ?? null,
     [nodes, selectedTurnId]
   );
+
+  const connectedImages = useMemo(() => {
+    if (!hoverNode || hoverNode.kind !== "keyword") return [];
+    const keyword = hoverNode.id;
+    const list: { id: string; url: string; label: string; kind: "image" | "inspiration" }[] = [];
+
+    for (const turn of turns) {
+      if (turn.keywords && turn.keywords.includes(keyword)) {
+        list.push({
+          id: turn.image_id,
+          url: turn.image_url,
+          label: `Turn ${turn.turn}`,
+          kind: "image"
+        });
+      }
+    }
+
+    for (const item of inspiration) {
+      if (item.keywords && item.keywords.includes(keyword)) {
+        list.push({
+          id: item.id,
+          url: item.image_url,
+          label: `Inspiration`,
+          kind: "inspiration"
+        });
+      }
+    }
+
+    return list;
+  }, [hoverNode, turns, inspiration]);
 
   // Measure container
   useEffect(() => {
@@ -451,7 +484,9 @@ export function KnowledgeWeb({
             }}
             onNodeClick={(node: unknown) => {
               const typed = node as GraphNode;
-              if (typed.kind === "image" || typed.kind === "inspiration") {
+              if (typed.kind === "image") {
+                router.push(`/post/${typed.id}`);
+              } else if (typed.kind === "inspiration") {
                 onImageSelect(typed.id, typed.kind);
               }
             }}
@@ -469,45 +504,102 @@ export function KnowledgeWeb({
           <div className="rounded-2xl border border-[#D8D4CC]/60 bg-white p-4">
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Detail</p>
             {hoverNode?.kind === "image" ? (
-              <div className="mt-3 grid gap-4 md:grid-cols-[160px_1fr]">
-                <div className="aspect-square border border-[#D8D4CC] bg-[#FAF9F6] p-4 text-[#252422]">
-                  <div className="flex h-full flex-col justify-between">
-                    <span className="text-xs uppercase tracking-[0.3em] text-[#858076] font-semibold">{hoverNode.label}</span>
-                    <div className="space-y-2">
-                      <div className="text-4xl font-extrabold text-[#252422]">{hoverNode.turn}</div>
-                      <div className="h-px bg-[#D8D4CC]" />
-                    </div>
-                  </div>
+              <div className="mt-3 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="w-24 h-24 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] flex-shrink-0 shadow-sm">
+                  <img
+                    src={hoverNode.imageUrl}
+                    alt={hoverNode.label}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <div className="space-y-2">
-                  <p className="break-all text-sm text-[#44423E] font-medium">{hoverNode.imageUrl}</p>
-                  <p className="text-sm leading-6 text-[#858076]">
-                    Clicking it jumps back to the Micro tab and scrolls the strip to the same turn.
+                <div className="space-y-1 text-center sm:text-left flex-1 min-w-0">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="text-lg font-bold text-[#252422]">{hoverNode.label}</span>
+                    <span className="px-2 py-0.5 text-[10px] uppercase font-semibold tracking-wider rounded-full bg-[#FAF9F6] border border-[#D8D4CC] text-[#858076]">
+                      Image Turn
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#858076] break-all max-w-lg font-mono">
+                    {hoverNode.imageUrl}
+                  </p>
+                  <p className="text-sm leading-6 text-[#858076] mt-2">
+                    Clicking opens the detail page for this post's thread.
                   </p>
                 </div>
               </div>
             ) : hoverNode?.kind === "keyword" ? (
-              <p className="mt-3 text-sm leading-6 text-[#44423E]">
-                {hoverNode.label} connects the image turns that share a conceptual thread in the debate history.
-              </p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-[#252422]">{hoverNode.label}</span>
+                  <span className="px-2 py-0.5 text-[10px] uppercase font-semibold tracking-wider rounded-full bg-zinc-100 border border-zinc-200 text-zinc-600">
+                    Keyword
+                  </span>
+                </div>
+                {connectedImages.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-[#858076]">
+                      Connected Concepts ({connectedImages.length})
+                    </p>
+                    <div className="flex flex-wrap gap-4 pt-1">
+                      {connectedImages.map((img) => (
+                        <div
+                          key={img.id}
+                          className="group relative cursor-pointer"
+                          onClick={() => {
+                            if (img.kind === "image") {
+                              router.push(`/post/${img.id}`);
+                            } else {
+                              onImageSelect(img.id, "inspiration");
+                            }
+                          }}
+                        >
+                          <div className={cn(
+                            "w-16 h-16 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] shadow-sm transition-all duration-300 hover:scale-110 hover:shadow-md hover:border-[#252422]",
+                            img.kind === "inspiration" && "border-[#D45113]/55 hover:border-[#D45113]"
+                          )}>
+                            <img
+                              src={img.url}
+                              alt={img.label}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 scale-0 transition-transform duration-200 group-hover:scale-100 bg-[#252422] text-[#FAF9F6] text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10 shadow">
+                            {img.label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#858076]">
+                    This keyword is not connected to any images in the active web.
+                  </p>
+                )}
+              </div>
             ) : hoverNode?.kind === "comment" ? (
               <p className="mt-3 text-sm leading-6 text-[#44423E]">
                 <span className="font-semibold text-[#252422]">{hoverNode.label}</span>: {hoverNode.text}
               </p>
             ) : hoverNode?.kind === "inspiration" ? (
-              <div className="mt-3 grid gap-4 md:grid-cols-[160px_1fr]">
-                <div className="aspect-square border border-[#D8D4CC] bg-[#FAF9F6] p-4 text-[#252422]">
-                  <div className="flex h-full flex-col justify-between">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#D45113] font-bold">Inspiration</span>
-                    <div className="space-y-2">
-                      <div className="text-sm font-semibold truncate text-[#252422]">{hoverNode.id}</div>
-                      <div className="h-px bg-[#D8D4CC]" />
-                    </div>
-                  </div>
+              <div className="mt-3 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="w-24 h-24 rounded-full overflow-hidden border border-[#D45113]/50 bg-[#FAF9F6] flex-shrink-0 shadow-sm">
+                  <img
+                    src={hoverNode.imageUrl}
+                    alt={hoverNode.label}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <div className="space-y-2">
-                  <p className="break-all text-xs font-mono text-[#44423E]">{hoverNode.imageUrl}</p>
-                  <p className="text-sm leading-6 text-[#858076]">
+                <div className="space-y-1 text-center sm:text-left flex-1 min-w-0">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="text-lg font-bold text-[#252422]">{hoverNode.id}</span>
+                    <span className="px-2 py-0.5 text-[10px] uppercase font-semibold tracking-wider rounded-full bg-[#D45113]/10 border border-[#D45113]/25 text-[#D45113]">
+                      Inspiration
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#858076] break-all max-w-lg font-mono">
+                    {hoverNode.imageUrl}
+                  </p>
+                  <p className="text-sm leading-6 text-[#858076] mt-2">
                     This is a user-uploaded reference inspiration image.
                   </p>
                 </div>
