@@ -21,6 +21,7 @@ import { useStudioStatus } from "@/lib/useStudioStatus";
 
 export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [unsavedAgentsList, setUnsavedAgentsList] = useState<string[]>([]);
   const [view, setView] = useState<"micro" | "macro" | "inspiration" | "table">("micro");
   const [pinInput, setPinInput] = useState("");
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -207,7 +208,21 @@ export default function Home() {
         </div>
       </Tabs>
 
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <Sheet
+        open={settingsOpen}
+        onOpenChange={(open) => {
+          if (!open && unsavedAgentsList.length > 0) {
+            const agentNames = unsavedAgentsList.join(", ");
+            const confirmClose = window.confirm(
+              `You haven't saved the settings for: ${agentNames}.\nAre you sure you want to continue without saving?`
+            );
+            if (!confirmClose) {
+              return;
+            }
+          }
+          setSettingsOpen(open);
+        }}
+      >
         <SheetContent side="right" className="overflow-y-auto sm:max-w-[560px]">
           <SheetHeader className="mb-4 px-6 pt-6">
             <SheetTitle>Agent Management</SheetTitle>
@@ -258,7 +273,13 @@ export default function Home() {
             </div>
           ) : (
             <div className="px-4 pb-6">
-              <ManagementSidebar onPulseStart={startPolling} status={status} />
+              <ManagementSidebar
+                onPulseStart={startPolling}
+                status={status}
+                onUnsavedChangeStateChange={(hasUnsaved, unsavedNames) => {
+                  setUnsavedAgentsList(unsavedNames);
+                }}
+              />
             </div>
           )}
         </SheetContent>

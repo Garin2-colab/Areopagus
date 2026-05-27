@@ -167,15 +167,18 @@ function nextAgentIndex(agents: AgentRecord[]) {
 type ManagementSidebarProps = {
   onPulseStart?: () => void | Promise<void>;
   status?: StudioStatus | null;
+  onUnsavedChangeStateChange?: (hasUnsaved: boolean, unsavedAgentNames: string[]) => void;
 };
 
-export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarProps) {
+export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateChange }: ManagementSidebarProps) {
   const nextAgentNumber = useRef(nextAgentIndex(DEFAULT_AGENTS));
   const agentsRef = useRef(DEFAULT_AGENTS);
   const [agents, setAgents] = useState<AgentRecord[]>(DEFAULT_AGENTS);
+  const [savedAgents, setSavedAgents] = useState<AgentRecord[]>(DEFAULT_AGENTS);
   const [agentsLoaded, setAgentsLoaded] = useState(false);
   const [pulsePending, setPulsePending] = useState(false);
   const [pulseMessage, setPulseMessage] = useState<string | null>(null);
+  const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const storedAgents = loadStoredAgents();
@@ -183,36 +186,74 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
       nextAgentNumber.current = nextAgentIndex(storedAgents);
       agentsRef.current = storedAgents;
       setAgents(storedAgents);
+      setSavedAgents(storedAgents);
+    } else {
+      setSavedAgents(DEFAULT_AGENTS);
     }
     setAgentsLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!agentsLoaded) return;
-    agentsRef.current = agents;
-    saveAgents(agents);
-  }, [agents, agentsLoaded]);
-
-  useEffect(() => {
-    return () => {
-      if (agentsLoaded) {
-        saveAgents(agentsRef.current);
+    
+    const unsavedNames: string[] = [];
+    agents.forEach((current) => {
+      const saved = savedAgents.find((s) => s.id === current.id);
+      if (!saved) {
+        unsavedNames.push(current.name || "New Agent");
+      } else {
+        const isChanged =
+          current.name !== saved.name ||
+          current.persona !== saved.persona ||
+          current.model !== saved.model ||
+          current.heartbeatMinutes !== saved.heartbeatMinutes ||
+          JSON.stringify(current.referenceImages || []) !== JSON.stringify(saved.referenceImages || []);
+        if (isChanged) {
+          unsavedNames.push(current.name || saved.name);
+        }
       }
-    };
-  }, [agentsLoaded]);
+    });
+
+    savedAgents.forEach((saved) => {
+      if (!agents.some((current) => current.id === saved.id)) {
+        unsavedNames.push(`${saved.name} (Deleted)`);
+      }
+    });
+
+    onUnsavedChangeStateChange?.(unsavedNames.length > 0, unsavedNames);
+  }, [agents, savedAgents, agentsLoaded, onUnsavedChangeStateChange]);
 
   const commitAgents = (updater: (current: AgentRecord[]) => AgentRecord[]) => {
     setAgents((current) => {
       const nextAgents = updater(current);
       agentsRef.current = nextAgents;
-      saveAgents(nextAgents);
       return nextAgents;
     });
   };
 
-  const saveCurrentAgents = () => {
-    const payload = saveAgents(agentsRef.current);
-    setPulseMessage(`Saved ${payload.personaCount} personas.`);
+  const hasUnsavedChanges = (agentId: string) => {
+    const current = agents.find((a) => a.id === agentId);
+    const saved = savedAgents.find((a) => a.id === agentId);
+    if (!current) return false;
+    if (!saved) return true;
+    return (
+      current.name !== saved.name ||
+      current.persona !== saved.persona ||
+      current.model !== saved.model ||
+      current.heartbeatMinutes !== saved.heartbeatMinutes ||
+      JSON.stringify(current.referenceImages || []) !== JSON.stringify(saved.referenceImages || [])
+    );
+  };
+
+  const saveAgent = (agentId: string) => {
+    setSavedAgents(agents);
+    agentsRef.current = agents;
+    const payload = saveAgents(agents);
+
+    setSavedStatus((prev) => ({ ...prev, [agentId]: true }));
+    setTimeout(() => {
+      setSavedStatus((prev) => ({ ...prev, [agentId]: false }));
+    }, 3000);
   };
 
   const addAgent = () => {
@@ -230,7 +271,27 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
   const pulse = async () => {
     setPulsePending(true);
     setPulseMessage(null);
-    saveAgents(agentsRef.current);
+
+    // Save all agents on pulse
+    setSavedAgents(agents);
+    agentsRef.current = agents;
+    saveAgents(agents);
+
+    // Flash saved status on all active agents
+    const nextSavedStatus: Record<string, boolean> = {};
+    agents.forEach((a) => {
+      nextSavedStatus[a.id] = true;
+    });
+    setSavedStatus(nextSavedStatus);
+    setTimeout(() => {
+      setSavedStatus((prev) => {
+        const reset: Record<string, boolean> = {};
+        Object.keys(prev).forEach((k) => {
+          reset[k] = false;
+        });
+        return reset;
+      });
+    }, 3000);
 
     try {
       await onPulseStart?.();
@@ -382,7 +443,12 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
               <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/80 bg-white shadow-none">
                 <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
+                      {hasUnsavedChanges(agent.id) && (
+                        <span className="text-[9px] uppercase tracking-wider text-[#D45113] font-bold bg-[#D45113]/10 px-1.5 py-0.5 rounded animate-pulse">Unsaved</span>
+                      )}
+                    </div>
                     <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
                   </div>
                   <Button
@@ -477,7 +543,7 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
 
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Model Selection & Save</p>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <select
                         value={agent.model}
                         onChange={(event) => updateAgent(agent.id, { model: event.target.value as ModelName })}
@@ -490,12 +556,17 @@ export function ManagementSidebar({ onPulseStart, status }: ManagementSidebarPro
                       </select>
                       <Button
                         type="button"
-                        onClick={saveCurrentAgents}
+                        onClick={() => saveAgent(agent.id)}
                         className="rounded-2xl border border-[#D8D4CC] bg-[#252422] px-4 text-[#FAF9F6] hover:bg-black hover:text-white"
                       >
                         <Save className="mr-2 h-4 w-4" />
                         Save
                       </Button>
+                      {savedStatus[agent.id] && (
+                        <span className="text-xs font-semibold text-green-600 animate-in fade-in-50 duration-300">
+                          Saved!
+                        </span>
+                      )}
                     </div>
                   </div>
 
