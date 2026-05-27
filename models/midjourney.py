@@ -367,22 +367,8 @@ Return JSON only:
         grid_bytes, mime_type = fetch_image_bytes(grid_url)
         choice = self.midjourney_select_best_image(grid_url, grid_bytes, mime_type, agent, prompt_json, action)
         print(f"[midjourney] Gemini selected quadrant: {choice}", flush=True)
-        
-        res_upscale = self.userapi_request("POST", "/midjourney/v2/upscale", {"hash": task_id, "choice": choice})
-        upscale_task_id = res_upscale.get("hash") or res_upscale.get("jobid") or res_upscale.get("jobId")
-        if not upscale_task_id:
-            raise RuntimeError(f"No hash returned from userapi.ai upscale call: {res_upscale}")
-        print(f"[midjourney] Upscale task created: {upscale_task_id}", flush=True)
-        
-        completed_upscale = self.poll_userapi_task(upscale_task_id)
-        raw_image_url = completed_upscale.get("result", {}).get("url")
-        if not raw_image_url:
-            raw_image_url = completed_upscale.get("result", {}).get("proxy_url")
-        if not raw_image_url:
-            raise RuntimeError(f"No upscale image URL in UserAPI result: {completed_upscale}")
-        print(f"[midjourney] Completed upscale URL: {raw_image_url}", flush=True)
 
-        return upscale_task_id, raw_image_url, prompt_text
+        return task_id, f"{grid_url}#{choice}", prompt_text
 
     def save_media(
         self,
@@ -390,5 +376,68 @@ Return JSON only:
         image_id: str,
         aspect_ratio: str,
     ) -> Dict[str, Any]:
-        from orchestrator import save_webp_image
+        from orchestrator import save_webp_image, fetch_image_bytes, IMAGE_DIR, WEBP_QUALITY, get_image
+        from io import BytesIO
+        from PIL import Image
+
+        if "#" in raw_media_url:
+            grid_url, choice = raw_media_url.split("#", 1)
+            print(f"[midjourney] Slicing quadrant {choice} from grid image: {grid_url}", flush=True)
+            try:
+                grid_bytes, _ = fetch_image_bytes(grid_url)
+                IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+                webp_path = IMAGE_DIR / f"{image_id}.webp"
+
+                with Image.open(BytesIO(grid_bytes)) as img:
+                    w, h = img.size
+                    mid_x = w // 2
+                    mid_y = h // 2
+
+                    if choice == "U1":
+                        box = (0, 0, mid_x, mid_y)
+                    elif choice == "U2":
+                        box = (mid_x, 0, w, mid_y)
+                    elif choice == "U3":
+                        box = (0, mid_y, mid_x, h)
+                    elif choice == "U4":
+                        box = (mid_x, mid_y, w, h)
+                    else:
+                        box = (0, 0, w, h)
+
+                    cropped = img.crop(box)
+                    cw, ch = cropped.size
+                    if cw > ch:
+                        target_w = 1080
+                        target_h = int(1080 * (ch / cw))
+                    else:
+                        target_h = 1080
+                        target_w = int(1080 * (cw / ch))
+
+                    converted = cropped.convert("RGB").resize((target_w, target_h), Image.Resampling.LANCZOS)
+                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                    width, height = converted.size
+
+                try:
+                    web_url = get_image.get_web_url()
+                except Exception:
+                    web_url = None
+
+                if not web_url:
+                    web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+
+                web_url = web_url.rstrip("/")
+
+                return {
+                    "path": str(webp_path),
+                    "url": f"{web_url}/?id={image_id}",
+                    "format": "webp",
+                    "quality": WEBP_QUALITY,
+                    "width": width,
+                    "height": height,
+                }
+            except Exception as e:
+                print(f"[midjourney] Error slicing grid image, falling back to full grid: {e}", flush=True)
+                return save_webp_image(grid_url, image_id)
+
         return save_webp_image(raw_media_url, image_id)
+
