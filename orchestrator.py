@@ -1587,6 +1587,8 @@ def dispatch_agent_action(
     schema_template: dict[str, Any],
 ) -> dict[str, Any]:
     action = normalize_action(assessment.get("action"))
+    agent_name = agent.get("name", agent.get("id", "Agent"))
+    print(f"[dispatch_agent_action] Dispatched action '{action}' for agent '{agent_name}' target_turn={assessment.get('selected_turn')}", flush=True)
     turn_number = next_turn_number(history)
     selected_turn_number = assessment.get("selected_turn")
     selected_turn = None
@@ -1924,6 +1926,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     scoring_nodes.extend(t.get("keywords", []))
                 update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name, active_nodes=scoring_nodes)
                 assessment = assess_agent_interest(agent, recent_turns)
+                print(f"[orchestrate] Assessment for '{agent_name}': {json.dumps(assessment, indent=2)}", flush=True)
 
                 # Build focused active_nodes for the selected action
                 selected_id = assessment.get("selected_image_id", "")
@@ -1943,6 +1946,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     recent_turns=recent_turns,
                     schema_template=schema_template,
                 )
+                print(f"[orchestrate] Completed action '{assessment.get('action')}' for agent '{agent_name}'. Result: {json.dumps(action_result, indent=2)}", flush=True)
                 update_studio_status(f"{agent_name} complete: {assessment.get('action')}", active=True, agent_name=agent_name, active_nodes=[])
                 recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
                 results.append(
