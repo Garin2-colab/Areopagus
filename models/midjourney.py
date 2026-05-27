@@ -393,13 +393,14 @@ Return JSON only:
                     mid_x = w // 2
                     mid_y = h // 2
 
-                    if choice == "U1":
+                    choice_str = str(choice).strip().upper()
+                    if choice_str in ("U1", "1"):
                         box = (0, 0, mid_x, mid_y)
-                    elif choice == "U2":
+                    elif choice_str in ("U2", "2"):
                         box = (mid_x, 0, w, mid_y)
-                    elif choice == "U3":
+                    elif choice_str in ("U3", "3"):
                         box = (0, mid_y, mid_x, h)
-                    elif choice == "U4":
+                    elif choice_str in ("U4", "4"):
                         box = (mid_x, mid_y, w, h)
                     else:
                         box = (0, 0, w, h)
