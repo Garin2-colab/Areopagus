@@ -2159,6 +2159,10 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             if updated_any:
                 save_history(history)
                 return {"ok": True, "message": f"Image {image_id} replaced successfully."}
+            
+            if image_id.startswith("ref_style_") or image_id.startswith("ref_"):
+                return {"ok": True, "message": f"Reference image {image_id} uploaded successfully."}
+                
             return {"ok": False, "error": "No matching turn found."}
 
         elif action == "delete_post":
