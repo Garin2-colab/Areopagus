@@ -8,9 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageLightbox } from "@/components/image-lightbox";
 import type { Thread } from "@/lib/history";
+import { cn } from "@/lib/utils";
 import {
   buildKeywordFrequency,
   formatTimestamp,
+  formatRelativeTime,
   getAgentName,
   getTurnCategory,
   type PostTurn
@@ -75,6 +77,22 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
 
   const totalPosts = turns.length;
 
+  // Find the top feed that has comments/replies within the last 24 hours
+  const highlightThreadId = useMemo(() => {
+    for (const thread of feedThreads) {
+      const counts = countCommentsAndReplies(thread);
+      const totalComments = counts.comments + counts.replies;
+      if (totalComments > 0) {
+        const lastActivityTime = new Date(thread.updated_at).getTime();
+        const hrs24Ms = 24 * 60 * 60 * 1000;
+        if (!isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms)) {
+          return thread.thread_id;
+        }
+      }
+    }
+    return null;
+  }, [feedThreads]);
+
   return (
     <Card className="overflow-hidden rounded-[2rem] border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
@@ -93,17 +111,25 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
         {feedThreads.map((thread) => {
           const counts = countCommentsAndReplies(thread);
           const totalComments = counts.comments + counts.replies;
+          const isHighlighted = thread.thread_id === highlightThreadId;
           return (
             <div
               key={thread.thread_id}
               id={`feed-post-${thread.root.turn.image_id}`}
-              className="overflow-hidden rounded-[1.6rem] border border-[#D8D4CC]/60 bg-white transition-all duration-300"
+              className={cn(
+                "overflow-hidden rounded-[1.6rem] transition-all duration-300 border bg-white",
+                isHighlighted
+                  ? "border-[#D45113] ring-1 ring-[#D45113]/50 shadow-md shadow-[#D45113]/10"
+                  : "border-[#D8D4CC]/60"
+              )}
             >
               <CompactRootPost
                 turn={thread.root.turn}
                 categoryFrequency={categoryFrequency}
                 onImageClick={onImageClick}
                 commentCount={totalComments}
+                lastActivityAt={thread.updated_at}
+                isHighlighted={isHighlighted}
               />
             </div>
           );
@@ -120,13 +146,17 @@ function CompactRootPost({
   categoryFrequency,
   onImageClick,
   commentCount = 0,
+  lastActivityAt,
+  isHighlighted = false,
 }: {
   turn: PostTurn;
   categoryFrequency: Map<string, number>;
   onImageClick?: (src: string) => void;
   commentCount?: number;
+  lastActivityAt?: string;
+  isHighlighted?: boolean;
 }) {
-  const timestamp = formatTimestamp(turn.created_at);
+  const timestamp = formatRelativeTime(lastActivityAt || turn.created_at);
   const category = getTurnCategory(turn, categoryFrequency);
   const agentName = getAgentName(turn);
   const agentId = turn.agent_name || turn.prompt_json?.subject?.type || "agent";
@@ -205,6 +235,11 @@ function CompactRootPost({
             <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#D45113] text-[10px] font-bold">
               {category}
             </Badge>
+            {isHighlighted && (
+              <Badge className="border-transparent bg-[#D45113] text-[#FAF9F6] text-[10px] font-bold uppercase tracking-wider animate-pulse hover:bg-[#D45113]">
+                Active Discussion
+              </Badge>
+            )}
             {turn.keywords.slice(0, 3).map((keyword) => (
               <span key={keyword} className="text-[10px] uppercase tracking-[0.1em] font-semibold text-[#858076]">
                 #{keyword.replace(/\s+/g, "")}
