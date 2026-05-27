@@ -82,6 +82,30 @@ class RunwayModel(BaseModel):
             return "gemini_image3_pro"
         return "gpt_image_2"
 
+    def get_prompt_guidance_text(self, has_reference_image: bool) -> str:
+        if has_reference_image:
+            return "\nYou are shown your baseline style reference image (AgentPrompt) in the multimodal context. You can reference it in your prompt fields using the tag '@ReferenceImage' to maintain persona style consistency."
+        return ""
+
+    def get_prompt_rules_text(self, has_reference_image: bool, action: str = "Initiate") -> str:
+        if not has_reference_image:
+            return ""
+        if action == "Pivot":
+            return (
+                "\n- If reference_image_id is NOT null, you MUST reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag."
+                "\n- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text."
+            )
+        return (
+            "\n- If reference_image_id is NOT null, you must reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag."
+            "\n- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text."
+        )
+
+    def get_prompt_suffix_text(self, has_reference_image: bool) -> str:
+        if has_reference_image:
+            return "- If appropriate, reference '@ReferenceImage' in your prompt fields to anchor the style."
+        return ""
+
+
     def _get_api_key(self) -> str:
         from orchestrator import runway_api_key
         return runway_api_key()

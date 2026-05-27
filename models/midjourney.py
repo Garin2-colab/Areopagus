@@ -16,6 +16,16 @@ class MidjourneyModel(BaseModel):
     def model_name(self) -> str:
         return "midjourney"
 
+    def get_prompt_guidance_text(self, has_reference_image: bool) -> str:
+        return ""
+
+    def get_prompt_rules_text(self, has_reference_image: bool, action: str = "Initiate") -> str:
+        return "\n- Do NOT use the '@ReferenceImage' tag or any style slot tags (like '@AgentRef1', '@AgentRef2') inside `scene_description` or anywhere in prompt text under any circumstances (as this model does not support them)."
+
+    def post_process_prompt_json(self, prompt_json: Dict[str, Any]) -> Dict[str, Any]:
+        from orchestrator import remove_reference_tags
+        return remove_reference_tags(prompt_json)
+
     def _get_api_key(self) -> str:
         return os.environ.get("USERAPI_API_KEY", "").strip()
 

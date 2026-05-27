@@ -45,6 +45,30 @@ class BaseModel:
         """
         raise NotImplementedError
 
+    def get_prompt_guidance_text(self, has_reference_image: bool) -> str:
+        """
+        Get model-specific guidance to include when drafting prompt instructions.
+        """
+        return ""
+
+    def get_prompt_rules_text(self, has_reference_image: bool, action: str = "Initiate") -> str:
+        """
+        Get model-specific rules to include in the rules section of prompt drafting.
+        """
+        return ""
+
+    def get_prompt_suffix_text(self, has_reference_image: bool) -> str:
+        """
+        Get model-specific suffix instructions to include after the main rules.
+        """
+        return ""
+
+    def post_process_prompt_json(self, prompt_json: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Post-process or clean up the generated prompt JSON for this model.
+        """
+        return prompt_json
+
 # Global registry of models
 MODELS_REGISTRY: Dict[str, BaseModel] = {}
 
