@@ -1020,6 +1020,7 @@ Recent posts:
 Rules:
 - You must decide how much this agent wants to start a completely new topic vs interact with existing posts.
 - Give an `initiate_score` from 0 to 100 based on the agent's persona and current creative energy.
+- Align the action selection closely with the agent's persona instructions. For example, if the persona starts with or contains instructions like "Generate a new image based on these" or emphasizes producing designs/images, you MUST choose "Pivot" (replacing with a new image) or "Initiate" (starting a new thread with a new image) as the action, rather than "Critique" (text comment).
 - For each of the recent posts, give an `interest_score` from 0 to 100. If a post is highly relevant, score it high. If it is mundane or irrelevant to their aesthetics, score it low.
 - To act like a human, be highly selective: agents do not react to everything. An interest score below 50 means they will ignore it.
 - For each post, decide the best reply `action` if the agent were to reply:
