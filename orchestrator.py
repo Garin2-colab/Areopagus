@@ -698,8 +698,8 @@ Rules:
 - Return JSON only. No markdown, no code fences, no commentary.
 - Use the provided schema as the structural guide.
 - Keep the existing top-level keys from the schema:
-  scene_description, subject, attire, lighting_and_effects, environment,
-  color_palette, style, camera.
+  scene_description, aspect_ratio.
+- `scene_description` must be one long paragraph (2 to 5 descriptive sentences) containing the entire visual prompt details (blending subject, attire, lighting, environment, color palette, style, and camera).
 - Add these top-level keys:
   turn, debate_context, proposal, keywords
 - `proposal` must be 2 to 3 sentences written as Agent 1's design review proposal.
@@ -1225,16 +1225,17 @@ Schema template:
 {json.dumps(sanitize_for_runway(schema_template), indent=2, ensure_ascii=False)}
 
 Rules:
-- Keep the same top-level keys from the schema template.
+- Keep the same top-level keys from the schema template: scene_description, aspect_ratio.
+- `scene_description` must be one long paragraph (2 to 5 descriptive sentences) containing the entire visual prompt details (blending subject, attire, lighting, environment, color palette, style, and camera).
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
-- Inside the "style" object, dynamically select the most appropriate "aspect_ratio" for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
+- For `aspect_ratio`, dynamically select the most appropriate aspect ratio for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
 - reference_image_id: You must decide whether to use a style/composition reference image for this generation or generate completely from scratch.
   - If you want to use your baseline style image as a reference, set reference_image_id to "profile".
   - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
   - If you want to generate completely from scratch without image references, set reference_image_id to null.
-- If reference_image_id is NOT null, you must reference '@ReferenceImage' in at least one description field (e.g. style or scene_description). If it is null, do NOT use the '@ReferenceImage' tag.
+- If reference_image_id is NOT null, you must reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag.
 - If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
 - inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
@@ -1402,11 +1403,13 @@ Schema template:
 {json.dumps(sanitize_for_runway(schema_template), indent=2, ensure_ascii=False)}
 
 Rules:
-- Keep the same top-level keys from the schema template.
+Rules:
+- Keep the same top-level keys from the schema template: scene_description, aspect_ratio.
+- `scene_description` must be one long paragraph (2 to 5 descriptive sentences) containing the entire visual prompt details (blending subject, attire, lighting, environment, color palette, style, and camera).
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
-- Inside the "style" object, dynamically select the most appropriate "aspect_ratio" for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
+- For `aspect_ratio`, dynamically select the most appropriate aspect ratio for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
 - Make the image feel like a reply rather than a new standalone thread.
 - reference_image_id: You must decide whether to use a reference image for this generation or generate from scratch/external web.
   - If you want to use the parent image as a reference, set reference_image_id to "selected".
@@ -1414,7 +1417,7 @@ Rules:
   - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
   - If you want to reference a different recent turn's image from the list of recent posts above, set reference_image_id to its image_id (e.g. "thread_agent-1-gothic-anatomist_1").
   - If you want to generate completely from scratch without using any image references, set reference_image_id to null.
-- If reference_image_id is NOT null, you MUST reference '@ReferenceImage' in at least one description field (e.g. style, scene_description, subject, or camera) to direct the Runway/Gemini image-to-image/reference-image logic. If it is null, do NOT use the '@ReferenceImage' tag.
+- If reference_image_id is NOT null, you MUST reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag.
 - If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
 - inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
 - Return JSON only.
