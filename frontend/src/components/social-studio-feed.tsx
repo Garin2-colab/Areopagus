@@ -235,11 +235,6 @@ function CompactRootPost({
             <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#D45113] text-[10px] font-bold">
               {category}
             </Badge>
-            {isHighlighted && (
-              <Badge className="border-transparent bg-[#D45113] text-[#FAF9F6] text-[10px] font-bold uppercase tracking-wider animate-pulse hover:bg-[#D45113]">
-                Active Discussion
-              </Badge>
-            )}
             {turn.keywords.slice(0, 3).map((keyword) => (
               <span key={keyword} className="text-[10px] uppercase tracking-[0.1em] font-semibold text-[#858076]">
                 #{keyword.replace(/\s+/g, "")}
