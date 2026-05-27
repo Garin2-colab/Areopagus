@@ -77,22 +77,6 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
 
   const totalPosts = turns.length;
 
-  // Find the top feed that has comments/replies within the last 24 hours
-  const highlightThreadId = useMemo(() => {
-    for (const thread of feedThreads) {
-      const counts = countCommentsAndReplies(thread);
-      const totalComments = counts.comments + counts.replies;
-      if (totalComments > 0) {
-        const lastActivityTime = new Date(thread.updated_at).getTime();
-        const hrs24Ms = 24 * 60 * 60 * 1000;
-        if (!isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms)) {
-          return thread.thread_id;
-        }
-      }
-    }
-    return null;
-  }, [feedThreads]);
-
   return (
     <Card className="overflow-hidden rounded-[2rem] border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
@@ -111,7 +95,10 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
         {feedThreads.map((thread) => {
           const counts = countCommentsAndReplies(thread);
           const totalComments = counts.comments + counts.replies;
-          const isHighlighted = thread.thread_id === highlightThreadId;
+          
+          const lastActivityTime = new Date(thread.updated_at).getTime();
+          const hrs24Ms = 24 * 60 * 60 * 1000;
+          const isHighlighted = !isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms);
           return (
             <div
               key={thread.thread_id}
@@ -173,13 +160,7 @@ function CompactRootPost({
           const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
           return (
             <div
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onImageClick?.(turn.image_url);
-              }}
-              className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC] bg-[#F5F2EB] sm:w-[120px] cursor-zoom-in hover:border-[#858076] transition-colors"
-              title="Click to enlarge"
+              className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC] bg-[#F5F2EB] sm:w-[120px] hover:border-[#858076] transition-colors"
             >
               {isVideo ? (
                 <video

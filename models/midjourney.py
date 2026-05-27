@@ -130,14 +130,37 @@ class MidjourneyModel(BaseModel):
             url = url.strip()
             if "s.mj.run" in url:
                 return url
-            url_lower = url.lower()
-            ends_with_ext = any(url_lower.endswith(ext) or url_lower.endswith(ext + "/") for ext in (".webp", ".png", ".jpg", ".jpeg"))
-            if not ends_with_ext:
-                if "?" in url:
-                    url += "&ext=.webp"
-                else:
-                    url += "?ext=.webp"
-            return url
+            
+            from urllib.parse import urlparse, urlunparse, parse_qsl
+            try:
+                parsed = urlparse(url)
+                path = parsed.path
+                if not path:
+                    path = "/"
+                
+                path_lower = path.lower()
+                has_ext = any(path_lower.endswith(ext) or path_lower.endswith(ext + "/") for ext in (".webp", ".png", ".jpg", ".jpeg"))
+                
+                query = parsed.query
+                if not has_ext:
+                    q_params = dict(parse_qsl(query))
+                    if "ext" not in q_params:
+                        if query:
+                            query += "&ext=.webp"
+                        else:
+                            query = "ext=.webp"
+                
+                return urlunparse((
+                    parsed.scheme,
+                    parsed.netloc,
+                    path,
+                    parsed.params,
+                    query,
+                    parsed.fragment
+                ))
+            except Exception:
+                return url
+
 
         img_refs = []
         sref_refs = []

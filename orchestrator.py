@@ -2035,30 +2035,40 @@ def status_endpoint() -> dict[str, Any]:
     image=image,
     volumes={"/data": data_volume},
 )
-@modal.fastapi_endpoint(method="GET")
-def get_image(id: str) -> Any:
-    from fastapi.responses import FileResponse
-    data_volume.reload()
-    
-    mp4_path = IMAGE_DIR / f"{id}.mp4"
-    if mp4_path.exists():
-        return FileResponse(mp4_path, media_type="video/mp4")
+@modal.asgi_app()
+def get_image():
+    from fastapi import FastAPI
+    from fastapi.responses import FileResponse, JSONResponse
+
+    get_image_api = FastAPI()
+
+    @get_image_api.api_route("/", methods=["GET", "HEAD"])
+    def get_image_route(id: str) -> Any:
+        data_volume.reload()
         
-    clean_id = id
-    for ext in (".webp", ".mp4", ".png", ".jpg", ".jpeg"):
-        if clean_id.endswith(ext):
-            clean_id = clean_id[:-len(ext)]
-            break
+        mp4_path = IMAGE_DIR / f"{id}.mp4"
+        if mp4_path.exists():
+            return FileResponse(mp4_path, media_type="video/mp4")
             
-    mp4_path = IMAGE_DIR / f"{clean_id}.mp4"
-    if mp4_path.exists():
-        return FileResponse(mp4_path, media_type="video/mp4")
-        
-    webp_path = IMAGE_DIR / f"{clean_id}.webp"
-    if webp_path.exists():
-        return FileResponse(webp_path, media_type="image/webp")
-        
-    return {"error": "Not found", "status_code": 404}
+        clean_id = id
+        for ext in (".webp", ".mp4", ".png", ".jpg", ".jpeg"):
+            if clean_id.endswith(ext):
+                clean_id = clean_id[:-len(ext)]
+                break
+                
+        mp4_path = IMAGE_DIR / f"{clean_id}.mp4"
+        if mp4_path.exists():
+            return FileResponse(mp4_path, media_type="video/mp4")
+            
+        webp_path = IMAGE_DIR / f"{clean_id}.webp"
+        if webp_path.exists():
+            return FileResponse(webp_path, media_type="image/webp")
+            
+        return JSONResponse(content={"error": "Not found"}, status_code=404)
+
+    return get_image_api
+
+
 
 @app.function(
     image=image,

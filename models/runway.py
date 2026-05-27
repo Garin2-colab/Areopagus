@@ -13,13 +13,13 @@ RUNWAY_QUALITY = "high"
 
 RUNWAY_RATIO_BY_MODEL = {
     "gpt_image_2": {
-        "1:1": "1024:1024",
-        "4:3": "1280:960",
-        "3:4": "960:1280",
-        "16:9": "1280:720",
-        "9:16": "720:1280",
-        "21:9": "1280:544",
-        "9:21": "544:1280",
+        "1:1": "1920:1920",
+        "4:3": "1920:1440",
+        "3:4": "1440:1920",
+        "16:9": "2560:1440",
+        "9:16": "1440:2560",
+        "21:9": "3840:1648",
+        "9:21": "1440:2560",
     },
     "gemini_image3_pro": {
         "1:1": "1024:1024",
@@ -145,7 +145,7 @@ class RunwayModel(BaseModel):
             return model_ratios[aspect_ratio]
         if model_ratios and "1:1" in model_ratios:
             return model_ratios["1:1"]
-        return "1024:1024"
+        return "1920:1920" if model == "gpt_image_2" else "1024:1024"
 
     def runway_reference_limit(self, model: str) -> int:
         return 14 if model == "gemini_image3_pro" else 16
