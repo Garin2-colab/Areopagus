@@ -679,6 +679,28 @@ def sanitize_for_runway(value: Any) -> Any:
     return value
 
 
+def remove_reference_tags(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: remove_reference_tags(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [remove_reference_tags(item) for item in value]
+    if isinstance(value, str):
+        import re
+        text = re.sub(r"@ReferenceImage\b", "", value)
+        text = re.sub(r"@AgentRef\d+\b", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        # Clean up any stray commas/punctuation that were right next to the tags
+        text = re.sub(r",\s*,", ",", text)
+        text = re.sub(r"\s+,\s+", ", ", text)
+        text = re.sub(r"\s+\.\s+", ". ", text)
+        text = text.replace("inspired by but", "inspired by")
+        text = text.replace("inspired by ,", "")
+        text = text.replace("inspired by .", "")
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+    return value
+
+
 def build_futurist_prompt(
     schema_template: dict[str, Any],
     turn_index: int,
@@ -1159,6 +1181,11 @@ def build_initiate_prompt_json(
     turn_number: int,
     history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from models import get_model
+    raw_model = agent.get("selected_model") or agent.get("model") or "gpt_image_2"
+    model_handler = get_model(raw_model)
+    is_runway = model_handler.__class__.__name__ == "RunwayModel"
+
     # Download baseline agent reference image bytes if configured
     image_bytes = None
     image_mime_type = None
@@ -1209,7 +1236,7 @@ def build_initiate_prompt_json(
     prompt = f"""
 You are drafting a brand-new Areopagus thread.
 """
-    if prompt_img_url:
+    if prompt_img_url and is_runway:
         prompt += "\nYou are shown your baseline style reference image (AgentPrompt) in the multimodal context. You can reference it in your prompt fields using the tag '@ReferenceImage' to maintain persona style consistency."
 
     if inspiration_image_id and inspiration_meta:
@@ -1250,12 +1277,18 @@ Rules:
   - If you want to use your baseline style image as a reference, set reference_image_id to "profile".
   - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
   - If you want to generate completely from scratch without image references, set reference_image_id to null.
-- If reference_image_id is NOT null, you must reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag.
-- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
+"""
+    if is_runway:
+        prompt += "\n- If reference_image_id is NOT null, you must reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag."
+        prompt += "\n- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text."
+    else:
+        prompt += "\n- Do NOT use the '@ReferenceImage' tag or any style slot tags (like '@AgentRef1', '@AgentRef2') inside `scene_description` or anywhere in prompt text under any circumstances (as this model does not support them)."
+
+    prompt += f"""
 - inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
 """
-    if prompt_img_url:
+    if prompt_img_url and is_runway:
         prompt += "- If appropriate, reference '@ReferenceImage' in your prompt fields to anchor the style."
 
     prompt += "\n- Return JSON only.\n"
@@ -1268,6 +1301,8 @@ Rules:
         model=agent_gemini_model(agent)
     )
     prompt_json = sanitize_for_runway(prompt_json)
+    if not is_runway:
+        prompt_json = remove_reference_tags(prompt_json)
     prompt_json["debate_context"] = sanitize_for_runway([summarize_turn_for_agent(turn) for turn in recent_turns])
     if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
         prompt_json["proposal"] = (
@@ -1342,6 +1377,11 @@ def build_pivot_prompt_json(
     turn_number: int,
     history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from models import get_model
+    raw_model = agent.get("selected_model") or agent.get("model") or "gpt_image_2"
+    model_handler = get_model(raw_model)
+    is_runway = model_handler.__class__.__name__ == "RunwayModel"
+
     selected_prompt = prompt_payload_for_turn(selected_turn)
     
     # Download the parent image bytes to feed into Gemini for visual analysis
@@ -1432,8 +1472,14 @@ Rules:
   - If you want to use one of your general reference style images from the profile, set reference_image_id to the slot name (e.g. "AgentRef1", "AgentRef2", etc.) if present in your style_slots.
   - If you want to reference a different recent turn's image from the list of recent posts above, set reference_image_id to its image_id (e.g. "thread_agent-1-gothic-anatomist_1").
   - If you want to generate completely from scratch without using any image references, set reference_image_id to null.
-- If reference_image_id is NOT null, you MUST reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag.
-- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text.
+"""
+    if is_runway:
+        prompt += "\n- If reference_image_id is NOT null, you MUST reference '@ReferenceImage' inside `scene_description`. If it is null, do NOT use the '@ReferenceImage' tag."
+        prompt += "\n- If you want to reference another style slot (e.g. @AgentRef2) without making it the primary visual guide, you can use its tag anywhere in prompt text."
+    else:
+        prompt += "\n- Do NOT use the '@ReferenceImage' tag or any style slot tags (like '@AgentRef1', '@AgentRef2') inside `scene_description` or anywhere in prompt text under any circumstances (as this model does not support them)."
+
+    prompt += f"""
 - inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
 - Return JSON only.
 """
@@ -1446,6 +1492,8 @@ Rules:
         model=agent_gemini_model(agent)
     )
     prompt_json = sanitize_for_runway(prompt_json)
+    if not is_runway:
+        prompt_json = remove_reference_tags(prompt_json)
     prompt_json["debate_context"] = sanitize_for_runway([summarize_turn_for_agent(turn) for turn in recent_turns])
     if not isinstance(prompt_json.get("proposal"), str) or not prompt_json["proposal"].strip():
         prompt_json["proposal"] = (
