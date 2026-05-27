@@ -165,25 +165,48 @@ class MidjourneyModel(BaseModel):
                     if url and url not in img_refs and url not in sref_refs:
                         sref_refs.append(url)
                         
-        parts = []
-        
+        # Budget is 2000 characters total (Midjourney limit is 2200)
+        other_parts = []
         if img_refs:
-            parts.append(" ".join(img_refs))
-            
-        if raw_prompt:
-            parts.append(raw_prompt)
-            
+            other_parts.append(" ".join(img_refs))
         if sref_refs:
-            parts.append(f"--sref {' '.join(sref_refs)}")
-            
+            other_parts.append(f"--sref {' '.join(sref_refs)}")
         ratio = extract_aspect_ratio(prompt_json)
         if ratio:
-            parts.append(f"--ar {ratio}")
+            other_parts.append(f"--ar {ratio}")
+        if action == "Pivot":
+            other_parts.append("--profile e45mt9k 48lvp9w 4hi6mui")
             
+        other_len = len(" ".join(other_parts)) + 2  # +2 for padding spaces
+        max_prompt_len = max(200, 2000 - other_len)
+        
+        if len(raw_prompt) > max_prompt_len:
+            raw_prompt = raw_prompt[:max_prompt_len]
+            # Try to cut at last comma or space
+            last_comma = raw_prompt.rfind(",")
+            if last_comma > max_prompt_len - 100:
+                raw_prompt = raw_prompt[:last_comma]
+            else:
+                last_space = raw_prompt.rfind(" ")
+                if last_space > max_prompt_len - 50:
+                    raw_prompt = raw_prompt[:last_space]
+            raw_prompt = raw_prompt.strip() + "..."
+            
+        parts = []
+        if img_refs:
+            parts.append(" ".join(img_refs))
+        if raw_prompt:
+            parts.append(raw_prompt)
+        if sref_refs:
+            parts.append(f"--sref {' '.join(sref_refs)}")
+        if ratio:
+            parts.append(f"--ar {ratio}")
         if action == "Pivot":
             parts.append("--profile e45mt9k 48lvp9w 4hi6mui")
             
-        return " ".join(parts).strip()
+        final_prompt = " ".join(parts).strip()
+        print(f"[format_midjourney_prompt] Final prompt length: {len(final_prompt)}", flush=True)
+        return final_prompt
 
     def midjourney_select_best_image(
         self,

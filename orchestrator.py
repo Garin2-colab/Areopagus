@@ -118,6 +118,7 @@ image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("pillow", "fastapi[standard]")
     .add_local_dir("./example", remote_path="/root/example")
+    .add_local_dir("./models", remote_path="/root/models")
 )
 
 
@@ -2525,7 +2526,7 @@ def heartbeat_cron() -> None:
 
     # Fire the orchestration
     try:
-        result = orchestrate(agents_config)
+        result = orchestrate.local(agents_config)
         print(
             f"[heartbeat_cron] Pulse complete. "
             f"processed={result.get('processed', 0)}, skipped={result.get('skipped', 0)}",
