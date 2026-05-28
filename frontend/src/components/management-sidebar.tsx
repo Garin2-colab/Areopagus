@@ -513,11 +513,8 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
-                      {hasUnsavedChanges(agent.id) && (
+                      {agent.active !== false && hasUnsavedChanges(agent.id) && (
                         <span className="text-[9px] uppercase tracking-wider text-[#D45113] font-bold bg-[#D45113]/10 px-1.5 py-0.5 rounded animate-pulse">Unsaved</span>
-                      )}
-                      {agent.active === false && (
-                        <span className="text-[9px] uppercase tracking-wider text-[#858076] font-bold bg-[#EFECE7] px-1.5 py-0.5 rounded">Deactivated</span>
                       )}
                     </div>
                     <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
