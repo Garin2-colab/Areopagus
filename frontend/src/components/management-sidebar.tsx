@@ -316,6 +316,21 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
     commitAgents((current) => current.map((agent) => (agent.id === id ? { ...agent, ...patch } : agent)));
   };
 
+  const toggleAgentActive = (id: string) => {
+    setAgents((current) => {
+      const nextAgents = current.map((agent) => {
+        if (agent.id === id) {
+          return { ...agent, active: agent.active !== false ? false : true };
+        }
+        return agent;
+      });
+      agentsRef.current = nextAgents;
+      setSavedAgents(nextAgents);
+      saveAgents(nextAgents);
+      return nextAgents;
+    });
+  };
+
   const removeAgent = (id: string) => {
     commitAgents((current) => (current.length > 1 ? current.filter((agent) => agent.id !== id) : current));
   };
@@ -523,7 +538,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => updateAgent(agent.id, { active: agent.active !== false ? false : true })}
+                      onClick={() => toggleAgentActive(agent.id)}
                       className="h-8 rounded-full text-xs text-[#44423E] hover:bg-[#44423E]/10 hover:text-black px-3 transition-colors font-semibold"
                       aria-label={`${agent.active !== false ? "Deactivate" : "Activate"} ${agent.name}`}
                     >
