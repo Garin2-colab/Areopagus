@@ -228,7 +228,7 @@ MODEL SPECIFIC GUIDANCE FOR MIDJOURNEY:
         import random
         ref_id = prompt_json.get("reference_image_id")
         if ref_id is not None or random.random() < 0.25:
-            rand_sref = str(random.randint(100000000, 9999999999))
+            rand_sref = str(random.randint(0, 4294967295))
             if rand_sref not in sref_refs:
                 sref_refs.append(rand_sref)
 

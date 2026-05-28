@@ -517,6 +517,10 @@ def userapi_api_key() -> str:
     return os.environ.get("USERAPI_API_KEY", "").strip()
 
 
+def kie_api_key() -> str:
+    return os.environ.get("KIE_API_KEY", "").strip()
+
+
 def gemini_generate(
     prompt_text: str,
     *,
