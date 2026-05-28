@@ -150,7 +150,20 @@ class SeedanceModel(BaseModel):
             model="gpt_image_2"
         )
 
-        full_prompt = "Generate a sequence of multiple shots to capture the essence of the scene"
+        if action == "Initiate":
+            full_prompt = prompt_json.get("scene_description", "").strip()
+            if not full_prompt:
+                full_prompt = (
+                    "A colossal, crystalline architectural edifice, constantly reconfiguring its geometry in a slow, "
+                    "almost imperceptible dance. The camera executes a seamless, multi-axis orbital shot, revealing "
+                    "intricate fractal patterns emerging and dissolving across its surfaces, each transition captured "
+                    "with a subtle, kinetic blur. Light, filtered through shifting translucent panels, creates a "
+                    "symphony of evolving chromatic refractions, highlighting the structure's impossible scale and "
+                    "fluid, living nature. The entire sequence, designed for a 15-second loop, embodies a ballet of "
+                    "form and light, observed through a high-speed cinematic lens."
+                )
+        else:
+            full_prompt = "Generate a sequence of multiple shots to capture the essence of the scene"
         
         aspect_ratio = None
         if selected_turn and "image_webp" in selected_turn:
