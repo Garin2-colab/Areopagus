@@ -130,7 +130,19 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
     setFeedback(null);
 
     try {
-      const base64Data = await compressImage(file);
+      const isVideo = file.type.startsWith("video/");
+      let base64Data: string;
+      if (isVideo) {
+        base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (error) => reject(error);
+        });
+      } else {
+        base64Data = await compressImage(file);
+      }
+
       const response = await fetch("/api/replace-image", {
         method: "POST",
         headers: {
@@ -139,7 +151,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
         body: JSON.stringify({
           image_id: imageId,
           image_base64: base64Data,
-          mime_type: "image/jpeg"
+          mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg")
         })
       });
 
@@ -206,7 +218,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept="image/*"
+        accept="image/*,video/mp4,video/*"
         className="hidden"
       />
 

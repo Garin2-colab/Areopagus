@@ -50,9 +50,39 @@ export async function GET(request: Request) {
     if (format) {
       targetUrl += `&format=${encodeURIComponent(format)}`;
     }
-    const response = await fetch(targetUrl, {
+    let response = await fetch(targetUrl, {
       cache: "no-store",
     });
+
+    if (!response.ok && response.status === 404) {
+      // Bidirectional fallback
+      let fallbackUrl = "";
+      if (isDev) {
+        // Fall back to production endpoint
+        const prodBaseUrl = modalImageUrlBase.replace("-get-image-dev.modal.run", "-get-image.modal.run");
+        fallbackUrl = `${prodBaseUrl}?id=${encodeURIComponent(id)}`;
+      } else {
+        // Fall back to dev endpoint
+        const devBaseUrl = modalImageUrlBase.replace("-get-image.modal.run", "-get-image-dev.modal.run");
+        fallbackUrl = `${devBaseUrl}?id=${encodeURIComponent(id)}`;
+      }
+      
+      if (v) {
+        fallbackUrl += `&v=${encodeURIComponent(v)}`;
+      }
+      if (format) {
+        fallbackUrl += `&format=${encodeURIComponent(format)}`;
+      }
+      
+      try {
+        const fallbackResponse = await fetch(fallbackUrl, { cache: "no-store" });
+        if (fallbackResponse.ok) {
+          response = fallbackResponse;
+        }
+      } catch (err) {
+        console.error("Fallback request failed:", err);
+      }
+    }
 
     if (!response.ok) {
       return NextResponse.json(

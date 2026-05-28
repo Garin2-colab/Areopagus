@@ -1825,27 +1825,53 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
         elif action == "replace_image":
             image_id = payload.get("image_id")
             image_base64 = payload.get("image_base64")
+            mime_type = payload.get("mime_type", "image/png")
             if not image_id or not image_base64:
                 return {"ok": False, "error": "Missing image_id or image_base64."}
             if "," in image_base64:
                 header, base64_data = image_base64.split(",", 1)
+                if "data:" in header and ";base64" in header:
+                    mime_type = header.split("data:", 1)[1].split(";base64", 1)[0]
             else:
                 base64_data = image_base64
             img_bytes = base64.b64decode(base64_data)
             
             IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-            webp_path = IMAGE_DIR / f"{image_id}.webp"
-            from io import BytesIO
-            from PIL import Image
-            with Image.open(BytesIO(img_bytes)) as img:
-                if img.mode in ("RGBA", "LA"):
-                    background = Image.new("RGBA", img.size, (255, 255, 255, 255))
-                    background.paste(img, (0, 0), img)
-                    converted = background.convert("RGB")
-                else:
-                    converted = img.convert("RGB")
-                converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
-                width, height = converted.size
+            is_video = mime_type.startswith("video/") or mime_type == "video/mp4" or "video" in mime_type.lower()
+            
+            if is_video:
+                mp4_path = IMAGE_DIR / f"{image_id}.mp4"
+                with open(mp4_path, "wb") as f:
+                    f.write(img_bytes)
+                webp_path = IMAGE_DIR / f"{image_id}.webp"
+                if webp_path.exists():
+                    try:
+                        webp_path.unlink()
+                    except Exception:
+                        pass
+                width = payload.get("width", 854)
+                height = payload.get("height", 480)
+                file_size = mp4_path.stat().st_size
+            else:
+                webp_path = IMAGE_DIR / f"{image_id}.webp"
+                mp4_path = IMAGE_DIR / f"{image_id}.mp4"
+                if mp4_path.exists():
+                    try:
+                        mp4_path.unlink()
+                    except Exception:
+                        pass
+                from io import BytesIO
+                from PIL import Image
+                with Image.open(BytesIO(img_bytes)) as img:
+                    if img.mode in ("RGBA", "LA"):
+                        background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                        background.paste(img, (0, 0), img)
+                        converted = background.convert("RGB")
+                    else:
+                        converted = img.convert("RGB")
+                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                    width, height = converted.size
+                file_size = webp_path.stat().st_size
 
             try:
                 web_url = get_image.get_web_url()
@@ -1855,21 +1881,32 @@ def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
             web_url = web_url.rstrip("/")
 
             import time
-            new_url = f"{web_url}/?id={image_id}&v={int(time.time())}"
+            suffix = "&format=mp4" if is_video else ""
+            new_url = f"{web_url}/?id={image_id}&v={int(time.time())}{suffix}"
             history = load_history()
             updated_any = False
             for turn in history.get("turns", []):
                 if turn.get("image_id") == image_id:
                     turn["image_url"] = new_url
-                    turn["image_webp"] = {
-                        "path": f"/data/images/{image_id}.webp",
-                        "url": new_url,
-                        "format": "webp",
-                        "quality": WEBP_QUALITY,
-                        "source_mime_type": payload.get("mime_type", "image/png"),
-                        "size_bytes": webp_path.stat().st_size,
-                        "dimensions": {"width": width, "height": height},
-                    }
+                    if is_video:
+                        turn["image_webp"] = {
+                            "path": f"/data/images/{image_id}.mp4",
+                            "url": new_url,
+                            "format": "mp4",
+                            "source_mime_type": mime_type,
+                            "size_bytes": file_size,
+                            "dimensions": {"width": width, "height": height},
+                        }
+                    else:
+                        turn["image_webp"] = {
+                            "path": f"/data/images/{image_id}.webp",
+                            "url": new_url,
+                            "format": "webp",
+                            "quality": WEBP_QUALITY,
+                            "source_mime_type": mime_type,
+                            "size_bytes": file_size,
+                            "dimensions": {"width": width, "height": height},
+                        }
                     updated_any = True
             if updated_any:
                 save_history(history)
