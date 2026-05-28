@@ -42,9 +42,10 @@ function dotColor(agentId: string): string {
 }
 
 function getAspectClass(turn: PostTurn) {
-  const dims = turn.image_webp?.dimensions;
-  if (dims && dims.width && dims.height) {
-    const ratio = dims.width / dims.height;
+  const width = turn.image_webp?.dimensions?.width || turn.image_webp?.width;
+  const height = turn.image_webp?.dimensions?.height || turn.image_webp?.height;
+  if (width && height) {
+    const ratio = width / height;
     if (ratio < 0.7) return "aspect-[9/16]";
     if (ratio < 0.9) return "aspect-[3/4]";
     if (ratio > 1.4) return "aspect-video";

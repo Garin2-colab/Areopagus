@@ -40,6 +40,8 @@ export type HistoryTurn = {
       width: number;
       height: number;
     };
+    width?: number;
+    height?: number;
   };
 };
 

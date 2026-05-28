@@ -20,7 +20,9 @@ function getMutateUrl() {
   const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--/);
   if (match) {
     const username = match[1];
-    return `https://${username}--areopagus-mutate-history-endpoint.modal.run`;
+    const devMatch = referenceUrl.match(/areopagus-(?:history-endpoint|status-endpoint|pulse-endpoint|save-endpoint|get-image)(-[a-zA-Z0-9]+)?\.modal\.run/);
+    const suffix = devMatch && devMatch[1] ? devMatch[1] : "";
+    return `https://${username}--areopagus-mutate-history-endpoint${suffix}.modal.run`;
   }
 
   return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
@@ -44,15 +46,18 @@ function getModalImageUrl() {
   const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--/);
   if (match) {
     const username = match[1];
-    return `https://${username}--areopagus-get-image.modal.run`;
+    const devMatch = referenceUrl.match(/areopagus-(?:history-endpoint|status-endpoint|pulse-endpoint|save-endpoint|mutate-history-endpoint)(-[a-zA-Z0-9]+)?\.modal\.run/);
+    const suffix = devMatch && devMatch[1] ? devMatch[1] : "";
+    return `https://${username}--areopagus-get-image${suffix}.modal.run`;
   }
 
   return "https://heebok-lee--areopagus-get-image.modal.run";
 }
 
 export async function replaceImageAction(imageId: string, base64Data: string, mimeType: string) {
+  const mutateUrl = getMutateUrl();
+  console.log(`[replaceImageAction] Starting replacement for ${imageId} (${mimeType}). Length: ${base64Data.length}. Target URL: ${mutateUrl}`);
   try {
-    const mutateUrl = getMutateUrl();
     const payload = {
       action: "replace_image",
       image_id: imageId,
@@ -68,11 +73,14 @@ export async function replaceImageAction(imageId: string, base64Data: string, mi
       body: JSON.stringify(payload)
     });
 
+    console.log(`[replaceImageAction] Response status: ${response.status}`);
+
     if (!response.ok) {
       throw new Error(`Modal replace-image endpoint failed with status ${response.status}`);
     }
 
     const data = await response.json();
+    console.log(`[replaceImageAction] Response JSON:`, JSON.stringify(data));
 
     if (data.ok) {
       try {
@@ -91,6 +99,7 @@ export async function replaceImageAction(imageId: string, base64Data: string, mi
 
     return data;
   } catch (error) {
+    console.error(`[replaceImageAction] Failed for ${imageId}:`, error);
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Image replacement failed."

@@ -1730,8 +1730,16 @@ def status_endpoint() -> dict[str, Any]:
 def get_image():
     from fastapi import FastAPI
     from fastapi.responses import FileResponse, JSONResponse
+    from fastapi.middleware.cors import CORSMiddleware
 
     get_image_api = FastAPI()
+    get_image_api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @get_image_api.api_route("/", methods=["GET", "HEAD"])
     def get_image_route(id: str) -> Any:
