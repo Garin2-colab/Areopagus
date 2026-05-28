@@ -8,6 +8,11 @@ const nextConfig = {
         hostname: "dnznrvs05pmza.cloudfront.net"
       }
     ]
+  },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "50mb"
+    }
   }
 };
 

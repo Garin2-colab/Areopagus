@@ -8,6 +8,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { compressImage } from "@/lib/utils";
+import { replaceImageAction } from "@/app/actions";
 
 type SocialStudioTableProps = {
   turns: HistoryTurn[];
@@ -143,35 +144,9 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
         base64Data = await compressImage(file);
       }
 
-      const response = await fetch("/api/replace-image", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          image_id: imageId,
-          image_base64: base64Data,
-          mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg")
-        })
-      });
+      const mimeType = file.type || (isVideo ? "video/mp4" : "image/jpeg");
+      const result = await replaceImageAction(imageId, base64Data, mimeType);
 
-      if (!response.ok) {
-        let errMsg = `Upload failed with status ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errMsg = errorData.error || errMsg;
-        } catch {
-          try {
-            const txt = await response.text();
-            if (txt && txt.length < 200) {
-              errMsg = txt;
-            }
-          } catch {}
-        }
-        throw new Error(errMsg);
-      }
-
-      const result = await response.json();
       if (result.ok) {
         showFeedback("success", `Successfully replaced image for turn: ${imageId}`);
         await onRefresh();
