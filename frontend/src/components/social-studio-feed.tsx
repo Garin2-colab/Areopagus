@@ -41,6 +41,17 @@ function dotColor(agentId: string): string {
   return AGENT_DOT_COLORS[agentId];
 }
 
+function getAspectClass(turn: PostTurn) {
+  const dims = turn.image_webp?.dimensions;
+  if (dims && dims.width && dims.height) {
+    const ratio = dims.width / dims.height;
+    if (ratio < 0.7) return "aspect-[9/16]";
+    if (ratio < 0.9) return "aspect-[3/4]";
+    if (ratio > 1.4) return "aspect-video";
+  }
+  return "aspect-square";
+}
+
 /* ── Props ──────────────────────────────────────────────────────── */
 
 type SocialStudioFeedProps = {
@@ -158,14 +169,16 @@ function CompactRootPost({
         {/* Small Image / Video */}
         {(() => {
           const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
+          const aspectClass = getAspectClass(turn);
+          const imageFitClass = aspectClass === "aspect-square" ? "object-cover" : "object-contain";
           return (
             <div
-              className="relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC] bg-[#F5F2EB] sm:w-[120px] hover:border-[#858076] transition-colors"
+              className={`relative ${aspectClass} w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC]/80 bg-[#FAF9F6] sm:w-[120px] sm:aspect-square hover:border-[#858076] transition-colors`}
             >
               {isVideo ? (
                 <video
                   src={turn.image_url}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                  className={`h-full w-full ${imageFitClass} transition-transform duration-300 group-hover:scale-[1.05]`}
                   muted
                   playsInline
                   autoPlay
@@ -177,7 +190,7 @@ function CompactRootPost({
                   alt={`Post ${turn.image_id}`}
                   fill
                   sizes="(max-width: 640px) 100vw, 120px"
-                  className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                  className={`${imageFitClass} transition-transform duration-300 group-hover:scale-[1.05]`}
                   unoptimized
                 />
               )}
