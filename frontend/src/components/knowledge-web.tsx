@@ -312,17 +312,67 @@ export function KnowledgeWeb({
                 const video = document.createElement("video");
                 video.src = url;
                 video.muted = true;
-                video.loop = true;
                 video.playsInline = true;
                 video.crossOrigin = "anonymous";
                 
-                video.onloadeddata = () => {
-                  cache.set(url, video);
-                  resolve();
+                let resolved = false;
+                const finishWithVideo = () => {
+                  if (!resolved) {
+                    resolved = true;
+                    cache.set(url, video);
+                    video.play().catch(() => {});
+                    resolve();
+                  }
                 };
-                video.onerror = () => resolve();
-                
-                video.play().catch(() => {});
+
+                const tryCapture = () => {
+                  if (resolved) return;
+                  try {
+                    if (video.videoWidth === 0 || video.videoHeight === 0) {
+                      return;
+                    }
+                    const canvas = document.createElement("canvas");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext("2d");
+                    if (ctx) {
+                      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                      const img = new Image();
+                      img.onload = () => {
+                        if (!resolved) {
+                          resolved = true;
+                          cache.set(url, img);
+                          resolve();
+                        }
+                      };
+                      img.onerror = () => {
+                        finishWithVideo();
+                      };
+                      img.src = canvas.toDataURL("image/webp", 0.8) || canvas.toDataURL("image/jpeg", 0.8);
+                    } else {
+                      finishWithVideo();
+                    }
+                  } catch (e) {
+                    console.error("Failed to extract video thumbnail frame", e);
+                    finishWithVideo();
+                  }
+                };
+
+                video.onloadeddata = () => {
+                  video.currentTime = 0;
+                  tryCapture();
+                };
+
+                video.onseeked = () => {
+                  tryCapture();
+                };
+
+                video.onerror = () => {
+                  finishWithVideo();
+                };
+
+                // Safety timeout after 2 seconds
+                setTimeout(finishWithVideo, 2000);
               } else {
                 const image = new window.Image();
                 image.onload = () => {
