@@ -242,7 +242,7 @@ export function KnowledgeWeb({
       if (turn.keywords && turn.keywords.includes(keyword)) {
         list.push({
           id: turn.image_id,
-          url: turn.image_url,
+          url: getGraphImageUrl(turn.image_url, turn.image_webp?.format),
           label: `Turn ${turn.turn}`,
           kind: "image"
         });
@@ -308,8 +308,8 @@ export function KnowledgeWeb({
   useEffect(() => {
     const urls = Array.from(
       new Set([
-        ...turns.map((turn) => turn.image_url),
-        ...inspiration.map((item) => item.image_url)
+        ...turns.map((turn) => getGraphImageUrl(turn.image_url, turn.image_webp?.format)),
+        ...inspiration.map((item) => getGraphImageUrl(item.image_url))
       ])
     );
     let cancelled = false;
@@ -644,22 +644,28 @@ export function KnowledgeWeb({
             {hoverNode?.kind === "image" ? (
               <div className="mt-3 flex flex-col sm:flex-row items-center sm:items-start gap-4">
                 <div className="w-24 h-24 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] flex-shrink-0 shadow-sm">
-                  {isTurnVideoUrl(hoverNode.imageUrl) ? (
-                    <video
-                      src={hoverNode.imageUrl}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <img
-                      src={hoverNode.imageUrl}
-                      alt={hoverNode.label}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
+                  {(() => {
+                    const originalTurn = turns.find((t) => t.image_id === hoverNode.id);
+                    const isVideo = originalTurn?.image_webp?.format === "mp4" || 
+                                    originalTurn?.image_url.includes("format=mp4") || 
+                                    originalTurn?.image_url.endsWith(".mp4");
+                    return (isVideo && originalTurn) ? (
+                      <video
+                        src={originalTurn.image_url}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={hoverNode.imageUrl}
+                        alt={hoverNode.label}
+                        className="w-full h-full object-cover"
+                      />
+                    );
+                  })()}
                 </div>
                 <div className="space-y-1 text-center sm:text-left flex-1 min-w-0">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
