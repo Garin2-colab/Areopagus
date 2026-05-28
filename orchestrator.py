@@ -117,6 +117,7 @@ app = modal.App(APP_NAME)
 data_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
     .pip_install("pillow", "fastapi[standard]")
     .add_local_dir("./example", remote_path="/root/example")
     .add_local_dir("./models", remote_path="/root/models")
@@ -605,6 +606,18 @@ def save_mp4_video(video_url: str, image_id: str, aspect_ratio: str = "16:9") ->
 
     with open(mp4_path, "wb") as f:
         f.write(video_bytes)
+
+    # Extract first frame as a companion webp thumbnail for image-based downstream tasks
+    webp_path = IMAGE_DIR / f"{image_id}.webp"
+    try:
+        import subprocess
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(mp4_path),
+            "-vframes", "1", "-f", "image2", str(webp_path)
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        print(f"[save_mp4_video] Successfully extracted first frame to {webp_path}", flush=True)
+    except Exception as exc:
+        print(f"[save_mp4_video] Warning: Failed to extract first frame via ffmpeg: {exc}", flush=True)
 
     ratios = {
         "1:1": (480, 480),
@@ -1749,10 +1762,6 @@ def get_image():
         if not image_id:
             return JSONResponse(content={"error": "Missing id parameter"}, status_code=400)
             
-        mp4_path = IMAGE_DIR / f"{image_id}.mp4"
-        if mp4_path.exists():
-            return FileResponse(mp4_path, media_type="video/mp4")
-            
         clean_id = image_id
         requested_ext = None
         
@@ -1761,7 +1770,7 @@ def get_image():
             ext_param = ext_param.strip().lower()
             if not ext_param.startswith("."):
                 ext_param = "." + ext_param
-            if ext_param in (".webp", ".png", ".jpg", ".jpeg"):
+            if ext_param in (".webp", ".png", ".jpg", ".jpeg", ".mp4"):
                 requested_ext = ext_param
                 
         for r_ext in (".webp", ".mp4", ".png", ".jpg", ".jpeg"):
@@ -1771,8 +1780,14 @@ def get_image():
                 clean_id = clean_id[:-len(r_ext)]
                 break
                 
+        # Serve MP4 if explicitly requested, or if no format was specified and mp4 exists
+        serve_mp4 = False
         mp4_path = IMAGE_DIR / f"{clean_id}.mp4"
         if mp4_path.exists():
+            if requested_ext == ".mp4" or requested_ext is None:
+                serve_mp4 = True
+                
+        if serve_mp4:
             return FileResponse(mp4_path, media_type="video/mp4")
             
         webp_path = IMAGE_DIR / f"{clean_id}.webp"
@@ -2401,3 +2416,30 @@ def main() -> None:
 
     result = orchestrate.remote(agents_config_payload)
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+@app.function(image=image, volumes={"/data": data_volume})
+def generate_missing_thumbnails():
+    import subprocess
+    from pathlib import Path
+    
+    images_dir = Path("/data/images")
+    if not images_dir.exists():
+        print("No images dir found.")
+        return
+        
+    for mp4_path in images_dir.glob("*.mp4"):
+        webp_path = mp4_path.with_suffix(".webp")
+        if not webp_path.exists():
+            print(f"Extracting first frame from {mp4_path} to {webp_path}")
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", str(mp4_path),
+                    "-vframes", "1", "-f", "image2", str(webp_path)
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                print(f"Success: {webp_path.name}")
+            except Exception as e:
+                print(f"Failed to extract for {mp4_path.name}: {e}")
+                
+    data_volume.commit()
+

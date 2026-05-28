@@ -172,6 +172,7 @@ MODEL SPECIFIC GUIDANCE FOR MIDJOURNEY:
                         query_params["id"] = id_val[:-5] + ".png"
                 
                 query_params["ext"] = ".png"
+                query_params.pop("format", None)
                 
                 return urlunparse((
                     parsed.scheme,

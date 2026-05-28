@@ -200,6 +200,7 @@ class RunwayModel(BaseModel):
                             query_params["id"] = id_val[:-5] + ".png"
                     
                     query_params["ext"] = ".png"
+                    query_params.pop("format", None)
                     uri_str = urlunparse((
                         parsed.scheme,
                         parsed.netloc,
