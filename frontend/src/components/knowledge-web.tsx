@@ -64,6 +64,25 @@ const ForceGraph2D = dynamic(async () => (await import("react-force-graph-2d")).
 
 import type { HistoryTurn, Thread, InspirationItem } from "@/lib/history";
 
+function getGraphImageUrl(url: string, format?: string) {
+  if (!url) return "";
+  const isMp4 = url.includes("format=mp4") || url.endsWith(".mp4") || format === "mp4";
+  if (isMp4) {
+    if (url.includes("?id=")) {
+      const parts = url.split("?");
+      const base = parts[0];
+      const query = parts[1] || "";
+      const params = query.split("&").filter(p => !p.startsWith("format="));
+      params.push("format=webp");
+      return `${base}?${params.join("&")}`;
+    }
+    if (url.endsWith(".mp4")) {
+      return url.slice(0, -4) + ".webp";
+    }
+  }
+  return url;
+}
+
 function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: InspirationItem[] = []) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
@@ -75,7 +94,7 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
       id: turn.image_id,
       kind: "image",
       turn: turn.turn,
-      imageUrl: turn.image_url,
+      imageUrl: getGraphImageUrl(turn.image_url, turn.image_webp?.format),
       label: `Turn ${turn.turn}`
     };
     nodes.push(imageNode);
@@ -105,7 +124,7 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     const inspNode: GraphNode = {
       id: item.id,
       kind: "inspiration",
-      imageUrl: item.image_url,
+      imageUrl: getGraphImageUrl(item.image_url),
       label: `Inspiration`
     };
     nodes.push(inspNode);
