@@ -151,7 +151,7 @@ MODEL SPECIFIC GUIDANCE FOR MIDJOURNEY:
             if "s.mj.run" in url:
                 return url
             
-            from urllib.parse import urlparse, urlunparse, parse_qsl
+            from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
             try:
                 parsed = urlparse(url)
                 path = parsed.path
@@ -159,23 +159,26 @@ MODEL SPECIFIC GUIDANCE FOR MIDJOURNEY:
                     path = "/"
                 
                 path_lower = path.lower()
-                has_ext = any(path_lower.endswith(ext) or path_lower.endswith(ext + "/") for ext in (".webp", ".png", ".jpg", ".jpeg"))
+                if path_lower.endswith(".webp"):
+                    path = path[:-5] + ".png"
+                elif path_lower.endswith(".webp/"):
+                    path = path[:-6] + ".png/"
                 
-                query = parsed.query
-                if not has_ext:
-                    q_params = dict(parse_qsl(query))
-                    if "ext" not in q_params:
-                        if query:
-                            query += "&ext=.webp"
-                        else:
-                            query = "ext=.webp"
+                query_params = dict(parse_qsl(parsed.query))
+                
+                if "id" in query_params:
+                    id_val = query_params["id"]
+                    if id_val.endswith(".webp"):
+                        query_params["id"] = id_val[:-5] + ".png"
+                
+                query_params["ext"] = ".png"
                 
                 return urlunparse((
                     parsed.scheme,
                     parsed.netloc,
                     path,
                     parsed.params,
-                    query,
+                    urlencode(query_params),
                     parsed.fragment
                 ))
             except Exception:

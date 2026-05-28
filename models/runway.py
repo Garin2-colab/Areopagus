@@ -187,7 +187,30 @@ class RunwayModel(BaseModel):
         def add_reference(uri: Any, tag: str) -> None:
             if not isinstance(uri, str) or not uri.strip():
                 return
-            references.append({"uri": uri.strip(), "tag": tag})
+            uri_str = uri.strip()
+            if "get-image" in uri_str or "get_image" in uri_str:
+                from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+                try:
+                    parsed = urlparse(uri_str)
+                    query_params = dict(parse_qsl(parsed.query))
+                    
+                    if "id" in query_params:
+                        id_val = query_params["id"]
+                        if id_val.endswith(".webp"):
+                            query_params["id"] = id_val[:-5] + ".png"
+                    
+                    query_params["ext"] = ".png"
+                    uri_str = urlunparse((
+                        parsed.scheme,
+                        parsed.netloc,
+                        parsed.path,
+                        parsed.params,
+                        urlencode(query_params),
+                        parsed.fragment
+                    ))
+                except Exception:
+                    pass
+            references.append({"uri": uri_str, "tag": tag})
 
         ref_decision = None
         if prompt_json and isinstance(prompt_json, dict):

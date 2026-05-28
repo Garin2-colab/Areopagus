@@ -1728,9 +1728,11 @@ def status_endpoint() -> dict[str, Any]:
 )
 @modal.asgi_app()
 def get_image():
-    from fastapi import FastAPI
-    from fastapi.responses import FileResponse, JSONResponse
+    from fastapi import FastAPI, Request
+    from fastapi.responses import FileResponse, JSONResponse, Response
     from fastapi.middleware.cors import CORSMiddleware
+    from PIL import Image
+    from io import BytesIO
 
     get_image_api = FastAPI()
     get_image_api.add_middleware(
@@ -1741,18 +1743,32 @@ def get_image():
         allow_headers=["*"],
     )
 
-    @get_image_api.api_route("/", methods=["GET", "HEAD"])
-    def get_image_route(id: str) -> Any:
+    def handle_get_image(image_id: str, ext: str = None, format: str = None) -> Any:
         data_volume.reload()
         
-        mp4_path = IMAGE_DIR / f"{id}.mp4"
+        if not image_id:
+            return JSONResponse(content={"error": "Missing id parameter"}, status_code=400)
+            
+        mp4_path = IMAGE_DIR / f"{image_id}.mp4"
         if mp4_path.exists():
             return FileResponse(mp4_path, media_type="video/mp4")
             
-        clean_id = id
-        for ext in (".webp", ".mp4", ".png", ".jpg", ".jpeg"):
-            if clean_id.endswith(ext):
-                clean_id = clean_id[:-len(ext)]
+        clean_id = image_id
+        requested_ext = None
+        
+        ext_param = ext or format
+        if ext_param:
+            ext_param = ext_param.strip().lower()
+            if not ext_param.startswith("."):
+                ext_param = "." + ext_param
+            if ext_param in (".webp", ".png", ".jpg", ".jpeg"):
+                requested_ext = ext_param
+                
+        for r_ext in (".webp", ".mp4", ".png", ".jpg", ".jpeg"):
+            if clean_id.endswith(r_ext):
+                if not requested_ext:
+                    requested_ext = r_ext
+                clean_id = clean_id[:-len(r_ext)]
                 break
                 
         mp4_path = IMAGE_DIR / f"{clean_id}.mp4"
@@ -1761,9 +1777,39 @@ def get_image():
             
         webp_path = IMAGE_DIR / f"{clean_id}.webp"
         if webp_path.exists():
+            if requested_ext in (".png", ".jpg", ".jpeg"):
+                try:
+                    img = Image.open(webp_path)
+                    out_buf = BytesIO()
+                    
+                    if requested_ext == ".png":
+                        img.save(out_buf, format="PNG")
+                        media_type = "image/png"
+                    else:  # .jpg or .jpeg
+                        if img.mode in ("RGBA", "LA"):
+                            background = Image.new("RGB", img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+                            background.save(out_buf, format="JPEG", quality=90)
+                        else:
+                            img.convert("RGB").save(out_buf, format="JPEG", quality=90)
+                        media_type = "image/jpeg"
+                        
+                    return Response(content=out_buf.getvalue(), media_type=media_type)
+                except Exception as exc:
+                    print(f"[get_image] On-the-fly conversion failed for {clean_id}: {exc}", flush=True)
+                    return FileResponse(webp_path, media_type="image/webp")
+            
             return FileResponse(webp_path, media_type="image/webp")
             
         return JSONResponse(content={"error": "Not found"}, status_code=404)
+
+    @get_image_api.api_route("/", methods=["GET", "HEAD"])
+    def get_image_query(id: str = None, ext: str = None, format: str = None) -> Any:
+        return handle_get_image(id, ext, format)
+
+    @get_image_api.api_route("/{id}", methods=["GET", "HEAD"])
+    def get_image_path(id: str, ext: str = None, format: str = None) -> Any:
+        return handle_get_image(id, ext, format)
 
     return get_image_api
 
