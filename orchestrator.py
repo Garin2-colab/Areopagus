@@ -1268,7 +1268,7 @@ Schema template:
 
 Rules:
 - Keep the same top-level keys from the schema template: scene_description, aspect_ratio.
-- `scene_description` must be one long paragraph (2 to 5 descriptive sentences) containing the entire visual prompt details (blending subject, attire, lighting, environment, color palette, style, and camera).
+- `scene_description` should be highly diverse in structure and length. It can be a simple direct sentence, an abstract/surreal conceptual description, or a complex hyper-detailed visual shoot script (1 to 5 sentences) blending subject, attire, lighting, environment, style, and camera. Do not follow a rigid template.
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
@@ -1457,7 +1457,7 @@ Schema template:
 Rules:
 Rules:
 - Keep the same top-level keys from the schema template: scene_description, aspect_ratio.
-- `scene_description` must be one long paragraph (2 to 5 descriptive sentences) containing the entire visual prompt details (blending subject, attire, lighting, environment, color palette, style, and camera).
+- `scene_description` should be highly diverse in structure and length. It can be a simple direct sentence, an abstract/surreal conceptual description, or a complex hyper-detailed visual shoot script (1 to 5 sentences) blending subject, attire, lighting, environment, style, and camera. Do not follow a rigid template.
 - Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.

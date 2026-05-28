@@ -17,10 +17,20 @@ class MidjourneyModel(BaseModel):
         return "midjourney"
 
     def get_prompt_guidance_text(self, has_reference_image: bool) -> str:
-        return ""
+        return """
+MODEL SPECIFIC GUIDANCE FOR MIDJOURNEY:
+- We want to generate highly diverse visual outputs. When writing the `scene_description`, do not follow a rigid template. Produce prompts of varying complexity:
+  - Sometimes write a simple, direct 1-sentence prompt focusing on a single strong subject or action.
+  - Sometimes write a highly abstract, symbolic, glitched, or conceptual prompt (e.g., glitched pixels, symbolic layouts, experimental textures).
+  - Sometimes write a complex, multi-sentence hyper-detailed scenario detailing camera precision (e.g., Fujifilm GFX100, medium shots, extreme close-ups), specific environments (salt plains, concrete studio floors), and lighting details.
+- To achieve a premium fashion/editorial look, incorporate references to famous visual artists, designers, photographers, or directors (e.g., in the style of Chen Man, Bruno Aveillan, Darren Aronofsky, Yoshitaka Amano, Tim Walker, Annie Leibovitz, Mert and Marcus, Iris van Herpen, Nick Knight, Alexander McQueen, Yohji Yamamoto, Chanel, etc.) to ground the aesthetic.
+"""
 
     def get_prompt_rules_text(self, has_reference_image: bool, action: str = "Initiate") -> str:
-        return "\n- Do NOT use the '@ReferenceImage' tag or any style slot tags (like '@AgentRef1', '@AgentRef2') inside `scene_description` or anywhere in prompt text under any circumstances (as this model does not support them)."
+        return """
+- Do NOT use the '@ReferenceImage' tag or any style slot tags (like '@AgentRef1', '@AgentRef2') inside `scene_description` or anywhere in prompt text under any circumstances (as this model does not support them).
+- Make the `scene_description` highly diverse: vary it between simple, abstract, and complex formats. Use names of famous designers/artists/photographers (e.g., Chen Man, Bruno Aveillan, Darren Aronofsky, Yoshitaka Amano, Tim Walker, Annie Leibovitz, Mert and Marcus, Nick Knight, Iris van Herpen, Alexander McQueen, Yohji Yamamoto, etc.) to establish a premium look and feel.
+"""
 
     def post_process_prompt_json(self, prompt_json: Dict[str, Any]) -> Dict[str, Any]:
         from orchestrator import remove_reference_tags
@@ -215,6 +225,13 @@ class MidjourneyModel(BaseModel):
                         if url not in img_refs and url not in sref_refs:
                             sref_refs.append(url)
                         
+        import random
+        ref_id = prompt_json.get("reference_image_id")
+        if ref_id is not None or random.random() < 0.25:
+            rand_sref = str(random.randint(100000000, 9999999999))
+            if rand_sref not in sref_refs:
+                sref_refs.append(rand_sref)
+
         # Budget is 2000 characters total (Midjourney limit is 2200)
         other_parts = []
         if img_refs:
@@ -225,7 +242,7 @@ class MidjourneyModel(BaseModel):
         if ratio:
             other_parts.append(f"--ar {ratio}")
         if action == "Pivot":
-            other_parts.append("--profile e45mt9k 48lvp9w 4hi6mui")
+            other_parts.append("--w 500 --c 30")
             
         other_len = len(" ".join(other_parts)) + 2  # +2 for padding spaces
         max_prompt_len = max(200, 2000 - other_len)
@@ -252,7 +269,7 @@ class MidjourneyModel(BaseModel):
         if ratio:
             parts.append(f"--ar {ratio}")
         if action == "Pivot":
-            parts.append("--profile e45mt9k 48lvp9w 4hi6mui")
+            parts.append("--w 500 --c 30")
             
         final_prompt = " ".join(parts).strip()
         print(f"[format_midjourney_prompt] Final prompt length: {len(final_prompt)}", flush=True)
