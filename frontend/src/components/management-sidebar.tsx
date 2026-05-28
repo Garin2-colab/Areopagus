@@ -21,6 +21,7 @@ type AgentRecord = {
   model: ModelName;
   heartbeatMinutes: number;
   referenceImages?: string[];
+  active?: boolean;
 };
 
 type StoredAgentsPayload = {
@@ -77,7 +78,8 @@ function createAgent(index: number): AgentRecord {
     persona: DEFAULT_PERSONA,
     model: "GPT-Image-2",
     heartbeatMinutes: 15,
-    referenceImages: []
+    referenceImages: [],
+    active: true
   };
 }
 
@@ -113,7 +115,8 @@ function normalizeStoredAgent(value: unknown, index: number): AgentRecord | null
       typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
         ? candidate.heartbeatMinutes
         : fallback.heartbeatMinutes,
-    referenceImages: Array.isArray(candidate.referenceImages) ? candidate.referenceImages : []
+    referenceImages: Array.isArray(candidate.referenceImages) ? candidate.referenceImages : [],
+    active: typeof candidate.active === "boolean" ? candidate.active : true
   };
 }
 
@@ -247,6 +250,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
           current.persona !== saved.persona ||
           current.model !== saved.model ||
           current.heartbeatMinutes !== saved.heartbeatMinutes ||
+          (current.active !== undefined ? current.active : true) !== (saved.active !== undefined ? saved.active : true) ||
           JSON.stringify(current.referenceImages || []) !== JSON.stringify(saved.referenceImages || []);
         if (isChanged) {
           unsavedNames.push(current.name || saved.name);
@@ -288,6 +292,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
       current.persona !== saved.persona ||
       current.model !== saved.model ||
       current.heartbeatMinutes !== saved.heartbeatMinutes ||
+      (current.active !== undefined ? current.active : true) !== (saved.active !== undefined ? saved.active : true) ||
       JSON.stringify(current.referenceImages || []) !== JSON.stringify(saved.referenceImages || [])
     );
   };
@@ -495,7 +500,15 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
 
           <TabsContent value="agents" className="space-y-4 outline-none">
             {agents.map((agent, index) => (
-              <Card key={agent.id} className="overflow-hidden rounded-[1.5rem] border border-[#D8D4CC]/80 bg-white shadow-none">
+              <Card 
+                key={agent.id} 
+                className={cn(
+                  "overflow-hidden rounded-[1.5rem] border bg-white shadow-none transition-all duration-200",
+                  agent.active === false 
+                    ? "border-[#D8D4CC]/50 bg-gray-50/50" 
+                    : "border-[#D8D4CC]/80"
+                )}
+              >
                 <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -503,27 +516,42 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       {hasUnsavedChanges(agent.id) && (
                         <span className="text-[9px] uppercase tracking-wider text-[#D45113] font-bold bg-[#D45113]/10 px-1.5 py-0.5 rounded animate-pulse">Unsaved</span>
                       )}
+                      {agent.active === false && (
+                        <span className="text-[9px] uppercase tracking-wider text-[#858076] font-bold bg-[#EFECE7] px-1.5 py-0.5 rounded">Deactivated</span>
+                      )}
                     </div>
                     <Badge className="border-[#D8D4CC] bg-[#F5F2EB] text-[#44423E] font-semibold">{agent.model}</Badge>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => removeAgent(agent.id)}
-                    className="h-8 rounded-full text-xs text-[#D45113] hover:bg-[#D45113]/10 hover:text-[#B33E0A] px-4 transition-colors font-semibold"
-                    aria-label={`Remove ${agent.name}`}
-                  >
-                    Delete
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => updateAgent(agent.id, { active: agent.active !== false ? false : true })}
+                      className="h-8 rounded-full text-xs text-[#44423E] hover:bg-[#44423E]/10 hover:text-black px-3 transition-colors font-semibold"
+                      aria-label={`${agent.active !== false ? "Deactivate" : "Activate"} ${agent.name}`}
+                    >
+                      {agent.active !== false ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => removeAgent(agent.id)}
+                      className="h-8 rounded-full text-xs text-[#D45113] hover:bg-[#D45113]/10 hover:text-[#B33E0A] px-3 transition-colors font-semibold"
+                      aria-label={`Remove ${agent.name}`}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </CardHeader>
 
-                <CardContent className="space-y-4 px-4 py-4">
+                <CardContent className={cn("space-y-4 px-4 py-4 transition-all duration-200", agent.active === false && "opacity-50 grayscale pointer-events-none select-none")}>
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Name</p>
                     <Input
                       value={agent.name}
                       onChange={(event) => updateAgent(agent.id, { name: event.target.value })}
                       placeholder="Agent name"
+                      disabled={agent.active === false}
                     />
                   </div>
 
@@ -537,6 +565,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       onChange={(event) => updateAgent(agent.id, { persona: event.target.value })}
                       placeholder="Describe the agent's worldview, tone, and editing preferences."
                       className="min-h-[164px]"
+                      disabled={agent.active === false}
                     />
                     <p className="text-xs leading-5 text-[#858076]">
                       Use Markdown for bullets, emphasis, and short sections. This keeps long personas readable.
@@ -576,13 +605,16 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                                   alt={`Style Ref ${i + 1}`}
                                   className="w-full h-full object-cover"
                                 />
-                                <button
+                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleClearStyle(agent.id, i);
+                                    if (agent.active !== false) {
+                                      handleClearStyle(agent.id, i);
+                                    }
                                   }}
-                                  className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] uppercase tracking-wider text-[#F97316] font-bold transition-opacity"
+                                  disabled={agent.active === false}
+                                  className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] uppercase tracking-wider text-[#F97316] font-bold transition-opacity disabled:cursor-not-allowed"
                                 >
                                   Clear
                                 </button>
@@ -602,7 +634,8 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       <select
                         value={agent.model}
                         onChange={(event) => updateAgent(agent.id, { model: event.target.value as ModelName })}
-                        className="flex-1 rounded-2xl border border-[#D8D4CC] bg-white px-3 py-2 text-sm text-[#252422] focus:border-[#858076] focus:text-[#252422] focus:outline-none"
+                        className="flex-1 rounded-2xl border border-[#D8D4CC] bg-white px-3 py-2 text-sm text-[#252422] focus:border-[#858076] focus:text-[#252422] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        disabled={agent.active === false}
                       >
                         <option value="GPT-Image-2">GPT-Image-2</option>
                         <option value="Gemini-3-Pro">Gemini-3-Pro</option>
@@ -612,7 +645,8 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       <Button
                         type="button"
                         onClick={() => saveAgent(agent.id)}
-                        className="rounded-2xl border border-[#D8D4CC] bg-[#252422] px-4 text-[#FAF9F6] hover:bg-black hover:text-white"
+                        className="rounded-2xl border border-[#D8D4CC] bg-[#252422] px-4 text-[#FAF9F6] hover:bg-black hover:text-white disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        disabled={agent.active === false}
                       >
                         <Save className="mr-2 h-4 w-4" />
                         Save
@@ -639,7 +673,8 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       step={1}
                       value={agent.heartbeatMinutes}
                       onChange={(event) => updateAgent(agent.id, { heartbeatMinutes: parseInt(event.target.value, 10) })}
-                      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#EFECE7] accent-[#252422]"
+                      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#EFECE7] accent-[#252422] disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={agent.active === false}
                     />
                     <div className="flex justify-between text-[10px] uppercase tracking-[0.24em] text-[#858076]">
                       <span>none</span>
