@@ -949,7 +949,52 @@ def clamp_interest_score(value: Any) -> int:
     return max(0, min(100, score))
 
 
-def assess_agent_interest(agent: dict[str, Any], recent_turns: list[dict[str, Any]]) -> dict[str, Any]:
+def is_agent_allowed_to_reply(agent_id: str, thread_id: str, history: dict[str, Any]) -> bool:
+    # Find who initiated this thread.
+    initiator_agent_id = None
+    for turn in history.get("turns", []):
+        if turn.get("thread_id") == thread_id and turn.get("action") == "Initiate":
+            initiator_agent_id = turn.get("agent_id")
+            break
+            
+    if not initiator_agent_id:
+        # Fallback: look at the first turn of this thread by turn number
+        thread_turns = [t for t in history.get("turns", []) if t.get("thread_id") == thread_id]
+        if thread_turns:
+            first_turn = min(thread_turns, key=lambda t: t.get("turn", 9999))
+            initiator_agent_id = first_turn.get("agent_id")
+            
+    # If the current agent is NOT the initiator, they are always allowed to reply
+    if initiator_agent_id != agent_id:
+        return True
+        
+    # If the current agent IS the initiator, they can only reply if there's at least one turn or comment from another agent
+    # Check other agent's turns in this thread:
+    has_other_turn = any(
+        turn.get("agent_id") != agent_id 
+        for turn in history.get("turns", []) 
+        if turn.get("thread_id") == thread_id
+    )
+    if has_other_turn:
+        return True
+        
+    # Check other agent's comments in this thread:
+    thread = find_thread(history, thread_id)
+    if thread:
+        has_other_comment = any(
+            comment.get("agent_id") != agent_id 
+            for comment in thread.get("comments", [])
+        )
+        if has_other_comment:
+            return True
+            
+    return False
+
+
+def assess_agent_interest(agent: dict[str, Any], recent_turns: list[dict[str, Any]], history: dict[str, Any] = None) -> dict[str, Any]:
+    if history is None:
+        history = load_history()
+
     prompt = f"""
 You are the autonomous decision engine for Areopagus.
 
@@ -991,6 +1036,7 @@ Rules:
 - For each post, decide the best reply `action` if the agent were to reply:
   - Use `Pivot` when the agent wants to reply by generating a new image inspired by the post.
   - Use `Critique` when the agent wants to reply with text only (commenting).
+- Crucial rule for conversation flow: An agent is NOT allowed to reply (neither Critique nor Pivot) to a thread that they themselves initiated, UNLESS another agent has already replied/commented in that thread. If the agent initiated the thread and no one else has commented on it yet, you must score interest for all posts in that thread as 0.
 - Keep reasons short, character-driven, and active.
 """
 
@@ -1012,13 +1058,28 @@ Rules:
             continue
         raw_score = clamp_interest_score(score.get("interest_score"))
         jittered_score = clamp_interest_score(raw_score + random.uniform(-12, 12))
+        
+        # Enforce thread initiator permission rule
+        image_id = score.get("image_id")
+        action_val = normalize_action(score.get("action"))
+        reason_val = score.get("reason", "")
+        
+        if image_id:
+            thread = find_thread_for_image(history, image_id)
+            if thread:
+                tid = thread.get("thread_id")
+                if not is_agent_allowed_to_reply(agent.get("id"), tid, history):
+                    jittered_score = 0
+                    action_val = "Initiate"
+                    reason_val = f"[Restricted] Cannot comment or pivot on own initiated thread '{tid}' until another agent comments."
+
         normalized_scores.append(
             {
                 "turn": score.get("turn"),
-                "image_id": score.get("image_id"),
+                "image_id": image_id,
                 "interest_score": jittered_score,
-                "action": normalize_action(score.get("action")),
-                "reason": score.get("reason", ""),
+                "action": action_val,
+                "reason": reason_val,
             }
         )
 
@@ -1027,7 +1088,7 @@ Rules:
     best_post_score = max(normalized_scores, key=lambda item: item["interest_score"]) if normalized_scores else None
 
     if is_whim and normalized_scores:
-        # Flip a coin: either initiate a new thread, or reply to a random post
+        # Flip a coin: either initiate a new thread, or reply to an allowed random post
         whim_choice = random.choice(["initiate", "reply"])
         if whim_choice == "initiate":
             assessment["selected_turn"] = None
@@ -1037,13 +1098,22 @@ Rules:
             assessment["reason"] = f"[Whim] A sudden spark of inspiration led {agent.get('name')} to start a new thread."
             print(f"[orchestrate] WHIM: {agent.get('name')} chose to INITIATE a new thread on a whim.", flush=True)
         else:
-            random_post = random.choice(normalized_scores)
-            assessment["selected_turn"] = random_post.get("turn")
-            assessment["selected_image_id"] = random_post.get("image_id")
-            assessment["interest_score"] = random_post["interest_score"]
-            assessment["action"] = random_post["action"]
-            assessment["reason"] = f"[Whim] A passing detail caught {agent.get('name')}'s eye, compelling them to react: {random_post.get('reason')}"
-            print(f"[orchestrate] WHIM: {agent.get('name')} chose to interact with Turn {random_post.get('turn')} on a whim.", flush=True)
+            allowed_posts = [p for p in normalized_scores if p.get("interest_score", 0) >= 50]
+            if allowed_posts:
+                random_post = random.choice(allowed_posts)
+                assessment["selected_turn"] = random_post.get("turn")
+                assessment["selected_image_id"] = random_post.get("image_id")
+                assessment["interest_score"] = random_post["interest_score"]
+                assessment["action"] = random_post["action"]
+                assessment["reason"] = f"[Whim] A passing detail caught {agent.get('name')}'s eye, compelling them to react: {random_post.get('reason')}"
+                print(f"[orchestrate] WHIM: {agent.get('name')} chose to interact with Turn {random_post.get('turn')} on a whim.", flush=True)
+            else:
+                assessment["selected_turn"] = None
+                assessment["selected_image_id"] = ""
+                assessment["interest_score"] = initiate_score
+                assessment["action"] = "Initiate"
+                assessment["reason"] = f"[Whim Fallback] {agent.get('name')} initiated a new thread since no other interesting posts were available."
+                print(f"[orchestrate] WHIM: {agent.get('name')} chose to INITIATE (fallback) on a whim.", flush=True)
     else:
         # Standard logical selection based on highest jittered score
         if best_post_score and best_post_score["interest_score"] > initiate_score:
@@ -1625,7 +1695,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                 for t in recent_turns:
                     scoring_nodes.extend(t.get("keywords", []))
                 update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name, active_nodes=scoring_nodes)
-                assessment = assess_agent_interest(agent, recent_turns)
+                assessment = assess_agent_interest(agent, recent_turns, history)
                 print(f"[orchestrate] Assessment for '{agent_name}': {json.dumps(assessment, indent=2)}", flush=True)
 
                 # Build focused active_nodes for the selected action
