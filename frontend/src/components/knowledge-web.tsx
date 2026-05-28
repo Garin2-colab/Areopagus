@@ -157,7 +157,7 @@ export function KnowledgeWeb({
 }: KnowledgeWebProps) {
   const graphRef = useRef<any>(null);
   const graphFrameRef = useRef<HTMLDivElement | null>(null);
-  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const imageCacheRef = useRef<Map<string, HTMLImageElement | HTMLVideoElement>>(new Map());
   const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
   const forcesConfigured = useRef(false);
 
@@ -202,6 +202,12 @@ export function KnowledgeWeb({
   );
   
   const router = useRouter();
+  const isTurnVideoUrl = useCallback((url: string) => {
+    const turn = turns.find((t) => t.image_url === url || (t.image_webp && t.image_webp.url === url));
+    if (turn?.image_webp?.format === "mp4") return true;
+    return url.includes("format=mp4") || url.endsWith(".mp4");
+  }, [turns]);
+
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.kind === "image" && node.id === selectedTurnId) ?? null,
@@ -279,7 +285,7 @@ export function KnowledgeWeb({
     fg.d3ReheatSimulation?.();
   });
 
-  // Preload images (only refresh canvas visuals, don't reheat physics)
+  // Preload images and videos (only refresh canvas visuals, don't reheat physics)
   useEffect(() => {
     const urls = Array.from(
       new Set([
@@ -301,13 +307,31 @@ export function KnowledgeWeb({
                 return;
               }
 
-              const image = new window.Image();
-              image.onload = () => {
-                cache.set(url, image);
-                resolve();
-              };
-              image.onerror = () => resolve();
-              image.src = url;
+              const isVideo = isTurnVideoUrl(url);
+              if (isVideo) {
+                const video = document.createElement("video");
+                video.src = url;
+                video.muted = true;
+                video.loop = true;
+                video.playsInline = true;
+                video.crossOrigin = "anonymous";
+                
+                video.onloadeddata = () => {
+                  cache.set(url, video);
+                  resolve();
+                };
+                video.onerror = () => resolve();
+                
+                video.play().catch(() => {});
+              } else {
+                const image = new window.Image();
+                image.onload = () => {
+                  cache.set(url, image);
+                  resolve();
+                };
+                image.onerror = () => resolve();
+                image.src = url;
+              }
             })
         )
       );
@@ -322,8 +346,45 @@ export function KnowledgeWeb({
 
     return () => {
       cancelled = true;
+      // Pause video elements to free resources
+      const cache = imageCacheRef.current;
+      for (const val of cache.values()) {
+        if (val instanceof HTMLVideoElement) {
+          val.pause();
+          val.src = "";
+          val.load();
+        }
+      }
+      cache.clear();
     };
-  }, [turns, inspiration]);
+  }, [turns, inspiration, isTurnVideoUrl]);
+
+  // Set up an animation refresh loop for videos in the canvas
+  useEffect(() => {
+    let animationFrameId: number;
+    
+    const update = () => {
+      let hasVideos = false;
+      const cache = imageCacheRef.current;
+      for (const val of cache.values()) {
+        if (val instanceof HTMLVideoElement && !val.paused) {
+          hasVideos = true;
+          break;
+        }
+      }
+      
+      if (hasVideos) {
+        graphRef.current?.refresh?.();
+      }
+      
+      animationFrameId = requestAnimationFrame(update);
+    };
+    
+    animationFrameId = requestAnimationFrame(update);
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [turns]);
 
   // Build graphData with cloned nodes so D3 can freely mutate positions
   const forceGraphData = useMemo(() => {
@@ -441,7 +502,15 @@ export function KnowledgeWeb({
                 ctx.arc(0, 0, radius, 0, Math.PI * 2);
                 ctx.clip();
 
-                if (cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) {
+                const isVideoElement = cachedImage instanceof HTMLVideoElement;
+                if (isVideoElement) {
+                  if (cachedImage.readyState >= 2) {
+                    ctx.drawImage(cachedImage, -radius, -radius, radius * 2, radius * 2);
+                  } else {
+                    ctx.fillStyle = "#FAF9F6";
+                    ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+                  }
+                } else if (cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) {
                   ctx.drawImage(cachedImage, -radius, -radius, radius * 2, radius * 2);
                 } else {
                   ctx.fillStyle = "#FAF9F6";
@@ -506,11 +575,22 @@ export function KnowledgeWeb({
             {hoverNode?.kind === "image" ? (
               <div className="mt-3 flex flex-col sm:flex-row items-center sm:items-start gap-4">
                 <div className="w-24 h-24 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] flex-shrink-0 shadow-sm">
-                  <img
-                    src={hoverNode.imageUrl}
-                    alt={hoverNode.label}
-                    className="w-full h-full object-cover"
-                  />
+                  {isTurnVideoUrl(hoverNode.imageUrl) ? (
+                    <video
+                      src={hoverNode.imageUrl}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={hoverNode.imageUrl}
+                      alt={hoverNode.label}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                 </div>
                 <div className="space-y-1 text-center sm:text-left flex-1 min-w-0">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
@@ -557,11 +637,22 @@ export function KnowledgeWeb({
                             "w-16 h-16 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] shadow-sm transition-all duration-300 hover:scale-110 hover:shadow-md hover:border-[#252422]",
                             img.kind === "inspiration" && "border-[#D45113]/55 hover:border-[#D45113]"
                           )}>
-                            <img
-                              src={img.url}
-                              alt={img.label}
-                              className="w-full h-full object-cover"
-                            />
+                            {isTurnVideoUrl(img.url) ? (
+                              <video
+                                src={img.url}
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <img
+                                src={img.url}
+                                alt={img.label}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
                           </div>
                           <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 scale-0 transition-transform duration-200 group-hover:scale-100 bg-[#252422] text-[#FAF9F6] text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10 shadow">
                             {img.label}

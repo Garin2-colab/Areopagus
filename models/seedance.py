@@ -150,13 +150,21 @@ class SeedanceModel(BaseModel):
             model="gpt_image_2"
         )
 
-        from models.midjourney import MidjourneyModel
-        mj_formatter = MidjourneyModel()
-        image_prompt = mj_formatter.build_midjourney_prompt_text(prompt_json)
-        full_prompt = f"Generate a sequence of multiple shots to capture the essence of the scene: {image_prompt}"
+        full_prompt = "Generate a sequence of multiple shots to capture the essence of the scene"
         
-        raw_ratio = extract_aspect_ratio(prompt_json)
-        aspect_ratio = self.get_closest_seedance_aspect_ratio(raw_ratio)
+        aspect_ratio = None
+        if selected_turn and "image_webp" in selected_turn:
+            webp_info = selected_turn["image_webp"]
+            if isinstance(webp_info, dict) and "dimensions" in webp_info:
+                dims = webp_info["dimensions"]
+                if isinstance(dims, dict) and dims.get("width") and dims.get("height"):
+                    aspect_ratio = self.get_closest_seedance_aspect_ratio(f"{dims['width']}:{dims['height']}")
+                    print(f"[seedance] Using aspect ratio from reference image: {aspect_ratio} ({dims['width']}x{dims['height']})", flush=True)
+
+        if not aspect_ratio:
+            raw_ratio = extract_aspect_ratio(prompt_json)
+            aspect_ratio = self.get_closest_seedance_aspect_ratio(raw_ratio)
+            print(f"[seedance] Using aspect ratio from prompt: {aspect_ratio} (raw: {raw_ratio})", flush=True)
         
         reference_urls = []
         for ref in refs:
