@@ -1779,422 +1779,440 @@ def get_image():
     ],
     timeout=120,
 )
-@modal.fastapi_endpoint(method="POST")
-def mutate_history_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+@modal.asgi_app()
+def mutate_history_endpoint():
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
     import base64
     import json
     import traceback
-    
-    action = payload.get("action")
-    if not action:
-        return {"ok": False, "error": "Missing action parameter."}
 
-    data_volume.reload()
-    
-    try:
-        if action == "save":
-            AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
-                config_data = {k: v for k, v in payload.items() if k != "action"}
-                json.dump(config_data, fh, indent=2, ensure_ascii=False)
-                fh.write("\n")
-            data_volume.commit()
-            return {"ok": True, "message": "Config saved to Modal volume."}
+    mutate_api = FastAPI()
+    mutate_api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-        elif action == "load_agents":
-            if AGENTS_CONFIG_PATH.exists():
-                with AGENTS_CONFIG_PATH.open("r", encoding="utf-8") as fh:
-                    config = json.load(fh)
-                return {"ok": True, "config": config}
-            return {"ok": True, "config": None}
+    @mutate_api.post("/")
+    def handle_mutate(payload: dict[str, Any]) -> dict[str, Any]:
+            import base64
+            import json
+            import traceback
 
+            action = payload.get("action")
+            if not action:
+                return {"ok": False, "error": "Missing action parameter."}
 
-        elif action == "update_category":
-            image_id = payload.get("image_id")
-            category = payload.get("category")
-            if not image_id or category is None:
-                return {"ok": False, "error": "Missing image_id or category."}
-            history = load_history()
-            updated = False
-            for turn in history.get("turns", []):
-                if turn.get("image_id") == image_id:
-                    turn["category"] = category
-                    updated = True
-                    break
-            if not updated:
-                return {"ok": False, "error": f"Turn {image_id} not found."}
-            thread = find_thread_for_image(history, image_id)
-            if thread:
-                thread["category"] = category
-            rebuild_history_graph(history)
-            save_history(history)
-            return {"ok": True, "message": f"Category for turn {image_id} updated to {category}."}
-
-        elif action == "replace_image":
-            image_id = payload.get("image_id")
-            image_base64 = payload.get("image_base64")
-            mime_type = payload.get("mime_type", "image/png")
-            if not image_id or not image_base64:
-                return {"ok": False, "error": "Missing image_id or image_base64."}
-            if "," in image_base64:
-                header, base64_data = image_base64.split(",", 1)
-                if "data:" in header and ";base64" in header:
-                    mime_type = header.split("data:", 1)[1].split(";base64", 1)[0]
-            else:
-                base64_data = image_base64
-            img_bytes = base64.b64decode(base64_data)
-            
-            IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-            is_video = mime_type.startswith("video/") or mime_type == "video/mp4" or "video" in mime_type.lower()
-            
-            if is_video:
-                mp4_path = IMAGE_DIR / f"{image_id}.mp4"
-                with open(mp4_path, "wb") as f:
-                    f.write(img_bytes)
-                webp_path = IMAGE_DIR / f"{image_id}.webp"
-                if webp_path.exists():
-                    try:
-                        webp_path.unlink()
-                    except Exception:
-                        pass
-                width = payload.get("width", 854)
-                height = payload.get("height", 480)
-                file_size = mp4_path.stat().st_size
-            else:
-                webp_path = IMAGE_DIR / f"{image_id}.webp"
-                mp4_path = IMAGE_DIR / f"{image_id}.mp4"
-                if mp4_path.exists():
-                    try:
-                        mp4_path.unlink()
-                    except Exception:
-                        pass
-                from io import BytesIO
-                from PIL import Image
-                with Image.open(BytesIO(img_bytes)) as img:
-                    if img.mode in ("RGBA", "LA"):
-                        background = Image.new("RGBA", img.size, (255, 255, 255, 255))
-                        background.paste(img, (0, 0), img)
-                        converted = background.convert("RGB")
-                    else:
-                        converted = img.convert("RGB")
-                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
-                    width, height = converted.size
-                file_size = webp_path.stat().st_size
+            data_volume.reload()
 
             try:
-                web_url = get_image.get_web_url()
-            except Exception:
-                web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+                if action == "save":
+                    AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                    with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
+                        config_data = {k: v for k, v in payload.items() if k != "action"}
+                        json.dump(config_data, fh, indent=2, ensure_ascii=False)
+                        fh.write("\n")
+                    data_volume.commit()
+                    return {"ok": True, "message": "Config saved to Modal volume."}
 
-            web_url = web_url.rstrip("/")
+                elif action == "load_agents":
+                    if AGENTS_CONFIG_PATH.exists():
+                        with AGENTS_CONFIG_PATH.open("r", encoding="utf-8") as fh:
+                            config = json.load(fh)
+                        return {"ok": True, "config": config}
+                    return {"ok": True, "config": None}
 
-            import time
-            suffix = "&format=mp4" if is_video else ""
-            new_url = f"{web_url}/?id={image_id}&v={int(time.time())}{suffix}"
-            history = load_history()
-            updated_any = False
-            for turn in history.get("turns", []):
-                if turn.get("image_id") == image_id:
-                    turn["image_url"] = new_url
+
+                elif action == "update_category":
+                    image_id = payload.get("image_id")
+                    category = payload.get("category")
+                    if not image_id or category is None:
+                        return {"ok": False, "error": "Missing image_id or category."}
+                    history = load_history()
+                    updated = False
+                    for turn in history.get("turns", []):
+                        if turn.get("image_id") == image_id:
+                            turn["category"] = category
+                            updated = True
+                            break
+                    if not updated:
+                        return {"ok": False, "error": f"Turn {image_id} not found."}
+                    thread = find_thread_for_image(history, image_id)
+                    if thread:
+                        thread["category"] = category
+                    rebuild_history_graph(history)
+                    save_history(history)
+                    return {"ok": True, "message": f"Category for turn {image_id} updated to {category}."}
+
+                elif action == "replace_image":
+                    image_id = payload.get("image_id")
+                    image_base64 = payload.get("image_base64")
+                    mime_type = payload.get("mime_type", "image/png")
+                    if not image_id or not image_base64:
+                        return {"ok": False, "error": "Missing image_id or image_base64."}
+                    if "," in image_base64:
+                        header, base64_data = image_base64.split(",", 1)
+                        if "data:" in header and ";base64" in header:
+                            mime_type = header.split("data:", 1)[1].split(";base64", 1)[0]
+                    else:
+                        base64_data = image_base64
+                    img_bytes = base64.b64decode(base64_data)
+
+                    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+                    is_video = mime_type.startswith("video/") or mime_type == "video/mp4" or "video" in mime_type.lower()
+
                     if is_video:
-                        turn["image_webp"] = {
-                            "path": f"/data/images/{image_id}.mp4",
-                            "url": new_url,
-                            "format": "mp4",
-                            "source_mime_type": mime_type,
-                            "size_bytes": file_size,
-                            "dimensions": {"width": width, "height": height},
-                        }
+                        mp4_path = IMAGE_DIR / f"{image_id}.mp4"
+                        with open(mp4_path, "wb") as f:
+                            f.write(img_bytes)
+                        webp_path = IMAGE_DIR / f"{image_id}.webp"
+                        if webp_path.exists():
+                            try:
+                                webp_path.unlink()
+                            except Exception:
+                                pass
+                        width = payload.get("width", 854)
+                        height = payload.get("height", 480)
+                        file_size = mp4_path.stat().st_size
                     else:
-                        turn["image_webp"] = {
-                            "path": f"/data/images/{image_id}.webp",
-                            "url": new_url,
-                            "format": "webp",
-                            "quality": WEBP_QUALITY,
-                            "source_mime_type": mime_type,
-                            "size_bytes": file_size,
-                            "dimensions": {"width": width, "height": height},
-                        }
-                    updated_any = True
-            if updated_any:
-                save_history(history)
-                return {"ok": True, "message": f"Image {image_id} replaced successfully."}
-            
-            if image_id.startswith("ref_style_") or image_id.startswith("ref_"):
-                return {"ok": True, "message": f"Reference image {image_id} uploaded successfully."}
-                
-            return {"ok": False, "error": "No matching turn found."}
+                        webp_path = IMAGE_DIR / f"{image_id}.webp"
+                        mp4_path = IMAGE_DIR / f"{image_id}.mp4"
+                        if mp4_path.exists():
+                            try:
+                                mp4_path.unlink()
+                            except Exception:
+                                pass
+                        from io import BytesIO
+                        from PIL import Image
+                        with Image.open(BytesIO(img_bytes)) as img:
+                            if img.mode in ("RGBA", "LA"):
+                                background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                                background.paste(img, (0, 0), img)
+                                converted = background.convert("RGB")
+                            else:
+                                converted = img.convert("RGB")
+                            converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                            width, height = converted.size
+                        file_size = webp_path.stat().st_size
 
-        elif action == "delete_post":
-            image_id = payload.get("image_id")
-            if not image_id:
-                return {"ok": False, "error": "Missing image_id."}
-            history = load_history()
-            turns = history.get("turns", [])
-            target_turn = None
-            target_idx = -1
-            for i, t in enumerate(turns):
-                if t.get("image_id") == image_id:
-                    target_turn = t
-                    target_idx = i
-                    break
-            if not target_turn:
-                return {"ok": False, "error": f"Post not found for image_id: {image_id}"}
+                    try:
+                        web_url = get_image.get_web_url()
+                    except Exception:
+                        web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
-            thread_id = target_turn.get("thread_id") or image_id
-            turns.pop(target_idx)
+                    web_url = web_url.rstrip("/")
 
-            try:
-                webp_path = IMAGE_DIR / f"{image_id}.webp"
-                if webp_path.exists():
-                    webp_path.unlink()
-            except Exception as exc:
-                print(f"[delete_post] Warning: failed to delete file: {exc}", flush=True)
+                    import time
+                    suffix = "&format=mp4" if is_video else ""
+                    new_url = f"{web_url}/?id={image_id}&v={int(time.time())}{suffix}"
+                    history = load_history()
+                    updated_any = False
+                    for turn in history.get("turns", []):
+                        if turn.get("image_id") == image_id:
+                            turn["image_url"] = new_url
+                            if is_video:
+                                turn["image_webp"] = {
+                                    "path": f"/data/images/{image_id}.mp4",
+                                    "url": new_url,
+                                    "format": "mp4",
+                                    "source_mime_type": mime_type,
+                                    "size_bytes": file_size,
+                                    "dimensions": {"width": width, "height": height},
+                                }
+                            else:
+                                turn["image_webp"] = {
+                                    "path": f"/data/images/{image_id}.webp",
+                                    "url": new_url,
+                                    "format": "webp",
+                                    "quality": WEBP_QUALITY,
+                                    "source_mime_type": mime_type,
+                                    "size_bytes": file_size,
+                                    "dimensions": {"width": width, "height": height},
+                                }
+                            updated_any = True
+                    if updated_any:
+                        save_history(history)
+                        return {"ok": True, "message": f"Image {image_id} replaced successfully."}
 
-            thread_turns = [t for t in turns if t.get("thread_id") == thread_id or t.get("image_id") == thread_id]
-            thread_turns.sort(key=lambda t: (t.get("turn", 0), t.get("created_at", "")))
-            new_thread_id = None
-            if thread_turns:
-                was_root = (target_turn.get("action") == "Initiate") or (target_turn.get("parent_image_id") is None)
-                if was_root:
-                    new_root = thread_turns[0]
-                    new_root["parent_image_id"] = None
-                    new_root["action"] = "Initiate"
-                    new_thread_id = new_root["image_id"]
-                    for t in thread_turns:
-                        t["thread_id"] = new_thread_id
-                        if t.get("parent_image_id") == image_id:
-                            t["parent_image_id"] = new_thread_id
-                else:
-                    parent_id = target_turn.get("parent_image_id")
-                    for t in turns:
-                        if t.get("parent_image_id") == image_id:
-                            t["parent_image_id"] = parent_id
+                    if image_id.startswith("ref_style_") or image_id.startswith("ref_"):
+                        return {"ok": True, "message": f"Reference image {image_id} uploaded successfully."}
 
-            threads = history.get("threads", [])
-            updated_threads = []
-            for thread in threads:
-                if "comments" in thread:
-                    thread["comments"] = [c for c in thread["comments"] if c.get("post_image_id") != image_id]
-                tid = thread.get("thread_id")
-                if tid == thread_id:
-                    if not thread_turns:
-                        continue
-                    if new_thread_id:
-                        thread["thread_id"] = new_thread_id
-                        thread["root_image_id"] = new_thread_id
-                    if "posts" in thread:
-                        thread["posts"] = [p for p in thread["posts"] if p != image_id]
-                        if new_thread_id and new_thread_id not in thread["posts"]:
-                            thread["posts"].insert(0, new_thread_id)
-                    thread["updated_at"] = utc_now()
-                    updated_threads.append(thread)
-                else:
-                    updated_threads.append(thread)
-            history["threads"] = updated_threads
-            rebuild_history_graph(history)
-            save_history(history)
-            return {"ok": True, "message": f"Post {image_id} deleted successfully."}
+                    return {"ok": False, "error": "No matching turn found."}
 
-        elif action == "upload_inspiration":
-            image_base64 = payload.get("image_base64")
-            if not image_base64:
-                return {"ok": False, "error": "Missing image_base64."}
-            if "," in image_base64:
-                header, base64_data = image_base64.split(",", 1)
-            else:
-                base64_data = image_base64
-            img_bytes = base64.b64decode(base64_data)
+                elif action == "delete_post":
+                    image_id = payload.get("image_id")
+                    if not image_id:
+                        return {"ok": False, "error": "Missing image_id."}
+                    history = load_history()
+                    turns = history.get("turns", [])
+                    target_turn = None
+                    target_idx = -1
+                    for i, t in enumerate(turns):
+                        if t.get("image_id") == image_id:
+                            target_turn = t
+                            target_idx = i
+                            break
+                    if not target_turn:
+                        return {"ok": False, "error": f"Post not found for image_id: {image_id}"}
 
-            import time
-            insp_id = f"insp_{int(time.time())}"
-            IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-            webp_path = IMAGE_DIR / f"{insp_id}.webp"
-            from io import BytesIO
-            from PIL import Image
-            with Image.open(BytesIO(img_bytes)) as img:
-                if img.mode in ("RGBA", "LA"):
-                    background = Image.new("RGBA", img.size, (255, 255, 255, 255))
-                    background.paste(img, (0, 0), img)
-                    converted = background.convert("RGB")
-                else:
-                    converted = img.convert("RGB")
-                converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                    thread_id = target_turn.get("thread_id") or image_id
+                    turns.pop(target_idx)
 
-            try:
-                web_url = get_image.get_web_url()
-            except Exception:
-                web_url = "https://heebok-lee--areopagus-get-image.modal.run"
-            
-            web_url = web_url.rstrip("/")
-            image_url = f"{web_url}/?id={insp_id}"
+                    try:
+                        webp_path = IMAGE_DIR / f"{image_id}.webp"
+                        if webp_path.exists():
+                            webp_path.unlink()
+                    except Exception as exc:
+                        print(f"[delete_post] Warning: failed to delete file: {exc}", flush=True)
 
-            prompt = (
-                "Analyze this image and return a JSON object containing exactly 5 to 8 highly descriptive, simple, and intuitive keywords. "
-                "The keywords must be visually descriptive (e.g., describing specific textures, lighting, color palettes, geometric structures, design styles, artistic movements, visual elements) "
-                "and conceptually/metaphorically related (e.g., evoking specific moods, thematic concepts, design philosophies, metaphors). "
-                "NEVER use generic or lazy words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'. "
-                "Each keyword must start with a '#', contain only lowercase letters, and have no spaces. "
-                "Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. "
-                "Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). "
-                "The response must be a JSON object with a single key 'keywords' containing the list of strings. "
-                "Example format: {\"keywords\": [\"#kinetic\", \"#sculpture\", \"#biomimicry\", \"#gothic\", \"#anatomy\"]}"
-            )
-            keywords = ["#visualconcept", "#creativeideation", "#designmetaphor", "#aestheticreference", "#conceptualmotif"]
-            try:
-                res = gemini_generate(prompt, image_bytes=img_bytes, image_mime_type=payload.get("mime_type", "image/png"))
-                if isinstance(res, dict) and "keywords" in res and isinstance(res["keywords"], list):
-                    cleaned_keywords = []
-                    for kw in res["keywords"]:
-                        if not isinstance(kw, str):
-                            continue
-                        kw_cleaned = kw.strip().lower()
-                        if not kw_cleaned.startswith("#"):
-                            kw_cleaned = "#" + kw_cleaned
-                        # Remove spaces and filter characters
-                        kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
-                        # Filter out generic words
-                        if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
-                            cleaned_keywords.append(kw_cleaned)
-                    if len(cleaned_keywords) >= 3:
-                        keywords = cleaned_keywords
-            except Exception as exc:
-                print(f"[upload_inspiration] Keyword generation failed: {exc}.", flush=True)
+                    thread_turns = [t for t in turns if t.get("thread_id") == thread_id or t.get("image_id") == thread_id]
+                    thread_turns.sort(key=lambda t: (t.get("turn", 0), t.get("created_at", "")))
+                    new_thread_id = None
+                    if thread_turns:
+                        was_root = (target_turn.get("action") == "Initiate") or (target_turn.get("parent_image_id") is None)
+                        if was_root:
+                            new_root = thread_turns[0]
+                            new_root["parent_image_id"] = None
+                            new_root["action"] = "Initiate"
+                            new_thread_id = new_root["image_id"]
+                            for t in thread_turns:
+                                t["thread_id"] = new_thread_id
+                                if t.get("parent_image_id") == image_id:
+                                    t["parent_image_id"] = new_thread_id
+                        else:
+                            parent_id = target_turn.get("parent_image_id")
+                            for t in turns:
+                                if t.get("parent_image_id") == image_id:
+                                    t["parent_image_id"] = parent_id
 
-            history = load_history()
-            if "inspiration" not in history:
-                history["inspiration"] = []
-            inspiration_item = {
-                "id": insp_id,
-                "image_url": image_url,
-                "keywords": keywords,
-                "created_at": utc_now()
-            }
-            history["inspiration"].append(inspiration_item)
-            rebuild_history_graph(history)
-            save_history(history)
-            return {"ok": True, "inspiration": inspiration_item}
+                    threads = history.get("threads", [])
+                    updated_threads = []
+                    for thread in threads:
+                        if "comments" in thread:
+                            thread["comments"] = [c for c in thread["comments"] if c.get("post_image_id") != image_id]
+                        tid = thread.get("thread_id")
+                        if tid == thread_id:
+                            if not thread_turns:
+                                continue
+                            if new_thread_id:
+                                thread["thread_id"] = new_thread_id
+                                thread["root_image_id"] = new_thread_id
+                            if "posts" in thread:
+                                thread["posts"] = [p for p in thread["posts"] if p != image_id]
+                                if new_thread_id and new_thread_id not in thread["posts"]:
+                                    thread["posts"].insert(0, new_thread_id)
+                            thread["updated_at"] = utc_now()
+                            updated_threads.append(thread)
+                        else:
+                            updated_threads.append(thread)
+                    history["threads"] = updated_threads
+                    rebuild_history_graph(history)
+                    save_history(history)
+                    return {"ok": True, "message": f"Post {image_id} deleted successfully."}
 
-        elif action == "delete_inspiration":
-            insp_id = payload.get("id")
-            if not insp_id:
-                return {"ok": False, "error": "Missing id."}
-            history = load_history()
-            inspiration = history.get("inspiration", [])
-            target = None
-            for item in inspiration:
-                if item.get("id") == insp_id:
-                    target = item
-                    break
-            if not target:
-                return {"ok": False, "error": f"Inspiration item {insp_id} not found."}
-            inspiration.remove(target)
-            history["inspiration"] = inspiration
-            try:
-                webp_path = IMAGE_DIR / f"{insp_id}.webp"
-                if webp_path.exists():
-                    webp_path.unlink()
-            except Exception as exc:
-                print(f"[delete_inspiration] Warning: failed to delete file: {exc}", flush=True)
-            rebuild_history_graph(history)
-            save_history(history)
-            return {"ok": True, "message": f"Inspiration {insp_id} deleted successfully."}
-
-        elif action == "simplify_keywords":
-            history = load_history()
-            
-            # 1. Collect all unique keywords
-            unique_keywords = set()
-            for turn in history.get("turns", []):
-                for kw in turn.get("keywords", []):
-                    if kw:
-                        unique_keywords.add(kw)
-            for item in history.get("inspiration", []):
-                for kw in item.get("keywords", []):
-                    if kw:
-                        unique_keywords.add(kw)
-                        
-            if not unique_keywords:
-                return {"ok": True, "message": "No keywords to simplify."}
-                
-            # 2. Ask Gemini to map them
-            prompt = (
-                "You are an expert design vocabulary parser. You will be given a JSON list of hashtag keywords.\n"
-                "Analyze each keyword. If it is a compound/merged word representing multiple concepts (e.g., '#impossiblegeometryflux', '#monochromeminimalism', '#silkarchitecture', '#cyberpunkretro'), "
-                "split it into its constituent individual concepts (e.g., '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'; '#silk', '#architecture'; '#cyberpunk', '#retro').\n"
-                "If it is already a single clean concept (e.g., '#minimalism', '#brutalist', '#fashion', '#flux'), keep it as-is.\n"
-                "Avoid returning empty lists or generic words.\n"
-                "Return a JSON object with a single key 'mapping' containing the mapping of old keyword to list of simplified keywords.\n"
-                f"Input list: {json.dumps(list(unique_keywords))}"
-            )
-            
-            mapping = {}
-            try:
-                res = gemini_generate(prompt)
-                if isinstance(res, dict) and "mapping" in res:
-                    mapping = res["mapping"]
-            except Exception as exc:
-                return {"ok": False, "error": f"Failed to simplify keywords: {str(exc)}"}
-                
-            if not mapping:
-                return {"ok": False, "error": "Gemini returned an empty or invalid mapping."}
-                
-            # 3. Apply the mapping to history
-            def map_keywords(kws):
-                new_kws = []
-                for kw in kws:
-                    mapped = mapping.get(kw)
-                    if isinstance(mapped, list):
-                        for m in mapped:
-                            # Normalize
-                            m_cleaned = m.strip().lower()
-                            if not m_cleaned.startswith("#"):
-                                m_cleaned = "#" + m_cleaned
-                            # Remove spaces and filter characters
-                            m_cleaned = re.sub(r"[^a-z0-9#-]", "", m_cleaned.replace(" ", ""))
-                            # Filter out generic words
-                            if m_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"} and m_cleaned not in new_kws:
-                                new_kws.append(m_cleaned)
+                elif action == "upload_inspiration":
+                    image_base64 = payload.get("image_base64")
+                    if not image_base64:
+                        return {"ok": False, "error": "Missing image_base64."}
+                    if "," in image_base64:
+                        header, base64_data = image_base64.split(",", 1)
                     else:
-                        # Fallback to original
-                        if kw not in new_kws:
-                            new_kws.append(kw)
-                return new_kws
+                        base64_data = image_base64
+                    img_bytes = base64.b64decode(base64_data)
 
-            updated_turns = 0
-            for turn in history.get("turns", []):
-                old_kws = turn.get("keywords", [])
-                new_kws = map_keywords(old_kws)
-                if new_kws != old_kws:
-                    turn["keywords"] = new_kws
-                    updated_turns += 1
-                if isinstance(turn.get("prompt_json"), dict) and "keywords" in turn["prompt_json"]:
-                    turn["prompt_json"]["keywords"] = map_keywords(turn["prompt_json"]["keywords"])
+                    import time
+                    insp_id = f"insp_{int(time.time())}"
+                    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+                    webp_path = IMAGE_DIR / f"{insp_id}.webp"
+                    from io import BytesIO
+                    from PIL import Image
+                    with Image.open(BytesIO(img_bytes)) as img:
+                        if img.mode in ("RGBA", "LA"):
+                            background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                            background.paste(img, (0, 0), img)
+                            converted = background.convert("RGB")
+                        else:
+                            converted = img.convert("RGB")
+                        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
 
-            updated_insp = 0
-            for item in history.get("inspiration", []):
-                old_kws = item.get("keywords", [])
-                new_kws = map_keywords(old_kws)
-                if new_kws != old_kws:
-                    item["keywords"] = new_kws
-                    updated_insp += 1
+                    try:
+                        web_url = get_image.get_web_url()
+                    except Exception:
+                        web_url = "https://heebok-lee--areopagus-get-image.modal.run"
 
-            if updated_turns > 0 or updated_insp > 0:
-                rebuild_history_graph(history)
-                save_history(history)
-                return {"ok": True, "message": f"Successfully simplified keywords. Updated {updated_turns} turns and {updated_insp} inspiration items."}
-                
-            return {"ok": True, "message": "All keywords are already simplified."}
+                    web_url = web_url.rstrip("/")
+                    image_url = f"{web_url}/?id={insp_id}"
 
-        else:
-            return {"ok": False, "error": f"Unknown action: {action}"}
+                    prompt = (
+                        "Analyze this image and return a JSON object containing exactly 5 to 8 highly descriptive, simple, and intuitive keywords. "
+                        "The keywords must be visually descriptive (e.g., describing specific textures, lighting, color palettes, geometric structures, design styles, artistic movements, visual elements) "
+                        "and conceptually/metaphorically related (e.g., evoking specific moods, thematic concepts, design philosophies, metaphors). "
+                        "NEVER use generic or lazy words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'. "
+                        "Each keyword must start with a '#', contain only lowercase letters, and have no spaces. "
+                        "Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. "
+                        "Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). "
+                        "The response must be a JSON object with a single key 'keywords' containing the list of strings. "
+                        "Example format: {\"keywords\": [\"#kinetic\", \"#sculpture\", \"#biomimicry\", \"#gothic\", \"#anatomy\"]}"
+                    )
+                    keywords = ["#visualconcept", "#creativeideation", "#designmetaphor", "#aestheticreference", "#conceptualmotif"]
+                    try:
+                        res = gemini_generate(prompt, image_bytes=img_bytes, image_mime_type=payload.get("mime_type", "image/png"))
+                        if isinstance(res, dict) and "keywords" in res and isinstance(res["keywords"], list):
+                            cleaned_keywords = []
+                            for kw in res["keywords"]:
+                                if not isinstance(kw, str):
+                                    continue
+                                kw_cleaned = kw.strip().lower()
+                                if not kw_cleaned.startswith("#"):
+                                    kw_cleaned = "#" + kw_cleaned
+                                # Remove spaces and filter characters
+                                kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
+                                # Filter out generic words
+                                if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                                    cleaned_keywords.append(kw_cleaned)
+                            if len(cleaned_keywords) >= 3:
+                                keywords = cleaned_keywords
+                    except Exception as exc:
+                        print(f"[upload_inspiration] Keyword generation failed: {exc}.", flush=True)
 
-    except Exception as exc:
-        traceback.print_exc()
-        return {"ok": False, "error": str(exc)}
+                    history = load_history()
+                    if "inspiration" not in history:
+                        history["inspiration"] = []
+                    inspiration_item = {
+                        "id": insp_id,
+                        "image_url": image_url,
+                        "keywords": keywords,
+                        "created_at": utc_now()
+                    }
+                    history["inspiration"].append(inspiration_item)
+                    rebuild_history_graph(history)
+                    save_history(history)
+                    return {"ok": True, "inspiration": inspiration_item}
+
+                elif action == "delete_inspiration":
+                    insp_id = payload.get("id")
+                    if not insp_id:
+                        return {"ok": False, "error": "Missing id."}
+                    history = load_history()
+                    inspiration = history.get("inspiration", [])
+                    target = None
+                    for item in inspiration:
+                        if item.get("id") == insp_id:
+                            target = item
+                            break
+                    if not target:
+                        return {"ok": False, "error": f"Inspiration item {insp_id} not found."}
+                    inspiration.remove(target)
+                    history["inspiration"] = inspiration
+                    try:
+                        webp_path = IMAGE_DIR / f"{insp_id}.webp"
+                        if webp_path.exists():
+                            webp_path.unlink()
+                    except Exception as exc:
+                        print(f"[delete_inspiration] Warning: failed to delete file: {exc}", flush=True)
+                    rebuild_history_graph(history)
+                    save_history(history)
+                    return {"ok": True, "message": f"Inspiration {insp_id} deleted successfully."}
+
+                elif action == "simplify_keywords":
+                    history = load_history()
+
+                    # 1. Collect all unique keywords
+                    unique_keywords = set()
+                    for turn in history.get("turns", []):
+                        for kw in turn.get("keywords", []):
+                            if kw:
+                                unique_keywords.add(kw)
+                    for item in history.get("inspiration", []):
+                        for kw in item.get("keywords", []):
+                            if kw:
+                                unique_keywords.add(kw)
+
+                    if not unique_keywords:
+                        return {"ok": True, "message": "No keywords to simplify."}
+
+                    # 2. Ask Gemini to map them
+                    prompt = (
+                        "You are an expert design vocabulary parser. You will be given a JSON list of hashtag keywords.\n"
+                        "Analyze each keyword. If it is a compound/merged word representing multiple concepts (e.g., '#impossiblegeometryflux', '#monochromeminimalism', '#silkarchitecture', '#cyberpunkretro'), "
+                        "split it into its constituent individual concepts (e.g., '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'; '#silk', '#architecture'; '#cyberpunk', '#retro').\n"
+                        "If it is already a single clean concept (e.g., '#minimalism', '#brutalist', '#fashion', '#flux'), keep it as-is.\n"
+                        "Avoid returning empty lists or generic words.\n"
+                        "Return a JSON object with a single key 'mapping' containing the mapping of old keyword to list of simplified keywords.\n"
+                        f"Input list: {json.dumps(list(unique_keywords))}"
+                    )
+
+                    mapping = {}
+                    try:
+                        res = gemini_generate(prompt)
+                        if isinstance(res, dict) and "mapping" in res:
+                            mapping = res["mapping"]
+                    except Exception as exc:
+                        return {"ok": False, "error": f"Failed to simplify keywords: {str(exc)}"}
+
+                    if not mapping:
+                        return {"ok": False, "error": "Gemini returned an empty or invalid mapping."}
+
+                    # 3. Apply the mapping to history
+                    def map_keywords(kws):
+                        new_kws = []
+                        for kw in kws:
+                            mapped = mapping.get(kw)
+                            if isinstance(mapped, list):
+                                for m in mapped:
+                                    # Normalize
+                                    m_cleaned = m.strip().lower()
+                                    if not m_cleaned.startswith("#"):
+                                        m_cleaned = "#" + m_cleaned
+                                    # Remove spaces and filter characters
+                                    m_cleaned = re.sub(r"[^a-z0-9#-]", "", m_cleaned.replace(" ", ""))
+                                    # Filter out generic words
+                                    if m_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"} and m_cleaned not in new_kws:
+                                        new_kws.append(m_cleaned)
+                            else:
+                                # Fallback to original
+                                if kw not in new_kws:
+                                    new_kws.append(kw)
+                        return new_kws
+
+                    updated_turns = 0
+                    for turn in history.get("turns", []):
+                        old_kws = turn.get("keywords", [])
+                        new_kws = map_keywords(old_kws)
+                        if new_kws != old_kws:
+                            turn["keywords"] = new_kws
+                            updated_turns += 1
+                        if isinstance(turn.get("prompt_json"), dict) and "keywords" in turn["prompt_json"]:
+                            turn["prompt_json"]["keywords"] = map_keywords(turn["prompt_json"]["keywords"])
+
+                    updated_insp = 0
+                    for item in history.get("inspiration", []):
+                        old_kws = item.get("keywords", [])
+                        new_kws = map_keywords(old_kws)
+                        if new_kws != old_kws:
+                            item["keywords"] = new_kws
+                            updated_insp += 1
+
+                    if updated_turns > 0 or updated_insp > 0:
+                        rebuild_history_graph(history)
+                        save_history(history)
+                        return {"ok": True, "message": f"Successfully simplified keywords. Updated {updated_turns} turns and {updated_insp} inspiration items."}
+
+                    return {"ok": True, "message": "All keywords are already simplified."}
+
+                else:
+                    return {"ok": False, "error": f"Unknown action: {action}"}
+
+            except Exception as exc:
+                traceback.print_exc()
+                return {"ok": False, "error": str(exc)}
 
 
 
+    return mutate_api
 @app.function(
     image=image,
     volumes={"/data": data_volume},

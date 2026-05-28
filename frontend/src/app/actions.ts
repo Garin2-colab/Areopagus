@@ -106,3 +106,20 @@ export async function replaceImageAction(imageId: string, base64Data: string, mi
     };
   }
 }
+
+export async function getUploadSettingsAction() {
+  return {
+    mutateUrl: getMutateUrl(),
+    imageUrlBase: getModalImageUrl()
+  };
+}
+
+export async function revalidateHistoryAction() {
+  try {
+    revalidateTag("history", "max");
+    return { ok: true };
+  } catch (err) {
+    console.error("Failed to revalidate cache tag:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Revalidation failed" };
+  }
+}
