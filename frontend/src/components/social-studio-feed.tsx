@@ -104,13 +104,13 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
       </CardHeader>
 
       <CardContent className="space-y-4 px-4 py-4 md:px-5">
-        {feedThreads.map((thread) => {
+        {feedThreads.map((thread, index) => {
           const counts = countCommentsAndReplies(thread);
           const totalComments = counts.comments + counts.replies;
           
           const lastActivityTime = new Date(thread.updated_at).getTime();
           const hrs24Ms = 24 * 60 * 60 * 1000;
-          const isHighlighted = !isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms);
+          const isHighlighted = index < 3 && !isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms);
           return (
             <div
               key={thread.thread_id}
