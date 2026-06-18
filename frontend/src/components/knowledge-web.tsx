@@ -51,6 +51,18 @@ type GraphNode =
       fx?: number;
       fy?: number;
       val?: number;
+    }
+  | {
+      id: string;
+      kind: "brain";
+      brainType: string;
+      imageUrl: string;
+      label: string;
+      x?: number;
+      y?: number;
+      fx?: number;
+      fy?: number;
+      val?: number;
     };
 
 type GraphLink = {
@@ -62,7 +74,7 @@ const ForceGraph2D = dynamic(async () => (await import("react-force-graph-2d")).
   ssr: false
 });
 
-import type { HistoryTurn, Thread, InspirationItem } from "@/lib/history";
+import type { HistoryTurn, Thread, InspirationItem, BrainItem } from "@/lib/history";
 
 function getGraphImageUrl(url: string, format?: string) {
   if (!url) return "";
@@ -83,7 +95,7 @@ function getGraphImageUrl(url: string, format?: string) {
   return url;
 }
 
-function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: InspirationItem[] = []) {
+function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: InspirationItem[] = [], brain: BrainItem[] = []) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
   const keywordNodes = new Map<string, GraphNode>();
@@ -146,6 +158,32 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
 
+  // Brain items
+  for (const item of brain) {
+    const brainNode: GraphNode = {
+      id: item.id,
+      kind: "brain",
+      brainType: item.type,
+      imageUrl: item.type === "image" ? getGraphImageUrl(item.image_url) : "",
+      label: item.title || "Brain",
+    };
+    nodes.push(brainNode);
+
+    for (const keyword of item.keywords || []) {
+      if (!keywordNodes.has(keyword)) {
+        const keywordNode: GraphNode = {
+          id: keyword,
+          kind: "keyword",
+          label: keyword,
+        };
+        keywordNodes.set(keyword, keywordNode);
+        nodes.push(keywordNode);
+      }
+      links.push({ source: keyword, target: item.id });
+    }
+    imageKeywords.set(item.id, [...(item.keywords || [])]);
+  }
+
 
 
   // Filter out links that reference non-existent nodes (e.g. deleted posts)
@@ -159,7 +197,8 @@ type KnowledgeWebProps = {
   turns: HistoryTurn[];
   threads?: Thread[];
   inspiration?: InspirationItem[];
-  onImageSelect: (id: string, kind: "image" | "inspiration") => void;
+  brain?: BrainItem[];
+  onImageSelect: (id: string, kind: "image" | "inspiration" | "brain") => void;
   selectedTurnId?: string | null;
   activeNodes?: string[];
   onRefresh?: () => Promise<void> | void;
@@ -169,6 +208,7 @@ export function KnowledgeWeb({
   turns,
   threads = [],
   inspiration = [],
+  brain = [],
   onImageSelect,
   selectedTurnId,
   activeNodes = [],
@@ -216,8 +256,8 @@ export function KnowledgeWeb({
   };
   
   const { nodes, links, imageKeywords } = useMemo(
-    () => buildGraph(turns, threads, inspiration),
-    [turns, threads, inspiration]
+    () => buildGraph(turns, threads, inspiration, brain),
+    [turns, threads, inspiration, brain]
   );
   
   const router = useRouter();
@@ -236,7 +276,7 @@ export function KnowledgeWeb({
   const connectedImages = useMemo(() => {
     if (!hoverNode || hoverNode.kind !== "keyword") return [];
     const keyword = hoverNode.id;
-    const list: { id: string; url: string; label: string; kind: "image" | "inspiration" }[] = [];
+    const list: { id: string; url: string; label: string; kind: "image" | "inspiration" | "brain" }[] = [];
 
     for (const turn of turns) {
       if (turn.keywords && turn.keywords.includes(keyword)) {
@@ -260,8 +300,19 @@ export function KnowledgeWeb({
       }
     }
 
+    for (const item of brain) {
+      if (item.keywords && item.keywords.includes(keyword)) {
+        list.push({
+          id: item.id,
+          url: item.type === "image" ? item.image_url : "",
+          label: item.title || "Brain",
+          kind: "brain"
+        });
+      }
+    }
+
     return list;
-  }, [hoverNode, turns, inspiration]);
+  }, [hoverNode, turns, inspiration, brain]);
 
   // Measure container
   useEffect(() => {
@@ -309,7 +360,8 @@ export function KnowledgeWeb({
     const urls = Array.from(
       new Set([
         ...turns.map((turn) => getGraphImageUrl(turn.image_url, turn.image_webp?.format)),
-        ...inspiration.map((item) => getGraphImageUrl(item.image_url))
+        ...inspiration.map((item) => getGraphImageUrl(item.image_url)),
+        ...brain.filter((item) => item.type === "image" && item.image_url).map((item) => getGraphImageUrl(item.image_url))
       ])
     );
     let cancelled = false;
@@ -426,7 +478,7 @@ export function KnowledgeWeb({
       }
       cache.clear();
     };
-  }, [turns, inspiration, isTurnVideoUrl]);
+  }, [turns, inspiration, brain, isTurnVideoUrl]);
 
   // Set up an animation refresh loop for videos in the canvas
   useEffect(() => {
@@ -547,7 +599,7 @@ export function KnowledgeWeb({
               const typed = node as GraphNode;
               ctx.fillStyle = color;
               ctx.beginPath();
-              const radius = (typed.kind === "image" || typed.kind === "inspiration") ? 22 : 12;
+              const radius = (typed.kind === "image" || typed.kind === "inspiration" || typed.kind === "brain") ? 22 : 12;
               ctx.arc(typed.x ?? 0, typed.y ?? 0, radius, 0, Math.PI * 2, false);
               ctx.fill();
             }}
@@ -557,13 +609,13 @@ export function KnowledgeWeb({
               const hovered = hoverNode?.id === typed.id;
               const selected = selectedNode?.id === typed.id;
               const isActive = activeNodeSet.size > 0 && activeNodeSet.has(typed.id);
-              const radius = (typed.kind === "image" || typed.kind === "inspiration")
+              const radius = (typed.kind === "image" || typed.kind === "inspiration" || typed.kind === "brain")
                 ? (hovered || selected ? 18 : 14)
                 : typed.kind === "comment" ? 8 : 6;
               const labelScale = Math.max(0.55, 1 / globalScale);
               const mainLabelOpacity = getLabelOpacity(
                 globalScale,
-                (typed.kind === "image" || typed.kind === "inspiration") ? 12 : 11,
+                (typed.kind === "image" || typed.kind === "inspiration" || typed.kind === "brain") ? 12 : 11,
                 hovered || isActive,
                 selected
               );
@@ -573,7 +625,7 @@ export function KnowledgeWeb({
 
 
 
-              if (typed.kind === "image" || typed.kind === "inspiration") {
+              if (typed.kind === "image" || typed.kind === "inspiration" || (typed.kind === "brain" && typed.imageUrl)) {
                 const cachedImage = imageCacheRef.current.get(typed.imageUrl);
 
                 ctx.fillStyle = "#FAF9F6";
@@ -603,7 +655,7 @@ export function KnowledgeWeb({
 
                 ctx.restore();
 
-                ctx.strokeStyle = isActive ? "#D45113" : (typed.kind === "inspiration" ? "#D45113" : (selected || hovered ? "#252422" : "#858076"));
+                ctx.strokeStyle = isActive ? "#D45113" : (typed.kind === "inspiration" || typed.kind === "brain" ? "#D45113" : (selected || hovered ? "#252422" : "#858076"));
                 ctx.lineWidth = isActive ? 2.5 : (selected || hovered ? 1.8 : 1);
                 ctx.beginPath();
                 ctx.arc(0, 0, radius + 2, 0, Math.PI * 2);
@@ -639,8 +691,8 @@ export function KnowledgeWeb({
               const typed = node as GraphNode;
               if (typed.kind === "image") {
                 router.push(`/post/${typed.id}`);
-              } else if (typed.kind === "inspiration") {
-                onImageSelect(typed.id, typed.kind);
+              } else if (typed.kind === "inspiration" || typed.kind === "brain") {
+                onImageSelect(typed.id, typed.kind === "brain" ? "brain" : "inspiration");
               }
             }}
           />

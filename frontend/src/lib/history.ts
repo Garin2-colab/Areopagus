@@ -77,6 +77,22 @@ export type InspirationItem = {
   created_at: string;
 };
 
+export type BrainItem = {
+  id: string;
+  type: "image" | "note" | "reference";
+  source_file: string;
+  title: string;
+  keywords: string[];
+  summary: string;
+  mood: string;
+  color_palette: string[];
+  excerpt: string;
+  image_url: string;
+  full_text?: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type HistoryData = {
   project?: string;
   created_at?: string;
@@ -84,6 +100,7 @@ export type HistoryData = {
   turns: HistoryTurn[];
   threads?: Thread[];
   inspiration?: InspirationItem[];
+  brain?: BrainItem[];
   graph?: {
     nodes?: Array<Record<string, unknown>>;
     edges?: Array<Record<string, unknown>>;
@@ -174,12 +191,17 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
     image_url: sanitizeImageUrls(item.image_url)
   }));
 
+  const brain = (Array.isArray(data.brain) ? data.brain : []).map(item => ({
+    ...item,
+    image_url: sanitizeImageUrls(item.image_url)
+  }));
+
   let graph = data.graph;
   if (graph && Array.isArray(graph.nodes)) {
     graph = {
       ...graph,
       nodes: graph.nodes.map(node => {
-        if ((node.type === "image" || node.type === "inspiration") && typeof node.url === "string") {
+        if ((node.type === "image" || node.type === "inspiration" || String(node.type).startsWith("brain")) && typeof node.url === "string") {
           return { ...node, url: sanitizeImageUrls(node.url) };
         }
         return node;
@@ -191,6 +213,7 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
     ...data,
     turns,
     inspiration,
+    brain,
     graph
   };
 }

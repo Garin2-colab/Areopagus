@@ -223,8 +223,13 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
         if (response.ok) {
           const data = await response.json();
           if (data.ok && data.config && Array.isArray(data.config.agents)) {
+            const existingNames: string[] = [];
             const loaded = data.config.agents
-              .map((agent: any, idx: number) => normalizeStoredAgent(agent, idx))
+              .map((agent: any, idx: number) => {
+                const result = normalizeStoredAgent(agent, idx, existingNames);
+                if (result) existingNames.push(result.name);
+                return result;
+              })
               .filter((agent: any): agent is AgentRecord => agent !== null);
             if (loaded.length > 0 && active) {
               nextAgentNumber.current = nextAgentIndex(loaded);

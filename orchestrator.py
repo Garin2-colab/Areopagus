@@ -1178,6 +1178,21 @@ def retrieve_associative_memory(
             # Assign simulated high relevance (e.g. 9999) to prioritize user-uploaded references
             candidates.append((len(overlap), 9999, insp_copy))
 
+    # Search Second Brain items (highest priority)
+    for brain_item in history.get("brain", []):
+        if not isinstance(brain_item, dict) or "id" not in brain_item:
+            continue
+
+        brain_keywords = {k.lower() for k in brain_item.get("keywords", [])}
+        overlap = brain_keywords.intersection(current_keywords_set)
+        if overlap:
+            brain_copy = dict(brain_item)
+            brain_copy["image_id"] = brain_item["id"]
+            brain_copy["turn"] = "Brain"
+            brain_copy["proposal"] = brain_item.get("summary", "Second Brain Reference")
+            # Assign highest priority to brain items
+            candidates.append((len(overlap), 10000, brain_copy))
+
     if not candidates:
         return None
 
@@ -1646,6 +1661,40 @@ def rebuild_history_graph(history: dict[str, Any]) -> None:
                 "relation": "tagged_with",
             })
 
+    # Process brain items (Second Brain)
+    for item in history.get("brain", []):
+        if not isinstance(item, dict) or "id" not in item:
+            continue
+
+        brain_id = item["id"]
+        item_type = item.get("type", "image")
+        node_type = "brain" if item_type == "image" else f"brain-{item_type}"
+
+        if brain_id not in {n["id"] for n in history["graph"]["nodes"]}:
+            history["graph"]["nodes"].append({
+                "id": brain_id,
+                "type": node_type,
+                "label": item.get("title", "Brain Item"),
+                "url": item.get("image_url", ""),
+            })
+
+        for keyword in item.get("keywords", []):
+            if not keyword:
+                continue
+            keyword_node_id = f"keyword-{keyword.lower().lstrip('#')}"
+
+            if keyword_node_id not in {n["id"] for n in history["graph"]["nodes"]}:
+                history["graph"]["nodes"].append({
+                    "id": keyword_node_id,
+                    "type": "keyword",
+                    "label": keyword,
+                })
+
+            history["graph"]["edges"].append({
+                "from": brain_id,
+                "to": keyword_node_id,
+                "relation": "tagged_with",
+            })
 
 @app.function(
     image=image,
@@ -2247,6 +2296,156 @@ def mutate_history_endpoint():
                     rebuild_history_graph(history)
                     save_history(history)
                     return {"ok": True, "message": f"Inspiration {insp_id} deleted successfully."}
+
+                elif action == "upload_brain_item":
+                    brain_id = payload.get("brain_id")
+                    item_type = payload.get("type", "image")
+                    source_file = payload.get("source_file", "")
+                    keywords = payload.get("keywords", [])
+                    summary = payload.get("summary", "")
+                    mood = payload.get("mood", "")
+                    title = payload.get("title", source_file)
+                    color_palette = payload.get("color_palette", [])
+                    excerpt = payload.get("excerpt", "")
+                    full_text = payload.get("full_text")
+                    image_base64 = payload.get("image_base64")
+                    mime_type = payload.get("mime_type", "image/jpeg")
+
+                    if not brain_id:
+                        return {"ok": False, "error": "Missing brain_id."}
+
+                    image_url = ""
+
+                    # Save image if provided (for image-type brain items)
+                    if image_base64 and item_type == "image":
+                        if "," in image_base64:
+                            header, base64_data = image_base64.split(",", 1)
+                        else:
+                            base64_data = image_base64
+                        img_bytes = base64.b64decode(base64_data)
+
+                        IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+                        webp_path = IMAGE_DIR / f"{brain_id}.webp"
+                        from io import BytesIO
+                        from PIL import Image
+                        with Image.open(BytesIO(img_bytes)) as img:
+                            if img.mode in ("RGBA", "LA"):
+                                background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                                background.paste(img, (0, 0), img)
+                                converted = background.convert("RGB")
+                            else:
+                                converted = img.convert("RGB")
+                            converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+
+                        try:
+                            web_url = get_image.get_web_url()
+                        except Exception:
+                            web_url = "https://heebok-lee--areopagus-get-image.modal.run"
+                        web_url = web_url.rstrip("/")
+                        image_url = f"{web_url}/?id={brain_id}"
+
+                    # Normalize keywords
+                    cleaned_keywords = []
+                    for kw in keywords:
+                        if not isinstance(kw, str):
+                            continue
+                        kw_cleaned = kw.strip().lower()
+                        if not kw_cleaned.startswith("#"):
+                            kw_cleaned = "#" + kw_cleaned
+                        kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
+                        if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                            cleaned_keywords.append(kw_cleaned)
+
+                    history = load_history()
+                    if "brain" not in history:
+                        history["brain"] = []
+
+                    # Check if brain_id already exists (update case)
+                    existing_item = None
+                    for item in history["brain"]:
+                        if item.get("id") == brain_id:
+                            existing_item = item
+                            break
+
+                    brain_item = {
+                        "id": brain_id,
+                        "type": item_type,
+                        "source_file": source_file,
+                        "title": title,
+                        "keywords": cleaned_keywords,
+                        "summary": summary,
+                        "mood": mood,
+                        "color_palette": color_palette if isinstance(color_palette, list) else [],
+                        "excerpt": excerpt,
+                        "image_url": image_url,
+                        "created_at": existing_item.get("created_at", utc_now()) if existing_item else utc_now(),
+                        "updated_at": utc_now(),
+                    }
+
+                    if full_text and item_type == "note":
+                        brain_item["full_text"] = full_text
+
+                    if existing_item:
+                        idx = history["brain"].index(existing_item)
+                        history["brain"][idx] = brain_item
+                    else:
+                        history["brain"].append(brain_item)
+
+                    # Add brain item to the knowledge graph
+                    brain_node_id = brain_id
+                    graph = history.setdefault("graph", {"nodes": [], "edges": []})
+                    existing_node_ids = {n["id"] for n in graph.get("nodes", []) if isinstance(n, dict)}
+
+                    if brain_node_id not in existing_node_ids:
+                        graph["nodes"].append({
+                            "id": brain_node_id,
+                            "type": "brain" if item_type == "image" else f"brain-{item_type}",
+                            "label": title or "Brain Item",
+                            "url": image_url,
+                        })
+
+                    for keyword in cleaned_keywords:
+                        keyword_node_id = f"keyword-{keyword.lower().lstrip('#')}"
+                        if keyword_node_id not in existing_node_ids and keyword_node_id not in {n["id"] for n in graph["nodes"]}:
+                            graph["nodes"].append({
+                                "id": keyword_node_id,
+                                "type": "keyword",
+                                "label": keyword,
+                            })
+                        graph["edges"].append({
+                            "from": brain_node_id,
+                            "to": keyword_node_id,
+                            "relation": "tagged_with",
+                        })
+
+                    save_history(history)
+                    return {"ok": True, "brain_item": brain_item}
+
+                elif action == "delete_brain_item":
+                    brain_id = payload.get("id")
+                    if not brain_id:
+                        return {"ok": False, "error": "Missing id."}
+                    history = load_history()
+                    brain_items = history.get("brain", [])
+                    target = None
+                    for item in brain_items:
+                        if item.get("id") == brain_id:
+                            target = item
+                            break
+                    if not target:
+                        return {"ok": False, "error": f"Brain item {brain_id} not found."}
+                    brain_items.remove(target)
+                    history["brain"] = brain_items
+                    # Clean up image file if exists
+                    try:
+                        webp_path = IMAGE_DIR / f"{brain_id}.webp"
+                        if webp_path.exists():
+                            webp_path.unlink()
+                    except Exception as exc:
+                        print(f"[delete_brain_item] Warning: failed to delete file: {exc}", flush=True)
+                    rebuild_history_graph(history)
+                    save_history(history)
+                    return {"ok": True, "message": f"Brain item {brain_id} deleted successfully."}
 
                 elif action == "simplify_keywords":
                     history = load_history()

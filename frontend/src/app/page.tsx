@@ -9,7 +9,7 @@ import { StudioStatusFooter } from "@/components/studio-status-footer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnowledgeWeb } from "@/components/knowledge-web";
 import { SocialStudioTable } from "@/components/social-studio-table";
-import { InspirationManager } from "@/components/inspiration-manager";
+import { BrainHub } from "@/components/brain-hub";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { fetchHistory, sortTurnsNewestFirst, type HistoryData } from "@/lib/history";
 import { useStudioStatus } from "@/lib/useStudioStatus";
@@ -60,6 +60,7 @@ export default function Home() {
   const turns = useMemo(() => sortTurnsNewestFirst(history?.turns ?? []), [history]);
   const threads = useMemo(() => history?.threads ?? [], [history]);
   const inspiration = useMemo(() => history?.inspiration ?? [], [history]);
+  const brain = useMemo(() => history?.brain ?? [], [history]);
 
   return (
     <main className="min-h-screen bg-[#F5F2EB] pb-14 text-[#252422]">
@@ -78,7 +79,7 @@ export default function Home() {
                 Macro
               </TabsTrigger>
               <TabsTrigger value="inspiration" className="px-4">
-                Inspiration
+                Brain
               </TabsTrigger>
               <TabsTrigger value="table" className="px-4">
                 Table
@@ -93,7 +94,7 @@ export default function Home() {
               )}
               {view === "inspiration" && (
                 <h2 className="font-display text-xs font-bold tracking-[0.25em] text-[#858076] uppercase">
-                  Inspiration Board
+                  Second Brain
                 </h2>
               )}
               {view === "table" && (
@@ -118,8 +119,9 @@ export default function Home() {
                     turns={turns}
                     threads={threads}
                     inspiration={inspiration}
+                    brain={brain}
                     onImageSelect={(id, kind) => {
-                      if (kind === "inspiration") {
+                      if (kind === "inspiration" || kind === "brain") {
                         setView("inspiration");
                         setTimeout(() => {
                           const el = document.getElementById(`inspiration-${id}`);
@@ -140,7 +142,8 @@ export default function Home() {
                 </div>
               )}
               <div className={view === "inspiration" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
-                <InspirationManager
+                <BrainHub
+                  brain={brain}
                   inspiration={inspiration}
                   onRefresh={reloadHistory}
                   onImageClick={setLightboxSrc}
