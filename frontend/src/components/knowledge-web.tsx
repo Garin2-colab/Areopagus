@@ -459,7 +459,10 @@ export function KnowledgeWeb({
   const forceGraphData = useMemo(() => {
     return {
       nodes: nodes.map((node) => ({ ...node })),
-      links: links.map((link) => ({ ...link }))
+      links: links.map((link) => ({
+        ...link,
+        particleOffset: Math.random()
+      }))
     };
   }, [links, nodes]);
 
@@ -522,7 +525,19 @@ export function KnowledgeWeb({
               }
               return "rgba(133, 128, 118, 0.35)";
             }}
-            linkDirectionalParticles={0}
+            linkDirectionalParticles={1}
+            linkDirectionalParticleWidth={2.5}
+            linkDirectionalParticleSpeed={0.008}
+            linkDirectionalParticleColor={(link: unknown) => {
+              const l = link as { source: any; target: any };
+              const sId = typeof l.source === "object" ? l.source.id : l.source;
+              const tId = typeof l.target === "object" ? l.target.id : l.target;
+              if (activeNodeSet.size > 0 && activeNodeSet.has(sId) && activeNodeSet.has(tId)) {
+                return "rgba(212, 81, 19, 0.5)"; // 50% transparent orange
+              }
+              return "rgba(133, 128, 118, 0.5)"; // 50% transparent gray
+            }}
+            linkDirectionalParticleOffset="particleOffset"
 
             // Events
             onBackgroundClick={handleBackgroundClick}
