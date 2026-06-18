@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Brain,
   ChevronDown,
+  RefreshCw,
 } from "lucide-react";
 import type { BrainItem, InspirationItem } from "@/lib/history";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,9 @@ type FilterType = "all" | "image" | "note" | "reference";
 export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainHubProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
@@ -87,6 +90,39 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setUploadError(null);
+    setSyncMessage(null);
+
+    try {
+      const response = await fetch("/api/sync-brain", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Sync failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || "Sync was not successful.");
+      }
+
+      const msg = `Synced: ${result.downloaded} downloaded, ${result.skipped} already local${result.failed ? `, ${result.failed} failed` : ""}`;
+      setSyncMessage(msg);
+      setTimeout(() => setSyncMessage(null), 6000);
+
+      await onRefresh();
+    } catch (error) {
+      console.error("Sync error:", error);
+      setUploadError(error instanceof Error ? error.message : "Sync failed.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,17 +253,26 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {isUploading && (
+          <div className="flex items-center gap-2">
+            {(isUploading || isSyncing) && (
               <div className="flex items-center gap-2 text-xs font-semibold text-[#D45113]">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Analyzing...</span>
+                <span>{isSyncing ? "Syncing..." : "Analyzing..."}</span>
               </div>
             )}
             <Button
               type="button"
+              onClick={handleSync}
+              disabled={isUploading || isSyncing}
+              className="flex items-center gap-2 rounded-full border border-[#D8D4CC] bg-white hover:bg-[#F5F2EB] text-[#44423E] font-semibold text-xs h-9 px-4 shadow-sm transition-all"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+              <span>Sync</span>
+            </Button>
+            <Button
+              type="button"
               onClick={handleUploadClick}
-              disabled={isUploading}
+              disabled={isUploading || isSyncing}
               className="flex items-center gap-2 rounded-full bg-[#D45113] hover:bg-[#b0400d] text-[#FAF9F6] font-semibold text-xs h-9 px-4 shadow-sm transition-all"
             >
               <Upload className="h-3.5 w-3.5" />
@@ -272,6 +317,13 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
         <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 animate-in fade-in duration-200">
           <AlertCircle className="h-4 w-4" />
           <span>{uploadError}</span>
+        </div>
+      )}
+
+      {syncMessage && (
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 animate-in fade-in duration-200">
+          <RefreshCw className="h-3.5 w-3.5" />
+          <span>{syncMessage}</span>
         </div>
       )}
 
