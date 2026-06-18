@@ -24,7 +24,7 @@ type BrainHubProps = {
   onImageClick: (url: string) => void;
 };
 
-type FilterType = "all" | "image" | "note" | "reference" | "legacy";
+type FilterType = "all" | "image" | "note" | "reference";
 
 export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainHubProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,7 +35,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Merge brain items with legacy inspiration items for unified view
+  // Merge brain items with legacy inspiration items (shown as references)
   const allItems = useMemo(() => {
     const brainItems: (BrainItem & { _source: "brain" })[] = brain.map((b) => ({
       ...b,
@@ -44,7 +44,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
 
     const legacyItems: (BrainItem & { _source: "brain" })[] = inspiration.map((insp) => ({
       id: insp.id,
-      type: "image" as const,
+      type: "reference" as const,
       source_file: "",
       title: insp.id,
       keywords: insp.keywords,
@@ -67,10 +67,8 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
   const filteredItems = useMemo(() => {
     let items = allItems;
 
-    if (activeFilter === "legacy") {
-      items = items.filter((item) => item.id.startsWith("insp_"));
-    } else if (activeFilter !== "all") {
-      items = items.filter((item) => item.type === activeFilter && !item.id.startsWith("insp_"));
+    if (activeFilter !== "all") {
+      items = items.filter((item) => item.type === activeFilter);
     }
 
     if (searchQuery.trim()) {
@@ -173,11 +171,9 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
   };
 
   const filterCounts = useMemo(() => {
-    const counts = { all: allItems.length, image: 0, note: 0, reference: 0, legacy: 0 };
+    const counts = { all: allItems.length, image: 0, note: 0, reference: 0 };
     for (const item of allItems) {
-      if (item.id.startsWith("insp_")) {
-        counts.legacy++;
-      } else if (item.type === "image") {
+      if (item.type === "image") {
         counts.image++;
       } else if (item.type === "note") {
         counts.note++;
@@ -188,15 +184,13 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
     return counts;
   }, [allItems]);
 
-  const typeIcon = (type: string, id: string) => {
-    if (id.startsWith("insp_")) return <ImageIcon className="h-3.5 w-3.5" />;
+  const typeIcon = (type: string) => {
     if (type === "note") return <FileText className="h-3.5 w-3.5" />;
     if (type === "reference") return <FileArchive className="h-3.5 w-3.5" />;
     return <ImageIcon className="h-3.5 w-3.5" />;
   };
 
-  const typeLabel = (type: string, id: string) => {
-    if (id.startsWith("insp_")) return "Legacy";
+  const typeLabel = (type: string) => {
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
@@ -256,7 +250,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
           </div>
 
           <div className="flex items-center gap-1.5">
-            {(["all", "image", "note", "reference", "legacy"] as FilterType[]).map((filter) => (
+            {(["all", "image", "note", "reference"] as FilterType[]).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setActiveFilter(filter)}
@@ -299,7 +293,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
           {filteredItems.map((item) => {
             const isLegacy = item.id.startsWith("insp_");
             const isExpanded = expandedId === item.id;
-            const hasImage = item.type === "image" && item.image_url;
+            const hasImage = (item.type === "image" || (item.type === "reference" && item.image_url)) && item.image_url;
 
             return (
               <div
@@ -334,8 +328,8 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
                       />
                       {/* Type badge */}
                       <div className="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-[#252422]/70 px-2 py-0.5 text-[9px] font-semibold text-[#FAF9F6] backdrop-blur-sm">
-                        {typeIcon(item.type, item.id)}
-                        <span>{typeLabel(item.type, item.id)}</span>
+                        {typeIcon(item.type)}
+                        <span>{typeLabel(item.type)}</span>
                       </div>
                     </div>
                   ) : (
