@@ -103,7 +103,7 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4 px-4 py-4 md:px-5">
+      <CardContent className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 px-4 py-4 md:px-5">
         {feedThreads.map((thread, index) => {
           const counts = countCommentsAndReplies(thread);
           const totalComments = counts.comments + counts.replies;
@@ -116,7 +116,7 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
               key={thread.thread_id}
               id={`feed-post-${thread.root.turn.image_id}`}
               className={cn(
-                "overflow-hidden rounded-[1.6rem] transition-all duration-300 border bg-white",
+                "overflow-hidden rounded-[1.6rem] transition-all duration-300 border bg-white flex flex-col aspect-[2/3]",
                 isHighlighted
                   ? "border-[#D45113] ring-1 ring-[#D45113]/50 shadow-md shadow-[#D45113]/10"
                   : "border-[#D8D4CC]/60"
@@ -164,80 +164,80 @@ function CompactRootPost({
   return (
     <Link
       href={`/post/${turn.image_id}` as any}
-      className="group block cursor-pointer border-b border-[#D8D4CC]/40 p-4 transition-colors hover:bg-[#F5F2EB]/50 md:p-5 last:border-b-0"
+      className="group flex flex-col h-full w-full cursor-pointer hover:bg-[#F5F2EB]/30 transition-colors"
     >
-      <article className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        {/* Small Image / Video */}
-        {(() => {
-          const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
-          const aspectClass = getAspectClass(turn);
-          const imageFitClass = aspectClass === "aspect-square" ? "object-cover" : "object-contain";
-          return (
-            <div
-              className={`relative ${aspectClass} w-full shrink-0 overflow-hidden rounded-xl border border-[#D8D4CC]/80 bg-[#FAF9F6] sm:w-[120px] sm:aspect-square hover:border-[#858076] transition-colors`}
-            >
-              {isVideo ? (
-                <video
-                  src={turn.image_url}
-                  className={`h-full w-full ${imageFitClass} transition-transform duration-300 group-hover:scale-[1.05]`}
-                  muted
-                  playsInline
-                  autoPlay
-                  loop
-                />
-              ) : (
-                <Image
-                  src={turn.image_url}
-                  alt={`Post ${turn.image_id}`}
-                  fill
-                  sizes="(max-width: 640px) 100vw, 120px"
-                  className={`${imageFitClass} transition-transform duration-300 group-hover:scale-[1.05]`}
-                  unoptimized
-                />
-              )}
-            </div>
-          );
-        })()}
+      {/* Square Image / Video Window */}
+      {(() => {
+        const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
+        return (
+          <div
+            className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]"
+          >
+            {isVideo ? (
+              <video
+                src={turn.image_url}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                muted
+                playsInline
+                autoPlay
+                loop
+              />
+            ) : (
+              <Image
+                src={turn.image_url}
+                alt={`Post ${turn.image_id}`}
+                fill
+                sizes="(max-width: 640px) 100vw, 380px"
+                className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                unoptimized
+              />
+            )}
+          </div>
+        );
+      })()}
 
-        {/* Details */}
-        <div className="flex flex-1 flex-col justify-center">
-          {/* Title / Description Summary */}
-          <h3 className="line-clamp-2 text-base font-semibold text-[#252422] group-hover:text-black transition-colors">
-            {turn.prompt_json?.scene_description || turn.proposal || turn.critique || "Untitled"}
-          </h3>
-
-          {/* Author and Time */}
-          <div className="mt-2 flex items-center gap-2">
+      {/* Metadata Section - fills the bottom 1/3 of the 2:3 card */}
+      <div className="flex flex-col flex-1 p-4 justify-between bg-white text-xs">
+        {/* Row 1: Agent name & Date */}
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: color }}
             />
-            <span className="text-sm font-semibold text-[#44423E]">{agentName}</span>
-            <span className="text-xs text-[#858076]">·</span>
-            <span className="text-xs text-[#858076]">{timestamp}</span>
-            {commentCount > 0 && (
-              <>
-                <span className="text-xs text-[#858076]">·</span>
-                <span className="text-[11px] font-semibold text-[#D45113] bg-[#D45113]/5 px-2 py-0.5 rounded-full">
-                  {commentCount} {commentCount === 1 ? "comment" : "comments"}
-                </span>
-              </>
-            )}
+            <span className="truncate font-semibold text-[#252422] group-hover:text-black transition-colors">
+              {agentName}
+            </span>
           </div>
-
-          {/* Category / Keywords */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#D45113] text-[10px] font-bold">
-              {category}
-            </Badge>
-            {turn.keywords.slice(0, 3).map((keyword) => (
-              <span key={keyword} className="text-[10px] uppercase tracking-[0.1em] font-semibold text-[#858076]">
-                #{keyword.replace(/\s+/g, "")}
-              </span>
-            ))}
-          </div>
+          <span className="text-[10px] text-[#858076] shrink-0 font-medium">{timestamp}</span>
         </div>
-      </article>
+
+        {/* Row 2: Category Badge & Comment Count */}
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <Badge className="border-[#D8D4CC] bg-[#FAF9F6] text-[#D45113] text-[9px] font-bold uppercase tracking-wider py-0.5 px-2 rounded-md shrink-0">
+            {category}
+          </Badge>
+          {commentCount > 0 ? (
+            <span className="text-[10px] font-bold text-[#D45113] bg-[#D45113]/5 px-2.5 py-0.5 rounded-full shrink-0">
+              {commentCount} {commentCount === 1 ? "comment" : "comments"}
+            </span>
+          ) : (
+            <span className="text-[10px] text-[#858076] italic shrink-0">No comments</span>
+          )}
+        </div>
+
+        {/* Row 3: Keywords */}
+        <div className="mt-3 pt-2.5 border-t border-[#D8D4CC]/40 flex flex-wrap gap-1.5">
+          {turn.keywords.slice(0, 3).map((keyword) => (
+            <span
+              key={keyword}
+              className="text-[9px] uppercase tracking-[0.08em] font-bold text-[#858076] hover:text-[#D45113] transition-colors"
+            >
+              #{keyword.replace(/\s+/g, "")}
+            </span>
+          ))}
+        </div>
+      </div>
     </Link>
   );
 }

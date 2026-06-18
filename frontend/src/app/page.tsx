@@ -64,7 +64,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#F5F2EB] pb-14 text-[#252422]">
       <Tabs value={view} onValueChange={(value) => setView(value as "micro" | "macro" | "inspiration" | "table")}>
-        <header className="relative mx-auto max-w-7xl px-6 pt-8">
+        <header className="relative mx-auto max-w-[1600px] px-6 pt-8">
           <div className="flex flex-col items-center gap-5">
             <div className="flex flex-col items-center gap-2">
               <h1 className="font-display text-5xl text-[#D45113] md:text-7xl">AREOPAGUS</h1>
@@ -105,7 +105,7 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl px-6 pb-10 pt-8">
+        <div className="mx-auto max-w-[1600px] px-6 pb-10 pt-8">
           {historyError ? <p className="mb-4 text-sm text-zinc-400">{historyError}</p> : null}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             <div className="lg:col-span-8">
