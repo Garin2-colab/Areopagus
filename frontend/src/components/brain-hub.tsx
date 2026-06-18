@@ -14,20 +14,21 @@ import {
   ChevronDown,
   RefreshCw,
 } from "lucide-react";
-import type { BrainItem, InspirationItem } from "@/lib/history";
+import type { BrainItem, BriefItem, InspirationItem } from "@/lib/history";
 import { Button } from "@/components/ui/button";
 import { compressImage } from "@/lib/utils";
 
 type BrainHubProps = {
   brain: BrainItem[];
   inspiration: InspirationItem[];
+  briefs: BriefItem[];
   onRefresh: () => Promise<void>;
   onImageClick: (url: string) => void;
 };
 
-type FilterType = "all" | "image" | "note" | "reference";
+type FilterType = "all" | "image" | "note" | "reference" | "brief";
 
-export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainHubProps) {
+export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }: BrainHubProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -68,6 +69,9 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
 
   // Filter and search
   const filteredItems = useMemo(() => {
+    // Briefs are handled separately
+    if (activeFilter === "brief") return [];
+
     let items = allItems;
 
     if (activeFilter !== "all") {
@@ -207,7 +211,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
   };
 
   const filterCounts = useMemo(() => {
-    const counts = { all: allItems.length, image: 0, note: 0, reference: 0 };
+    const counts = { all: allItems.length + briefs.length, image: 0, note: 0, reference: 0, brief: briefs.length };
     for (const item of allItems) {
       if (item.type === "image") {
         counts.image++;
@@ -218,7 +222,24 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
       }
     }
     return counts;
-  }, [allItems]);
+  }, [allItems, briefs]);
+
+  // Filter briefs by search query
+  const filteredBriefs = useMemo(() => {
+    if (activeFilter !== "all" && activeFilter !== "brief") return [];
+    let items = briefs;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (b) =>
+          b.title?.toLowerCase().includes(q) ||
+          b.thesis?.toLowerCase().includes(q) ||
+          b.keywords?.some((k) => k.toLowerCase().includes(q)) ||
+          b.mood?.toLowerCase().includes(q)
+      );
+    }
+    return items;
+  }, [briefs, activeFilter, searchQuery]);
 
   const typeIcon = (type: string) => {
     if (type === "note") return <FileText className="h-3.5 w-3.5" />;
@@ -295,7 +316,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
           </div>
 
           <div className="flex items-center gap-1.5">
-            {(["all", "image", "note", "reference"] as FilterType[]).map((filter) => (
+            {(["all", "image", "note", "reference", "brief"] as FilterType[]).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setActiveFilter(filter)}
@@ -327,8 +348,115 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
         </div>
       )}
 
+      {/* Creative Briefs Section */}
+      {filteredBriefs.length > 0 && (
+        <div className="space-y-3">
+          {filteredBriefs.map((brief) => {
+            const isExpanded = expandedId === brief.brief_id;
+            return (
+              <div
+                key={brief.brief_id}
+                onClick={() => setExpandedId(isExpanded ? null : brief.brief_id)}
+                className={`group relative rounded-2xl border transition-all duration-200 cursor-pointer ${
+                  isExpanded
+                    ? "border-[#D45113]/40 shadow-md shadow-[#D45113]/10 bg-[#FAF9F6]"
+                    : "border-[#D8D4CC]/60 bg-[#FAF9F6] hover:border-[#D8D4CC] hover:shadow-sm"
+                }`}
+              >
+                <div className="p-4 space-y-2">
+                  {/* Brief Header */}
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#D45113]/10">
+                      <span className="text-lg">📋</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-[#252422]">{brief.title}</h4>
+                        <span className="rounded-full bg-[#D45113]/8 px-2 py-0.5 text-[9px] font-semibold text-[#D45113] uppercase tracking-wider">Brief</span>
+                      </div>
+                      <p className="text-[11px] text-[#44423E] leading-relaxed mt-1">{brief.thesis}</p>
+                    </div>
+                  </div>
+
+                  {/* Keywords */}
+                  <div className="flex flex-wrap gap-1 ml-12">
+                    {brief.keywords.slice(0, isExpanded ? 20 : 5).map((kw) => (
+                      <span
+                        key={kw}
+                        className="rounded-full bg-[#D45113]/8 px-1.5 py-0.5 text-[9px] font-semibold text-[#D45113]"
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Expanded: Visual Rules + Palette */}
+                  {isExpanded && (
+                    <div className="ml-12 mt-2 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      {brief.visual_rules.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-[#858076] uppercase tracking-wider mb-1">Visual Rules</p>
+                          <ul className="space-y-0.5">
+                            {brief.visual_rules.map((rule, idx) => (
+                              <li key={idx} className="text-[11px] text-[#44423E] flex items-start gap-1.5">
+                                <span className="text-[#D45113] mt-0.5">•</span>
+                                <span>{rule}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {brief.mood && (
+                        <p className="text-[10px] text-[#858076] italic">Mood: {brief.mood}</p>
+                      )}
+                      {brief.color_palette.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          {brief.color_palette.map((color, idx) => (
+                            <div
+                              key={idx}
+                              className="h-4 w-4 rounded-full border border-[#D8D4CC]/60"
+                              style={{ backgroundColor: color }}
+                              title={color}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-[9px] text-[#858076]/60">
+                        Sources: {brief.source_items.length} brain items •{" "}
+                        {new Date(brief.created_at).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Expand indicator */}
+                  {!isExpanded && (
+                    <div className="flex items-center gap-0.5 ml-12 text-[9px] text-[#858076]/60">
+                      <ChevronDown className="h-3 w-3" />
+                      <span>{brief.visual_rules.length} rules • {brief.source_items.length} sources</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Card Grid */}
-      {filteredItems.length === 0 ? (
+      {activeFilter === "brief" ? (
+        filteredBriefs.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-[#858076]">
+            <span className="text-4xl mb-3">📋</span>
+            <p className="text-sm font-medium">No Creative Briefs yet.</p>
+            <p className="text-xs text-[#858076]/80 mt-1 max-w-sm text-center">
+              Briefs are auto-generated when brain items share overlapping keywords. Sync more content to trigger synthesis.
+            </p>
+          </div>
+        )
+      ) : filteredItems.length === 0 && filteredBriefs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-[#858076]">
           <Brain className="h-10 w-10 text-[#858076]/40 stroke-[1.5] mb-3" />
           <p className="text-sm font-medium">
@@ -340,7 +468,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
               : "Drop images into brain/images/ and run sync_brain.py, or upload directly."}
           </p>
         </div>
-      ) : (
+      ) : (activeFilter as string) !== "brief" && filteredItems.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {filteredItems.map((item) => {
             const isLegacy = item.id.startsWith("insp_");
@@ -495,7 +623,7 @@ export function BrainHub({ brain, inspiration, onRefresh, onImageClick }: BrainH
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

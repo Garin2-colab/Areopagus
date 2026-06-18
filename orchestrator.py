@@ -2447,6 +2447,119 @@ def mutate_history_endpoint():
                     save_history(history)
                     return {"ok": True, "message": f"Brain item {brain_id} deleted successfully."}
 
+                elif action == "upload_brief":
+                    brief_id = payload.get("brief_id")
+                    title = payload.get("title", "")
+                    thesis = payload.get("thesis", "")
+                    visual_rules = payload.get("visual_rules", [])
+                    mood = payload.get("mood", "")
+                    color_palette = payload.get("color_palette", [])
+                    source_items = payload.get("source_items", [])
+                    keywords = payload.get("keywords", [])
+
+                    if not brief_id:
+                        return {"ok": False, "error": "Missing brief_id."}
+
+                    # Normalize keywords
+                    cleaned_keywords = []
+                    for kw in keywords:
+                        if not isinstance(kw, str):
+                            continue
+                        kw_cleaned = kw.strip().lower()
+                        if not kw_cleaned.startswith("#"):
+                            kw_cleaned = "#" + kw_cleaned
+                        kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
+                        if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                            cleaned_keywords.append(kw_cleaned)
+
+                    history = load_history()
+                    if "briefs" not in history:
+                        history["briefs"] = []
+
+                    # Check if brief_id already exists (update case)
+                    existing_brief = None
+                    for brief in history["briefs"]:
+                        if brief.get("brief_id") == brief_id:
+                            existing_brief = brief
+                            break
+
+                    brief_item = {
+                        "brief_id": brief_id,
+                        "title": title,
+                        "thesis": thesis,
+                        "visual_rules": visual_rules if isinstance(visual_rules, list) else [],
+                        "mood": mood,
+                        "color_palette": color_palette if isinstance(color_palette, list) else [],
+                        "source_items": source_items if isinstance(source_items, list) else [],
+                        "keywords": cleaned_keywords,
+                        "active": True,
+                        "auto_generated": True,
+                        "created_at": existing_brief.get("created_at", utc_now()) if existing_brief else utc_now(),
+                        "updated_at": utc_now(),
+                    }
+
+                    if existing_brief:
+                        idx = history["briefs"].index(existing_brief)
+                        history["briefs"][idx] = brief_item
+                    else:
+                        history["briefs"].append(brief_item)
+
+                    # Add brief to the knowledge graph
+                    graph = history.setdefault("graph", {"nodes": [], "edges": []})
+                    existing_node_ids = {n["id"] for n in graph.get("nodes", []) if isinstance(n, dict)}
+
+                    if brief_id not in existing_node_ids:
+                        graph["nodes"].append({
+                            "id": brief_id,
+                            "type": "brief",
+                            "label": title or "Creative Brief",
+                        })
+
+                    for keyword in cleaned_keywords:
+                        keyword_node_id = f"keyword-{keyword.lower().lstrip('#')}"
+                        if keyword_node_id not in existing_node_ids and keyword_node_id not in {n["id"] for n in graph["nodes"]}:
+                            graph["nodes"].append({
+                                "id": keyword_node_id,
+                                "type": "keyword",
+                                "label": keyword,
+                            })
+                        graph["edges"].append({
+                            "from": brief_id,
+                            "to": keyword_node_id,
+                            "relation": "tagged_with",
+                        })
+
+                    # Connect brief to its source brain items
+                    for source_id in source_items:
+                        if source_id in existing_node_ids or source_id in {n["id"] for n in graph["nodes"]}:
+                            graph["edges"].append({
+                                "from": brief_id,
+                                "to": source_id,
+                                "relation": "synthesized_from",
+                            })
+
+                    save_history(history)
+                    return {"ok": True, "brief": brief_item}
+
+                elif action == "delete_brief":
+                    brief_id = payload.get("brief_id")
+                    if not brief_id:
+                        return {"ok": False, "error": "Missing brief_id."}
+                    history = load_history()
+                    briefs = history.get("briefs", [])
+                    target = None
+                    for brief in briefs:
+                        if brief.get("brief_id") == brief_id:
+                            target = brief
+                            break
+                    if not target:
+                        return {"ok": False, "error": f"Brief {brief_id} not found."}
+                    briefs.remove(target)
+                    history["briefs"] = briefs
+                    rebuild_history_graph(history)
+                    save_history(history)
+                    return {"ok": True, "message": f"Brief {brief_id} deleted successfully."}
+
                 elif action == "simplify_keywords":
                     history = load_history()
 

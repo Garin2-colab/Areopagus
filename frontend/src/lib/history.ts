@@ -93,6 +93,21 @@ export type BrainItem = {
   updated_at: string;
 };
 
+export type BriefItem = {
+  brief_id: string;
+  title: string;
+  thesis: string;
+  visual_rules: string[];
+  mood: string;
+  color_palette: string[];
+  source_items: string[];
+  keywords: string[];
+  active: boolean;
+  auto_generated: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type HistoryData = {
   project?: string;
   created_at?: string;
@@ -101,6 +116,7 @@ export type HistoryData = {
   threads?: Thread[];
   inspiration?: InspirationItem[];
   brain?: BrainItem[];
+  briefs?: BriefItem[];
   graph?: {
     nodes?: Array<Record<string, unknown>>;
     edges?: Array<Record<string, unknown>>;
@@ -209,11 +225,27 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
     };
   }
 
+  const briefs: BriefItem[] = (data.briefs || []).map((item: Record<string, unknown>) => ({
+    brief_id: String(item.brief_id || ""),
+    title: String(item.title || ""),
+    thesis: String(item.thesis || ""),
+    visual_rules: Array.isArray(item.visual_rules) ? item.visual_rules.map(String) : [],
+    mood: String(item.mood || ""),
+    color_palette: Array.isArray(item.color_palette) ? item.color_palette.map(String) : [],
+    source_items: Array.isArray(item.source_items) ? item.source_items.map(String) : [],
+    keywords: Array.isArray(item.keywords) ? item.keywords.map(String) : [],
+    active: Boolean(item.active ?? true),
+    auto_generated: Boolean(item.auto_generated ?? true),
+    created_at: String(item.created_at || ""),
+    updated_at: String(item.updated_at || ""),
+  }));
+
   return {
     ...data,
     turns,
     inspiration,
     brain,
+    briefs,
     graph
   };
 }

@@ -61,6 +61,7 @@ export default function Home() {
   const threads = useMemo(() => history?.threads ?? [], [history]);
   const inspiration = useMemo(() => history?.inspiration ?? [], [history]);
   const brain = useMemo(() => history?.brain ?? [], [history]);
+  const briefs = useMemo(() => history?.briefs ?? [], [history]);
 
   return (
     <main className="min-h-screen bg-[#F5F2EB] pb-14 text-[#252422]">
@@ -145,6 +146,7 @@ export default function Home() {
                 <BrainHub
                   brain={brain}
                   inspiration={inspiration}
+                  briefs={briefs}
                   onRefresh={reloadHistory}
                   onImageClick={setLightboxSrc}
                 />

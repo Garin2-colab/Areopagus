@@ -1,6 +1,36 @@
 from typing import Any, Dict, List
 import json
 
+
+def retrieve_matching_briefs(
+    history: dict[str, Any] | None,
+    current_keywords: list[str],
+    max_briefs: int = 2,
+) -> list[dict[str, Any]]:
+    """
+    Layer 2→3 bridge: Find Creative Briefs whose keywords overlap
+    with the current context. Returns the top matching active briefs.
+    """
+    if not history:
+        return []
+    briefs = history.get("briefs", [])
+    if not briefs:
+        return []
+
+    current_set = {k.lower() for k in current_keywords}
+    scored: list[tuple[int, dict[str, Any]]] = []
+
+    for brief in briefs:
+        if not brief.get("active", True):
+            continue
+        brief_keywords = {k.lower() for k in brief.get("keywords", [])}
+        overlap = brief_keywords.intersection(current_set)
+        if len(overlap) >= 2:
+            scored.append((len(overlap), brief))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [brief for _, brief in scored[:max_briefs]]
+
 def build_futurist_prompt(
     schema_template: dict[str, Any],
     turn_index: int,
@@ -154,6 +184,25 @@ NOTE: An associative memory from the Knowledge Web has been recalled:
 This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
 """
 
+    # Layer 2→3: Inject matching Creative Briefs
+    if history:
+        all_keywords = []
+        for turn in recent_turns:
+            all_keywords.extend(turn.get("keywords", []))
+        matching_briefs = retrieve_matching_briefs(history, all_keywords)
+        if matching_briefs:
+            for bi, brief in enumerate(matching_briefs, 1):
+                rules_str = "\n".join(f"  - {r}" for r in brief.get("visual_rules", []))
+                prompt += f"""
+📋 ACTIVE CREATIVE BRIEF {bi}: "{brief.get('title', 'Untitled')}"
+Thesis: {brief.get('thesis', '')}
+Visual Rules:
+{rules_str}
+Mood: {brief.get('mood', '')}
+
+You SHOULD incorporate these directives into your composition when they align with your persona.
+"""
+
     prompt += f"""
 
 Return JSON only. Use the schema template below as the structural guide, then expand it into a fresh prompt that feels like a new thread rather than a revision.
@@ -300,6 +349,25 @@ NOTE: An associative memory from the Knowledge Web has been recalled:
 - Inspiration Proposal: "{inspiration_meta.get('proposal')}"
 
 This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+"""
+
+    # Layer 2→3: Inject matching Creative Briefs for pivot
+    if history:
+        pivot_keywords = list(selected_turn.get("keywords", []))
+        for turn in recent_turns:
+            pivot_keywords.extend(turn.get("keywords", []))
+        matching_briefs = retrieve_matching_briefs(history, pivot_keywords)
+        if matching_briefs:
+            for bi, brief in enumerate(matching_briefs, 1):
+                rules_str = "\n".join(f"  - {r}" for r in brief.get("visual_rules", []))
+                prompt += f"""
+📋 ACTIVE CREATIVE BRIEF {bi}: "{brief.get('title', 'Untitled')}"
+Thesis: {brief.get('thesis', '')}
+Visual Rules:
+{rules_str}
+Mood: {brief.get('mood', '')}
+
+You SHOULD incorporate these directives into your composition when they align with your persona.
 """
 
     prompt += f"""
