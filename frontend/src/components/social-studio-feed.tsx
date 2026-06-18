@@ -146,48 +146,95 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
 
 function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [prevTurn, setPrevTurn] = useState<PostTurn | null>(null);
+
+  const handleNext = () => {
+    setPrevTurn(turns[currentIndex]);
+    setCurrentIndex((prev) => (prev + 1) % turns.length);
+  };
 
   useEffect(() => {
     if (turns.length <= 1) return;
 
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % turns.length);
-    }, 1000);
+    const currentTurn = turns[currentIndex];
+    const isVideo = currentTurn.image_webp?.format === "mp4" || currentTurn.image_url.includes("format=mp4");
 
-    return () => clearInterval(interval);
-  }, [turns.length]);
+    if (isVideo) {
+      // For videos, display entire length and transition on ended.
+      // We also add a fallback timeout of 15 seconds so we never get stuck on a broken video.
+      const fallbackTimer = setTimeout(() => {
+        handleNext();
+      }, 15000);
+      return () => clearTimeout(fallbackTimer);
+    } else {
+      // For images, transition after 1 second.
+      const timer = setTimeout(() => {
+        handleNext();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentIndex, turns.length]);
 
   if (turns.length === 0) return null;
 
   const currentTurn = turns[currentIndex];
   const isVideo = currentTurn.image_webp?.format === "mp4" || currentTurn.image_url.includes("format=mp4");
+  const prevIsVideo = prevTurn ? (prevTurn.image_webp?.format === "mp4" || prevTurn.image_url.includes("format=mp4")) : false;
 
   return (
     <div className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]">
-      {isVideo ? (
-        <video
-          key={currentTurn.image_url}
-          src={currentTurn.image_url}
-          className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
-          muted
-          playsInline
-          autoPlay
-          loop
-        />
-      ) : (
-        <Image
-          key={currentTurn.image_url}
-          src={currentTurn.image_url}
-          alt={`Post ${currentTurn.image_id}`}
-          fill
-          sizes="(max-width: 640px) 100vw, 380px"
-          className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
-          unoptimized
-        />
+      {/* Background (Previous Slide) */}
+      {prevTurn && (
+        <div className="absolute inset-0 z-0">
+          {prevIsVideo ? (
+            <video
+              src={prevTurn.image_url}
+              className="h-full w-full object-contain"
+              muted
+              playsInline
+              autoPlay
+            />
+          ) : (
+            <Image
+              src={prevTurn.image_url}
+              alt="Previous Slide"
+              fill
+              sizes="(max-width: 640px) 100vw, 380px"
+              className="object-contain"
+              unoptimized
+            />
+          )}
+        </div>
       )}
+
+      {/* Foreground (Current Slide with Dissolve Transition) */}
+      <div 
+        key={currentTurn.image_url} 
+        className="absolute inset-0 z-10 animate-dissolve-in"
+      >
+        {isVideo ? (
+          <video
+            src={currentTurn.image_url}
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+            muted
+            playsInline
+            autoPlay
+            onEnded={handleNext}
+          />
+        ) : (
+          <Image
+            src={currentTurn.image_url}
+            alt={`Post ${currentTurn.image_id}`}
+            fill
+            sizes="(max-width: 640px) 100vw, 380px"
+            className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+            unoptimized
+          />
+        )}
+      </div>
       
       {turns.length > 1 && (
-        <div className="absolute bottom-2 right-2 bg-[#252422]/80 text-[#FAF9F6] text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wider z-10 select-none">
+        <div className="absolute bottom-2 right-2 bg-[#252422]/80 text-[#FAF9F6] text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wider z-20 select-none">
           {currentIndex + 1} / {turns.length}
         </div>
       )}

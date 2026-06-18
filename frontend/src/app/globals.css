@@ -61,3 +61,18 @@ body {
   background: #858076;
   box-shadow: 0 0 6px rgba(133, 128, 118, 0.35);
 }
+
+/* ── Dissolve Transition (0.25s) ────────────────────────────────── */
+
+@keyframes dissolve-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-dissolve-in {
+  animation: dissolve-in 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
