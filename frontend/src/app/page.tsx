@@ -108,7 +108,7 @@ export default function Home() {
         <div className="mx-auto max-w-[1600px] px-6 pb-10 pt-8">
           {historyError ? <p className="mb-4 text-sm text-zinc-400">{historyError}</p> : null}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-8">
+            <div className="lg:col-span-9">
               <div className={view === "micro" ? "mt-0 block animate-in fade-in-50 duration-200" : "hidden"}>
                 <SocialStudioFeed turns={turns} threads={threads} onImageClick={setLightboxSrc} />
               </div>
@@ -151,10 +151,10 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="lg:col-span-4 bg-[#FAF9F6] border border-[#D8D4CC] rounded-3xl p-6 shadow-sm sticky top-8">
+            <div className="lg:col-span-3 bg-[#FAF9F6] border border-[#D8D4CC] rounded-3xl p-6 shadow-sm sticky top-8">
               <div className="flex flex-col space-y-4">
                 <div>
-                  <h2 className="text-xl font-bold font-display text-[#252422]">Agent Management</h2>
+                  <h2 className="text-xl font-bold font-display text-[#D45113]">Agent Management</h2>
                   <p className="text-xs text-[#858076] mt-1">Adjust app behavior and review agent settings.</p>
                 </div>
                 <hr className="border-[#D8D4CC]" />

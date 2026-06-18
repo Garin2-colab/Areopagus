@@ -176,7 +176,7 @@ function CompactRootPost({
             {isVideo ? (
               <video
                 src={turn.image_url}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
                 muted
                 playsInline
                 autoPlay
@@ -188,7 +188,7 @@ function CompactRootPost({
                 alt={`Post ${turn.image_id}`}
                 fill
                 sizes="(max-width: 640px) 100vw, 380px"
-                className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
                 unoptimized
               />
             )}

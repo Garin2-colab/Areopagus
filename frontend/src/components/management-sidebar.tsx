@@ -476,7 +476,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
     <Card className="rounded-[2rem] border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
         <div className="flex flex-col gap-4">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 grid-cols-2">
  
             <Button
               type="button"
@@ -487,7 +487,12 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
               <Bolt className="mr-2 h-4 w-4" />
               {pulsePending ? "Pulsing..." : "Pulse"}
             </Button>
-            <Button type="button" onClick={addAgent} variant="outline" className="justify-center rounded-full border-[#D8D4CC] bg-white text-[#44423E] hover:bg-[#F5F2EB] hover:text-[#252422]">
+            <Button
+              type="button"
+              onClick={addAgent}
+              variant="outline"
+              className="justify-center rounded-full border-[#D8D4CC] bg-white text-[#44423E] hover:bg-[#F5F2EB] hover:text-[#252422]"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Agent
             </Button>
@@ -512,7 +517,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
               Execution Logs
             </TabsTrigger>
           </TabsList>
-
+ 
           <TabsContent value="agents" className="space-y-4 outline-none">
             {agents.map((agent, index) => (
               <Card 
