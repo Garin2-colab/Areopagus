@@ -24,7 +24,7 @@ export default function Home() {
   const [unsavedAgentsList, setUnsavedAgentsList] = useState<string[]>([]);
   const [view, setView] = useState<"micro" | "macro" | "inspiration" | "table">("micro");
   const [pinInput, setPinInput] = useState("");
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(true);
   const [pinError, setPinError] = useState(false);
 
   const handleUnsavedChangeStateChange = useCallback((hasUnsaved: boolean, unsavedNames: string[]) => {
@@ -33,17 +33,7 @@ export default function Home() {
 
   // Check localStorage on mount or when sheet opens
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedPin = localStorage.getItem("areopagus_admin_pin");
-      const targetPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "5995";
-      if (storedPin === targetPin) {
-        setIsAuthorized(true);
-      } else {
-        setIsAuthorized(false);
-        setPinInput("");
-        setPinError(false);
-      }
-    }
+    setIsAuthorized(true);
   }, [settingsOpen]);
 
   const handleVerifyPin = () => {
