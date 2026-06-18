@@ -533,9 +533,9 @@ export function KnowledgeWeb({
               const sId = typeof l.source === "object" ? l.source.id : l.source;
               const tId = typeof l.target === "object" ? l.target.id : l.target;
               if (activeNodeSet.size > 0 && activeNodeSet.has(sId) && activeNodeSet.has(tId)) {
-                return "rgba(212, 81, 19, 0.15)"; // 15% transparent orange
+                return "rgba(212, 81, 19, 0.25)"; // 25% transparent orange
               }
-              return "rgba(133, 128, 118, 0.15)"; // 15% transparent gray
+              return "rgba(133, 128, 118, 0.25)"; // 25% transparent gray
             }}
             linkDirectionalParticleOffset="particleOffset"
 
