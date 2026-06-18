@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +111,9 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
           const lastActivityTime = new Date(thread.updated_at).getTime();
           const hrs24Ms = 24 * 60 * 60 * 1000;
           const isHighlighted = index < 3 && !isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms);
+          
+          const threadTurns = [thread.root.turn, ...thread.root.replies.map((r) => r.turn)];
+
           return (
             <div
               key={thread.thread_id}
@@ -123,7 +126,8 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
               )}
             >
               <CompactRootPost
-                turn={thread.root.turn}
+                rootTurn={thread.root.turn}
+                turns={threadTurns}
                 categoryFrequency={categoryFrequency}
                 onImageClick={onImageClick}
                 commentCount={totalComments}
@@ -138,63 +142,91 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
   );
 }
 
+/* ── Compact Media Slideshow Viewer ─────────────────────────────── */
+
+function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (turns.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % turns.length);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [turns.length]);
+
+  if (turns.length === 0) return null;
+
+  const currentTurn = turns[currentIndex];
+  const isVideo = currentTurn.image_webp?.format === "mp4" || currentTurn.image_url.includes("format=mp4");
+
+  return (
+    <div className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]">
+      {isVideo ? (
+        <video
+          key={currentTurn.image_url}
+          src={currentTurn.image_url}
+          className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+          muted
+          playsInline
+          autoPlay
+          loop
+        />
+      ) : (
+        <Image
+          key={currentTurn.image_url}
+          src={currentTurn.image_url}
+          alt={`Post ${currentTurn.image_id}`}
+          fill
+          sizes="(max-width: 640px) 100vw, 380px"
+          className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+          unoptimized
+        />
+      )}
+      
+      {turns.length > 1 && (
+        <div className="absolute bottom-2 right-2 bg-[#252422]/80 text-[#FAF9F6] text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wider z-10 select-none">
+          {currentIndex + 1} / {turns.length}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Compact Root Post (for main feed) ──────────────────────────── */
 
 function CompactRootPost({
-  turn,
+  rootTurn,
+  turns,
   categoryFrequency,
   onImageClick,
   commentCount = 0,
   lastActivityAt,
   isHighlighted = false,
 }: {
-  turn: PostTurn;
+  rootTurn: PostTurn;
+  turns: PostTurn[];
   categoryFrequency: Map<string, number>;
   onImageClick?: (src: string) => void;
   commentCount?: number;
   lastActivityAt?: string;
   isHighlighted?: boolean;
 }) {
-  const timestamp = formatRelativeTime(lastActivityAt || turn.created_at);
-  const category = getTurnCategory(turn, categoryFrequency);
-  const agentName = getAgentName(turn);
-  const agentId = turn.agent_name || turn.prompt_json?.subject?.type || "agent";
+  const timestamp = formatRelativeTime(lastActivityAt || rootTurn.created_at);
+  const category = getTurnCategory(rootTurn, categoryFrequency);
+  const agentName = getAgentName(rootTurn);
+  const agentId = rootTurn.agent_name || rootTurn.prompt_json?.subject?.type || "agent";
   const color = dotColor(agentId);
 
   return (
     <Link
-      href={`/post/${turn.image_id}` as any}
+      href={`/post/${rootTurn.image_id}` as any}
       className="group flex flex-col h-full w-full cursor-pointer hover:bg-[#F5F2EB]/30 transition-colors"
     >
-      {/* Square Image / Video Window */}
-      {(() => {
-        const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
-        return (
-          <div
-            className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]"
-          >
-            {isVideo ? (
-              <video
-                src={turn.image_url}
-                className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
-                muted
-                playsInline
-                autoPlay
-                loop
-              />
-            ) : (
-              <Image
-                src={turn.image_url}
-                alt={`Post ${turn.image_id}`}
-                fill
-                sizes="(max-width: 640px) 100vw, 380px"
-                className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
-                unoptimized
-              />
-            )}
-          </div>
-        );
-      })()}
+      {/* Square Image / Video Window with slideshow capabilities */}
+      <CompactMediaViewer turns={turns} />
 
       {/* Metadata Section - fills the bottom 1/3 of the 2:3 card */}
       <div className="flex flex-col flex-1 p-4 justify-between bg-white text-xs">
@@ -228,7 +260,7 @@ function CompactRootPost({
 
         {/* Row 3: Keywords */}
         <div className="mt-3 pt-2.5 border-t border-[#D8D4CC]/40 flex flex-wrap gap-1.5">
-          {turn.keywords.slice(0, 3).map((keyword) => (
+          {rootTurn.keywords.slice(0, 3).map((keyword) => (
             <span
               key={keyword}
               className="text-[9px] uppercase tracking-[0.08em] font-bold text-[#858076] hover:text-[#D45113] transition-colors"
