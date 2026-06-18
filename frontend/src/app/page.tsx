@@ -151,13 +151,12 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="lg:col-span-3 bg-[#FAF9F6] border border-[#D8D4CC] rounded-3xl p-6 shadow-sm sticky top-8">
-              <div className="flex flex-col space-y-4">
-                <div>
-                  <h2 className="text-xl font-bold font-display text-[#D45113]">Agent Management</h2>
-                  <p className="text-xs text-[#858076] mt-1">Adjust app behavior and review agent settings.</p>
-                </div>
-                <hr className="border-[#D8D4CC]" />
+            <div className="lg:col-span-3 bg-[#FAF9F6] border border-[#D8D4CC]/60 rounded-[2rem] shadow-sm shadow-[#252422]/5 sticky top-8 overflow-hidden">
+              <div className="border-b border-[#D8D4CC]/60 px-6 py-5">
+                <h2 className="text-xl font-bold font-display text-[#D45113]">Agent Management</h2>
+                <p className="text-xs text-[#858076] mt-1">Adjust app behavior and review agent settings.</p>
+              </div>
+              <div className="p-4 md:p-5">
                 <ManagementSidebar
                   onPulseStart={startPolling}
                   status={status}

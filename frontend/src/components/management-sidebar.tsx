@@ -473,35 +473,33 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
   };
 
   return (
-    <Card className="rounded-[2rem] border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
-      <CardHeader className="border-b border-[#D8D4CC]/60 px-6 py-5">
-        <div className="flex flex-col gap-4">
-          <div className="grid gap-2 grid-cols-2">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-2 grid-cols-2">
  
-            <Button
-              type="button"
-              onClick={pulse}
-              disabled={pulsePending}
-              className="justify-center rounded-full border-[#D8D4CC] bg-[#252422] text-[#FAF9F6] hover:bg-black hover:text-white hover:border-[#252422]"
-            >
-              <Bolt className="mr-2 h-4 w-4" />
-              {pulsePending ? "Pulsing..." : "Pulse"}
-            </Button>
-            <Button
-              type="button"
-              onClick={addAgent}
-              variant="outline"
-              className="justify-center rounded-full border-[#D8D4CC] bg-white text-[#44423E] hover:bg-[#F5F2EB] hover:text-[#252422]"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Agent
-            </Button>
-          </div>
-          {pulseMessage ? <p className="text-xs leading-5 text-[#858076] font-medium">{pulseMessage}</p> : null}
+          <Button
+            type="button"
+            onClick={pulse}
+            disabled={pulsePending}
+            className="justify-center rounded-full border-[#D8D4CC] bg-[#252422] text-[#FAF9F6] hover:bg-black hover:text-white hover:border-[#252422]"
+          >
+            <Bolt className="mr-2 h-4 w-4" />
+            {pulsePending ? "Pulsing..." : "Pulse"}
+          </Button>
+          <Button
+            type="button"
+            onClick={addAgent}
+            variant="outline"
+            className="justify-center rounded-full border-[#D8D4CC] bg-white text-[#44423E] hover:bg-[#F5F2EB] hover:text-[#252422]"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Agent
+          </Button>
         </div>
-      </CardHeader>
+        {pulseMessage ? <p className="text-xs leading-5 text-[#858076] font-medium">{pulseMessage}</p> : null}
+      </div>
  
-      <CardContent className="space-y-4 px-4 py-4 md:px-5">
+      <div className="border-t border-[#D8D4CC]/60 pt-5">
         <Tabs defaultValue="agents" className="w-full">
           <TabsList className="grid w-full grid-cols-2 h-auto rounded-2xl bg-[#F5F2EB]/70 p-1 mb-6 border border-[#D8D4CC]/50">
             <TabsTrigger
@@ -560,7 +558,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                     </Button>
                   </div>
                 </CardHeader>
-
+ 
                 <CardContent className={cn("space-y-4 px-4 py-4 transition-all duration-200", agent.active === false && "opacity-50 grayscale pointer-events-none select-none")}>
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Name</p>
@@ -571,7 +569,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       disabled={agent.active === false}
                     />
                   </div>
-
+ 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Persona</p>
@@ -588,7 +586,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       Use Markdown for bullets, emphasis, and short sections. This keeps long personas readable.
                     </p>
                   </div>
-
+ 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Style References (2x5 Grid)</p>
@@ -599,7 +597,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                         const imgUrl = agent.referenceImages?.[i];
                         const hasImage = typeof imgUrl === "string" && imgUrl.trim().length > 0;
                         const displayUrl = hasImage ? sanitizeClientImageUrl(imgUrl) : null;
-
+ 
                         return (
                           <div
                             key={i}
@@ -644,7 +642,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       })}
                     </div>
                   </div>
-
+ 
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Model Selection & Save</p>
                     <div className="flex items-center gap-2">
@@ -675,7 +673,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                       )}
                     </div>
                   </div>
-
+ 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Heartbeat</p>
@@ -702,7 +700,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
               </Card>
             ))}
           </TabsContent>
-
+ 
           <TabsContent value="logs" className="outline-none">
             {status?.history && status.history.length > 0 ? (
               <div className="space-y-3">
@@ -713,7 +711,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                     status.active ? "bg-green-500 animate-pulse" : "bg-[#858076]/40"
                   )} />
                 </div>
-
+ 
                 <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
                   {[...status.history].reverse().map((log, index) => {
                     const isError = log.message.toLowerCase().includes("error") || log.message.toLowerCase().includes("fail");
@@ -753,7 +751,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
             )}
           </TabsContent>
         </Tabs>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
