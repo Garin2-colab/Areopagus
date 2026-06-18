@@ -34,10 +34,35 @@ const STORAGE_KEY = "areopagus.agent-personas.v1";
 
 const DEFAULT_PERSONA = "A minimalist avant-garde fashion curator. Aesthetic: Brutalist structures, silk drapery, high-contrast cinematic lighting, monochromatic palette.";
 
+const PHILOSOPHER_NAMES = [
+  "Socrates", "Plato", "Aristotle", "Pythagoras", "Heraclitus", "Parmenides",
+  "Zeno", "Epicurus", "Diogenes", "Democritus", "Anaximander", "Thales",
+  "Empedocles", "Anaxagoras", "Protagoras", "Gorgias", "Epictetus", "Seneca",
+  "Plotinus", "Chrysippus", "Pyrrho", "Theophrastus", "Hypatia", "Zenobia",
+  "Aristippus"
+];
+
+function generateGreekPhilosopherName(existingNames: string[]): string {
+  const normalizedExisting = existingNames.map(n => n.trim().toLowerCase());
+  const available = PHILOSOPHER_NAMES.filter(
+    name => !normalizedExisting.includes(name.toLowerCase())
+  );
+  if (available.length > 0) {
+    const idx = Math.floor(Math.random() * available.length);
+    return available[idx];
+  }
+  const baseName = PHILOSOPHER_NAMES[Math.floor(Math.random() * PHILOSOPHER_NAMES.length)];
+  let counter = 2;
+  while (normalizedExisting.includes(`${baseName.toLowerCase()} ${counter}`)) {
+    counter++;
+  }
+  return `${baseName} ${counter}`;
+}
+
 const DEFAULT_AGENTS: AgentRecord[] = [
   {
     id: "agent-1-gothic-anatomist",
-    name: "Agent 01",
+    name: "Socrates",
     persona: [
       "The Gothic Anatomist",
       "Visual Persona & Logic:",
@@ -54,7 +79,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
   },
   {
     id: "agent-2-fluid-biomorph",
-    name: "Agent 02",
+    name: "Plato",
     persona: [
       "The Fluid Biomorph",
       "Visual Persona & Logic:",
@@ -71,10 +96,10 @@ const DEFAULT_AGENTS: AgentRecord[] = [
   }
 ];
 
-function createAgent(index: number): AgentRecord {
+function createAgent(index: number, existingNames: string[] = []): AgentRecord {
   return {
     id: `agent-${index}-${Math.random().toString(36).slice(2, 8)}`,
-    name: `Agent ${String(index).padStart(2, "0")}`,
+    name: generateGreekPhilosopherName(existingNames),
     persona: DEFAULT_PERSONA,
     model: "GPT-Image-2",
     heartbeatMinutes: 15,
@@ -100,15 +125,21 @@ function isModelName(value: unknown): value is ModelName {
   return value === "GPT-Image-2" || value === "Gemini-3-Pro" || value === "Midjourney" || value === "Seedance-v2";
 }
 
-function normalizeStoredAgent(value: unknown, index: number): AgentRecord | null {
+function normalizeStoredAgent(value: unknown, index: number, existingNames: string[]): AgentRecord | null {
   if (!value || typeof value !== "object") return null;
 
   const candidate = value as Partial<AgentRecord>;
-  const fallback = createAgent(index + 1);
+  const fallback = createAgent(index + 1, existingNames);
+
+  let name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : fallback.name;
+  if (name.startsWith("Agent ")) {
+    name = generateGreekPhilosopherName(existingNames);
+  }
+  existingNames.push(name);
 
   return {
     id: typeof candidate.id === "string" && candidate.id.trim() ? candidate.id : fallback.id,
-    name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : fallback.name,
+    name,
     persona: typeof candidate.persona === "string" && candidate.persona.trim() ? candidate.persona : DEFAULT_PERSONA,
     model: isModelName(candidate.model) ? candidate.model : fallback.model,
     heartbeatMinutes:
@@ -134,8 +165,9 @@ function loadStoredAgents() {
 
     if (!storedAgents) return null;
 
+    const existingNames: string[] = [];
     const agents = storedAgents
-      .map((agent, index) => normalizeStoredAgent(agent, index))
+      .map((agent, index) => normalizeStoredAgent(agent, index, existingNames))
       .filter((agent): agent is AgentRecord => agent !== null);
 
     return agents.length > 0 ? agents : null;
@@ -309,7 +341,10 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
   };
 
   const addAgent = () => {
-    commitAgents((current) => [...current, createAgent(nextAgentNumber.current++)]);
+    commitAgents((current) => {
+      const existingNames = current.map((a) => a.name);
+      return [...current, createAgent(nextAgentNumber.current++, existingNames)];
+    });
   };
 
   const updateAgent = (id: string, patch: Partial<AgentRecord>) => {
@@ -530,7 +565,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                 <CardHeader className="flex-row items-start justify-between gap-3 border-b border-[#D8D4CC]/50 px-4 py-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Agent {index + 1}</p>
+                      <h3 className="text-sm font-bold text-[#252422]">{agent.name}</h3>
                       {agent.active !== false && hasUnsavedChanges(agent.id) && (
                         <span className="text-[9px] uppercase tracking-wider text-[#D45113] font-bold bg-[#D45113]/10 px-1.5 py-0.5 rounded animate-pulse">Unsaved</span>
                       )}
@@ -560,15 +595,6 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                 </CardHeader>
  
                 <CardContent className={cn("space-y-4 px-4 py-4 transition-all duration-200", agent.active === false && "opacity-50 grayscale pointer-events-none select-none")}>
-                  <div className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-[#858076] font-semibold">Name</p>
-                    <Input
-                      value={agent.name}
-                      onChange={(event) => updateAgent(agent.id, { name: event.target.value })}
-                      placeholder="Agent name"
-                      disabled={agent.active === false}
-                    />
-                  </div>
  
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
