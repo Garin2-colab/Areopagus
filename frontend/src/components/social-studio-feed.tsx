@@ -185,11 +185,13 @@ function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
     <div className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]">
       {/* Background (Previous Slide) */}
       {prevTurn && (
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 z-0 select-none pointer-events-none">
+          {/* Zoomed/Blurred Backdrop */}
           {prevIsVideo ? (
             <video
               src={prevTurn.image_url}
-              className="h-full w-full object-contain"
+              className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45"
+              style={{ filter: "blur(80px)" }}
               muted
               playsInline
               autoPlay
@@ -197,13 +199,34 @@ function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
           ) : (
             <Image
               src={prevTurn.image_url}
-              alt="Previous Slide"
+              alt=""
               fill
-              sizes="(max-width: 640px) 100vw, 380px"
-              className="object-contain"
+              className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45"
+              style={{ filter: "blur(80px)" }}
               unoptimized
             />
           )}
+          {/* Crisp Centered Media */}
+          <div className="relative h-full w-full flex items-center justify-center z-10">
+            {prevIsVideo ? (
+              <video
+                src={prevTurn.image_url}
+                className="h-full w-full object-contain"
+                muted
+                playsInline
+                autoPlay
+              />
+            ) : (
+              <Image
+                src={prevTurn.image_url}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 100vw, 380px"
+                className="object-contain"
+                unoptimized
+              />
+            )}
+          </div>
         </div>
       )}
 
@@ -212,25 +235,48 @@ function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
         key={currentTurn.image_url} 
         className="absolute inset-0 z-10 animate-dissolve-in"
       >
+        {/* Zoomed/Blurred Backdrop */}
         {isVideo ? (
           <video
             src={currentTurn.image_url}
-            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+            className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45 select-none pointer-events-none"
+            style={{ filter: "blur(80px)" }}
             muted
             playsInline
             autoPlay
-            onEnded={handleNext}
           />
         ) : (
           <Image
             src={currentTurn.image_url}
-            alt={`Post ${currentTurn.image_id}`}
+            alt=""
             fill
-            sizes="(max-width: 640px) 100vw, 380px"
-            className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+            className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45 select-none pointer-events-none"
+            style={{ filter: "blur(80px)" }}
             unoptimized
           />
         )}
+        {/* Crisp Centered Media */}
+        <div className="relative h-full w-full flex items-center justify-center z-10">
+          {isVideo ? (
+            <video
+              src={currentTurn.image_url}
+              className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+              muted
+              playsInline
+              autoPlay
+              onEnded={handleNext}
+            />
+          ) : (
+            <Image
+              src={currentTurn.image_url}
+              alt={`Post ${currentTurn.image_id}`}
+              fill
+              sizes="(max-width: 640px) 100vw, 380px"
+              className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+              unoptimized
+            />
+          )}
+        </div>
       </div>
       
       {turns.length > 1 && (
