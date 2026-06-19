@@ -132,20 +132,38 @@ function normalizeStoredAgent(value: unknown, index: number, existingNames: stri
   const fallback = createAgent(index + 1, existingNames);
 
   let name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : fallback.name;
-  if (name.startsWith("Agent ")) {
+  
+  // Sanitize real philosopher names (ensure no historical names are used)
+  const REAL_PHILOSOPHERS = [
+    "socrates", "plato", "aristotle", "pythagoras", "heraclitus", "parmenides",
+    "zeno", "epicurus", "diogenes", "democritus", "anaximander", "thales",
+    "empedocles", "anaxagoras", "protagoras", "gorgias", "epictetus", "seneca",
+    "plotinus", "chrysippus", "pyrrho", "theophrastus", "hypatia", "zenobia",
+    "aristippus"
+  ];
+  const nameLower = name.toLowerCase().trim();
+  const isReal = nameLower.startsWith("agent ") || REAL_PHILOSOPHERS.some(p => nameLower.includes(p));
+  if (isReal) {
     name = generateFictionalAgentName(existingNames);
   }
   existingNames.push(name);
+
+  const model = isModelName(candidate.model) ? candidate.model : fallback.model;
+
+  // Sanitize heartbeat (coerce old default 15 to new default 0/None)
+  let heartbeatMinutes = typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
+    ? candidate.heartbeatMinutes
+    : fallback.heartbeatMinutes;
+  if (heartbeatMinutes === 15) {
+    heartbeatMinutes = 0;
+  }
 
   return {
     id: typeof candidate.id === "string" && candidate.id.trim() ? candidate.id : fallback.id,
     name,
     persona: typeof candidate.persona === "string" && candidate.persona.trim() ? candidate.persona : DEFAULT_PERSONA,
-    model: isModelName(candidate.model) ? candidate.model : fallback.model,
-    heartbeatMinutes:
-      typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
-        ? candidate.heartbeatMinutes
-        : fallback.heartbeatMinutes,
+    model,
+    heartbeatMinutes,
     referenceImages: Array.isArray(candidate.referenceImages) ? candidate.referenceImages : [],
     active: typeof candidate.active === "boolean" ? candidate.active : true
   };
@@ -218,52 +236,72 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
   useEffect(() => {
     let active = true;
     async function initAgents() {
+      let loaded: AgentRecord[] = [];
+      let sourceConfig: any[] = [];
+      let loadedFromCloud = false;
+
       try {
         const response = await fetch("/api/save");
         if (response.ok) {
           const data = await response.json();
           if (data.ok && data.config && Array.isArray(data.config.agents)) {
-            const existingNames: string[] = [];
-            const loaded = data.config.agents
-              .map((agent: any, idx: number) => {
-                const result = normalizeStoredAgent(agent, idx, existingNames);
-                if (result) existingNames.push(result.name);
-                return result;
-              })
-              .filter((agent: any): agent is AgentRecord => agent !== null);
-            if (loaded.length > 0 && active) {
-              nextAgentNumber.current = nextAgentIndex(loaded);
-              agentsRef.current = loaded;
-              setAgents(loaded);
-              setSavedAgents(loaded);
-              
-              const payload: StoredAgentsPayload = {
-                updatedAt: new Date().toISOString(),
-                personaCount: loaded.length,
-                agents: loaded
-              };
-              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-              setAgentsLoaded(true);
-              return;
-            }
+            sourceConfig = data.config.agents;
+            loadedFromCloud = true;
           }
         }
       } catch (err) {
         console.warn("Failed to load agents from server, falling back to localStorage:", err);
       }
 
-      if (!active) return;
-
-      const storedAgents = loadStoredAgents();
-      if (storedAgents) {
-        nextAgentNumber.current = nextAgentIndex(storedAgents);
-        agentsRef.current = storedAgents;
-        setAgents(storedAgents);
-        setSavedAgents(storedAgents);
+      if (loadedFromCloud && sourceConfig.length > 0) {
+        const existingNames: string[] = [];
+        loaded = sourceConfig
+          .map((agent: any, idx: number) => normalizeStoredAgent(agent, idx, existingNames))
+          .filter((agent: any): agent is AgentRecord => agent !== null);
       } else {
-        setSavedAgents(DEFAULT_AGENTS);
+        const stored = loadStoredAgents();
+        if (stored) {
+          loaded = stored;
+        } else {
+          loaded = [...DEFAULT_AGENTS];
+        }
       }
-      setAgentsLoaded(true);
+
+      if (loaded.length > 0 && active) {
+        nextAgentNumber.current = nextAgentIndex(loaded);
+        agentsRef.current = loaded;
+        setAgents(loaded);
+        setSavedAgents(loaded);
+
+        // Check if any migration/sanitization happened compared to source data
+        let didMigrate = false;
+        if (loadedFromCloud && sourceConfig.length > 0) {
+          for (let i = 0; i < loaded.length; i++) {
+            const orig = sourceConfig[i];
+            const norm = loaded[i];
+            if (orig && (norm.name !== orig.name || norm.heartbeatMinutes !== orig.heartbeatMinutes)) {
+              didMigrate = true;
+              break;
+            }
+          }
+        } else {
+          // If fallback was used, write it back to synchronize
+          didMigrate = true;
+        }
+
+        if (didMigrate) {
+          console.log("Migrating agents config (removing philosopher names & default heartbeat 15x/day)");
+          saveAgents(loaded);
+        } else {
+          const payload: StoredAgentsPayload = {
+            updatedAt: new Date().toISOString(),
+            personaCount: loaded.length,
+            agents: loaded
+          };
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        }
+        setAgentsLoaded(true);
+      }
     }
 
     initAgents();
