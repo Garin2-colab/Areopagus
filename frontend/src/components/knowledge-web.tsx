@@ -337,7 +337,6 @@ export function KnowledgeWeb({
   }, []);
 
   // Configure D3 forces once after the ForceGraph2D mounts
-  // This runs via a ref callback, ensuring the graph instance is ready
   useEffect(() => {
     if (!graphRef.current || forcesConfigured.current) return;
     forcesConfigured.current = true;
@@ -345,39 +344,36 @@ export function KnowledgeWeb({
     const fg = graphRef.current;
 
     // ── Obsidian-style force-directed physics ──
-    // The key to Obsidian's graceful feel is *soft* springs + *high* damping.
-    // Forces are gentle enough that dragging one node barely ripples outward,
-    // and the high velocity decay acts like thick air — nodes glide to a stop
-    // instead of oscillating.
+    // Ultra-soft springs + heavy damping = graceful, fluid movement.
+    // Dragging one node should barely ripple outward; nodes glide to a
+    // stop like they're floating in honey.
 
-    // 1. Repulsion: moderate push, capped range so distant nodes don't react
+    // 1. Repulsion: gentle push, short range so distant nodes stay inert
     fg.d3Force("charge")
-      ?.strength(-100)
-      ?.distanceMax(250);
+      ?.strength(-60)
+      ?.distanceMax(200);
 
-    // 2. Links: soft springs — connected nodes drift together gently
-    //    (0.7 was too stiff, transmitting drag across the whole graph)
+    // 2. Links: very soft springs — nodes drift together like loose threads
     fg.d3Force("link")
-      ?.distance(55)
-      ?.strength(0.3);
-
-    // 3. Center: gentle recentering of the center-of-mass
-    fg.d3Force("center")
+      ?.distance(60)
       ?.strength(0.08);
 
-    // 4. Gravity: pulls every node softly toward (0,0) → circular boundary
-    fg.d3Force("x", forceX(0).strength(0.03));
-    fg.d3Force("y", forceY(0).strength(0.03));
+    // 3. Center: minimal recentering of the center-of-mass
+    fg.d3Force("center")
+      ?.strength(0.05);
 
-    // 5. Collision: prevents node overlap with generous padding
+    // 4. Gravity: whisper-light pull toward origin → circular boundary
+    fg.d3Force("x", forceX(0).strength(0.015));
+    fg.d3Force("y", forceY(0).strength(0.015));
+
+    // 5. Collision: prevents node overlap
     fg.d3Force("collide", forceCollide((node: any) => {
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 22;
+        return 20;
       }
-      return 10;
+      return 8;
     }).iterations(1));
 
-    // Reheat so the new force parameters take effect
     fg.d3ReheatSimulation?.();
   });
 
@@ -550,9 +546,14 @@ export function KnowledgeWeb({
     });
   }, []);
 
-  // Zoom to fit once the simulation settles
+  // Smooth zoom-to-fit once the simulation fully settles (long duration = no snap)
+  const initialFitDone = useRef(false);
   const handleEngineStop = useCallback(() => {
-    graphRef.current?.zoomToFit?.(400, 60);
+    if (!initialFitDone.current) {
+      initialFitDone.current = true;
+      // First settle: gentle 800ms zoom so the user never sees a jarring snap
+      graphRef.current?.zoomToFit?.(800, 60);
+    }
   }, []);
 
   const getLabelOpacity = (globalScale: number, baseSize: number, hovered: boolean, selected: boolean) => {
@@ -581,11 +582,12 @@ export function KnowledgeWeb({
             enableZoomInteraction
             enablePanInteraction
 
-            // Physics: pre-settle before first paint; high damping for graceful movement
-            warmupTicks={80}
-            cooldownTicks={200}
-            d3AlphaDecay={0.04}
-            d3VelocityDecay={0.55}
+            // Physics: fully pre-settle before first paint so there's no initial snap.
+            // Heavy velocity decay (0.7) = thick-air damping for graceful movement.
+            warmupTicks={500}
+            cooldownTicks={0}
+            d3AlphaDecay={0.03}
+            d3VelocityDecay={0.7}
 
             // Links
             linkWidth={(link: unknown) => {
@@ -620,22 +622,6 @@ export function KnowledgeWeb({
             // Events
             onBackgroundClick={handleBackgroundClick}
             onEngineStop={handleEngineStop}
-            onNodeDragEnd={() => {
-              // Rapidly cool the simulation after a drag so the graph
-              // settles quickly instead of shaking for seconds
-              const fg = graphRef.current;
-              if (fg) {
-                fg.d3Force("link")?.strength(0.3);
-                const sim = fg.d3Force("charge");
-                if (sim) {
-                  // Nudge alpha down so forces wind down gracefully
-                  fg.d3ReheatSimulation?.();
-                  setTimeout(() => {
-                    // Let the simulation's own alphaDecay handle the rest
-                  }, 0);
-                }
-              }
-            }}
 
             nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
               const typed = node as GraphNode;
