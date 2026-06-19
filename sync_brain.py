@@ -433,7 +433,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             # Upload to Modal
             result = upload_brain_item(
                 brain_id=brain_id,
-                item_type=item_type,
+                item_type=ftype,
                 source_file=rel,
                 image_base64=image_b64,
                 mime_type=mime,
