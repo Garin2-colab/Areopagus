@@ -2251,7 +2251,7 @@ def mutate_history_endpoint():
                                 # Remove spaces and filter characters
                                 kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
                                 # Filter out generic words
-                                if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                                if kw_cleaned not in {"#inspiration", "#design", "#photo", "#art", "#aesthetic", "#"}:
                                     cleaned_keywords.append(kw_cleaned)
                             if len(cleaned_keywords) >= 3:
                                 keywords = cleaned_keywords
@@ -2353,7 +2353,7 @@ def mutate_history_endpoint():
                         if not kw_cleaned.startswith("#"):
                             kw_cleaned = "#" + kw_cleaned
                         kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
-                        if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                        if kw_cleaned not in {"#inspiration", "#design", "#photo", "#art", "#aesthetic", "#"}:
                             cleaned_keywords.append(kw_cleaned)
 
                     history = load_history()
@@ -2469,7 +2469,7 @@ def mutate_history_endpoint():
                         if not kw_cleaned.startswith("#"):
                             kw_cleaned = "#" + kw_cleaned
                         kw_cleaned = re.sub(r"[^a-z0-9#-]", "", kw_cleaned.replace(" ", ""))
-                        if kw_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"}:
+                        if kw_cleaned not in {"#inspiration", "#design", "#photo", "#art", "#aesthetic", "#"}:
                             cleaned_keywords.append(kw_cleaned)
 
                     history = load_history()
@@ -2613,7 +2613,7 @@ def mutate_history_endpoint():
                                     # Remove spaces and filter characters
                                     m_cleaned = re.sub(r"[^a-z0-9#-]", "", m_cleaned.replace(" ", ""))
                                     # Filter out generic words
-                                    if m_cleaned not in {"#inspiration", "#design", "#image", "#photo", "#art", "#aesthetic", "#"} and m_cleaned not in new_kws:
+                                    if m_cleaned not in {"#inspiration", "#design", "#photo", "#art", "#aesthetic", "#"} and m_cleaned not in new_kws:
                                         new_kws.append(m_cleaned)
                             else:
                                 # Fallback to original

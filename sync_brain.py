@@ -389,6 +389,14 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                 elif ext == ".gif":
                     mime = "image/gif"
                 analysis = gemini_analyze_image(img_bytes, fpath.name, api_key)
+                if "keywords" not in analysis or not isinstance(analysis["keywords"], list):
+                    analysis["keywords"] = []
+                if rel.startswith("references/"):
+                    if "#reference" not in analysis["keywords"]:
+                        analysis["keywords"].append("#reference")
+                elif rel.startswith("images/"):
+                    if "#image" not in analysis["keywords"]:
+                        analysis["keywords"].append("#image")
                 print(f"           -> Title: {analysis.get('title', '?')}")
                 print(f"           -> Keywords: {', '.join(analysis.get('keywords', []))}")
 
