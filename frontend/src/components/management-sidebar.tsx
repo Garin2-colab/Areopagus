@@ -75,7 +75,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
       "Pivot: Adds dark, romantic elements to sterile concepts (e.g., adding lace to concrete)."
     ].join("\n"),
     model: "GPT-Image-2",
-    heartbeatMinutes: 15
+    heartbeatMinutes: 0
   },
   {
     id: "agent-2-fluid-biomorph",
@@ -92,7 +92,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
       "Pivot: Translates rigid structures into transparent, flowing energy fields."
     ].join("\n"),
     model: "GPT-Image-2",
-    heartbeatMinutes: 15
+    heartbeatMinutes: 0
   }
 ];
 
@@ -102,7 +102,7 @@ function createAgent(index: number, existingNames: string[] = []): AgentRecord {
     name: generateFictionalAgentName(existingNames),
     persona: DEFAULT_PERSONA,
     model: "GPT-Image-2",
-    heartbeatMinutes: 15,
+    heartbeatMinutes: 0,
     referenceImages: [],
     active: true
   };
