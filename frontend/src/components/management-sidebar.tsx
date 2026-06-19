@@ -150,13 +150,9 @@ function normalizeStoredAgent(value: unknown, index: number, existingNames: stri
 
   const model = isModelName(candidate.model) ? candidate.model : fallback.model;
 
-  // Sanitize heartbeat (coerce old default 15 to new default 0/None)
-  let heartbeatMinutes = typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
+  const heartbeatMinutes = typeof candidate.heartbeatMinutes === "number" && Number.isFinite(candidate.heartbeatMinutes)
     ? candidate.heartbeatMinutes
     : fallback.heartbeatMinutes;
-  if (heartbeatMinutes === 15) {
-    heartbeatMinutes = 0;
-  }
 
   return {
     id: typeof candidate.id === "string" && candidate.id.trim() ? candidate.id : fallback.id,

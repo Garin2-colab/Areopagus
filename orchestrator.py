@@ -122,6 +122,7 @@ image = (
     .add_local_dir("./example", remote_path="/root/example")
     .add_local_dir("./models", remote_path="/root/models")
     .add_local_file("./prompt_builder.py", remote_path="/root/prompt_builder.py")
+    .add_local_file("./agents_config.json", remote_path="/root/agents_config.json")
 )
 
 
@@ -186,14 +187,49 @@ def load_agents_config(override: dict[str, Any] | None = None) -> dict[str, Any]
         override.setdefault("agents", [])
         return override
 
-    for path in (AGENTS_CONFIG_PATH, LOCAL_AGENTS_CONFIG_PATH):
-        if path.exists():
-            with path.open("r", encoding="utf-8") as fh:
-                config = json.load(fh)
-            config.setdefault("agents", [])
-            return config
+    local_config = None
+    if LOCAL_AGENTS_CONFIG_PATH.exists():
+        try:
+            with LOCAL_AGENTS_CONFIG_PATH.open("r", encoding="utf-8") as fh:
+                local_config = json.load(fh)
+        except Exception as e:
+            print(f"[load_agents_config] Error reading local config: {e}", flush=True)
 
-    return {"agents": []}
+    volume_config = None
+    if AGENTS_CONFIG_PATH.exists():
+        try:
+            with AGENTS_CONFIG_PATH.open("r", encoding="utf-8") as fh:
+                volume_config = json.load(fh)
+        except Exception as e:
+            print(f"[load_agents_config] Error reading volume config: {e}", flush=True)
+
+    # Reconcile local repository config with persistent volume config
+    config = None
+    if local_config:
+        local_agents = {a.get("name") for a in local_config.get("agents", []) if a.get("name")}
+        volume_agents = {a.get("name") for a in volume_config.get("agents", []) if a.get("name")} if volume_config else set()
+        
+        # If volume is missing or holds completely different agents, overwrite with local config
+        if not volume_config or local_agents != volume_agents:
+            print(f"[load_agents_config] Overwriting/Seeding volume config with local config", flush=True)
+            config = local_config
+            try:
+                AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
+                    json.dump(config, fh, indent=2, ensure_ascii=False)
+                    fh.write("\n")
+                data_volume.commit()
+            except Exception as e:
+                print(f"[load_agents_config] Error updating volume config: {e}", flush=True)
+        else:
+            config = volume_config
+    elif volume_config:
+        config = volume_config
+    else:
+        config = {"agents": []}
+
+    config.setdefault("agents", [])
+    return config
 
 
 def normalize_action(action: Any) -> str:
@@ -1999,11 +2035,8 @@ def mutate_history_endpoint():
                     return {"ok": True, "message": "Config saved to Modal volume."}
 
                 elif action == "load_agents":
-                    if AGENTS_CONFIG_PATH.exists():
-                        with AGENTS_CONFIG_PATH.open("r", encoding="utf-8") as fh:
-                            config = json.load(fh)
-                        return {"ok": True, "config": config}
-                    return {"ok": True, "config": None}
+                    config = load_agents_config()
+                    return {"ok": True, "config": config}
 
 
                 elif action == "update_category":

@@ -320,6 +320,30 @@ def scan_brain_folder() -> list[dict[str, Any]]:
     return files
 
 
+def delete_remote_brain_item(brain_id: str) -> None:
+    """Delete a brain item from the Modal database."""
+    mutate_url = get_mutate_url()
+    payload = {
+        "action": "delete_brain_item",
+        "id": brain_id,
+    }
+    req = urllib.request.Request(
+        url=mutate_url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            if not result.get("ok"):
+                print(f"  [delete] Failed to delete brain item {brain_id}: {result.get('error')}")
+            else:
+                print(f"  [delete] Deleted remote brain item: {brain_id}")
+    except Exception as exc:
+        print(f"  [delete] Error deleting brain item {brain_id}: {exc}")
+
+
 def sync(*, force: bool = False, dry_run: bool = False) -> None:
     print("=" * 60)
     print("  AREOPAGUS SECOND BRAIN — Sync")
@@ -330,6 +354,31 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     existing = {item["local_path"]: item for item in index.get("items", [])}
     scanned = scan_brain_folder()
 
+    # 1. Fetch remote items to identify deletes and missing uploads
+    history = fetch_history_for_synthesis()
+    remote_brain_items = history.get("brain", []) if history else []
+    remote_brain_ids = {item["id"] for item in remote_brain_items if "id" in item}
+
+    # 2. Check for local files that were deleted
+    scanned_paths = {entry["relative"] for entry in scanned}
+    to_delete_local = []
+    for rel_path, prev_item in list(existing.items()):
+        if rel_path not in scanned_paths:
+            to_delete_local.append(rel_path)
+
+    if to_delete_local:
+        print(f"  Detected {len(to_delete_local)} locally deleted file(s). Cleaning from server...")
+        for rel_path in to_delete_local:
+            prev_item = existing[rel_path]
+            brain_id = prev_item.get("brain_id")
+            if brain_id:
+                if not dry_run:
+                    delete_remote_brain_item(brain_id)
+                else:
+                    print(f"    [DRY RUN] Would delete remote brain item: {brain_id} ({rel_path})")
+            del existing[rel_path]
+
+    # 3. Determine which scanned files need processing
     to_process: list[dict[str, Any]] = []
     unchanged = 0
 
@@ -337,9 +386,17 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
         rel = entry["relative"]
         prev = existing.get(rel)
 
+        # Check if the item actually exists in the remote database
+        is_missing_on_server = False
+        if prev and prev.get("brain_id") not in remote_brain_ids:
+            is_missing_on_server = True
+
         if force:
             to_process.append(entry)
         elif prev is None:
+            to_process.append(entry)
+        elif is_missing_on_server:
+            print(f"  Item {rel} is in local index but missing on server. Re-uploading...")
             to_process.append(entry)
         elif prev.get("hash") != entry["hash"]:
             to_process.append(entry)
@@ -351,8 +408,10 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     print(f"  Unchanged:   {unchanged}")
     print()
 
-    if not to_process:
+    if not to_process and not to_delete_local:
         print("  Nothing to sync. Brain is up to date.")
+        print()
+        synthesize_briefs(api_key)
         return
 
     if dry_run:
@@ -368,7 +427,13 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
         rel = entry["relative"]
         ftype = entry["type"]
         fpath: Path = entry["path"]
-        brain_id = f"brain_{int(time.time())}_{hashlib.md5(rel.encode()).hexdigest()[:6]}"
+        
+        # Reuse existing brain_id if available, to update the remote record instead of duplicating it
+        prev = existing.get(rel)
+        if prev and prev.get("brain_id"):
+            brain_id = prev["brain_id"]
+        else:
+            brain_id = f"brain_{int(time.time())}_{hashlib.md5(rel.encode()).hexdigest()[:6]}"
 
         print(f"  [{i}/{len(to_process)}] Processing {rel} ({ftype})...")
 
@@ -475,9 +540,8 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     print("=" * 60)
 
     # Auto-synthesize Creative Briefs from clustered brain items
-    if synced > 0:
-        print()
-        synthesize_briefs(api_key)
+    print()
+    synthesize_briefs(api_key)
 
 
 # ── Creative Brief Synthesis (Layer 2) ────────────────────────────────────────
