@@ -34,24 +34,24 @@ const STORAGE_KEY = "areopagus.agent-personas.v1";
 
 const DEFAULT_PERSONA = "A minimalist avant-garde fashion curator. Aesthetic: Brutalist structures, silk drapery, high-contrast cinematic lighting, monochromatic palette.";
 
-const PHILOSOPHER_NAMES = [
-  "Socrates", "Plato", "Aristotle", "Pythagoras", "Heraclitus", "Parmenides",
-  "Zeno", "Epicurus", "Diogenes", "Democritus", "Anaximander", "Thales",
-  "Empedocles", "Anaxagoras", "Protagoras", "Gorgias", "Epictetus", "Seneca",
-  "Plotinus", "Chrysippus", "Pyrrho", "Theophrastus", "Hypatia", "Zenobia",
-  "Aristippus"
+const FICTIONAL_AGENT_NAMES = [
+  "Erythocles", "Chromacles", "Moniles", "Phantastes", "Synthecles", "Grapheon",
+  "Vectocles", "Hylades", "Cosmion", "Spectron", "Nomades", "Tekton",
+  "Morphocles", "Iconos", "Kineton", "Aethelon", "Chroneon", "Pneumas",
+  "Somaticon", "Mnemocles", "Semion", "Aoidos", "Therion", "Halion",
+  "Pyrion", "Hydrion", "Asterion", "Thalassion"
 ];
 
-function generateGreekPhilosopherName(existingNames: string[]): string {
+function generateFictionalAgentName(existingNames: string[]): string {
   const normalizedExisting = existingNames.map(n => n.trim().toLowerCase());
-  const available = PHILOSOPHER_NAMES.filter(
+  const available = FICTIONAL_AGENT_NAMES.filter(
     name => !normalizedExisting.includes(name.toLowerCase())
   );
   if (available.length > 0) {
     const idx = Math.floor(Math.random() * available.length);
     return available[idx];
   }
-  const baseName = PHILOSOPHER_NAMES[Math.floor(Math.random() * PHILOSOPHER_NAMES.length)];
+  const baseName = FICTIONAL_AGENT_NAMES[Math.floor(Math.random() * FICTIONAL_AGENT_NAMES.length)];
   let counter = 2;
   while (normalizedExisting.includes(`${baseName.toLowerCase()} ${counter}`)) {
     counter++;
@@ -62,7 +62,7 @@ function generateGreekPhilosopherName(existingNames: string[]): string {
 const DEFAULT_AGENTS: AgentRecord[] = [
   {
     id: "agent-1-gothic-anatomist",
-    name: "Socrates",
+    name: "Erythocles",
     persona: [
       "The Gothic Anatomist",
       "Visual Persona & Logic:",
@@ -79,7 +79,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
   },
   {
     id: "agent-2-fluid-biomorph",
-    name: "Plato",
+    name: "Morphocles",
     persona: [
       "The Fluid Biomorph",
       "Visual Persona & Logic:",
@@ -99,7 +99,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
 function createAgent(index: number, existingNames: string[] = []): AgentRecord {
   return {
     id: `agent-${index}-${Math.random().toString(36).slice(2, 8)}`,
-    name: generateGreekPhilosopherName(existingNames),
+    name: generateFictionalAgentName(existingNames),
     persona: DEFAULT_PERSONA,
     model: "GPT-Image-2",
     heartbeatMinutes: 15,
@@ -133,7 +133,7 @@ function normalizeStoredAgent(value: unknown, index: number, existingNames: stri
 
   let name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : fallback.name;
   if (name.startsWith("Agent ")) {
-    name = generateGreekPhilosopherName(existingNames);
+    name = generateFictionalAgentName(existingNames);
   }
   existingNames.push(name);
 
