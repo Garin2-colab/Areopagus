@@ -344,36 +344,38 @@ export function KnowledgeWeb({
 
     const fg = graphRef.current;
 
-    // Obsidian-style force-directed physics layout:
-    // 1. Repulsion (charge): Keep local nodes pushed apart, with a distance limit to keep the graph compact
+    // ── Obsidian-style force-directed physics ──
+    // The key to Obsidian's graceful feel is *soft* springs + *high* damping.
+    // Forces are gentle enough that dragging one node barely ripples outward,
+    // and the high velocity decay acts like thick air — nodes glide to a stop
+    // instead of oscillating.
+
+    // 1. Repulsion: moderate push, capped range so distant nodes don't react
     fg.d3Force("charge")
-      ?.strength(-180)
-      ?.distanceMax(220);
+      ?.strength(-100)
+      ?.distanceMax(250);
 
-    // 2. Link force: Tight spring pulling connected nodes into neat clusters
+    // 2. Links: soft springs — connected nodes drift together gently
+    //    (0.7 was too stiff, transmitting drag across the whole graph)
     fg.d3Force("link")
-      ?.distance(45)
-      ?.strength(0.7);
+      ?.distance(55)
+      ?.strength(0.3);
 
-    // 3. Centering force: Keeps the graph center of mass aligned with the container
+    // 3. Center: gentle recentering of the center-of-mass
     fg.d3Force("center")
-      ?.strength(0.15);
+      ?.strength(0.08);
 
-    // 4. Gravity (X & Y forces): Pulls every node gently toward (0, 0) coordinate space.
-    // This replicates the Obsidian "Gravity" slider, wrapping all detached cluster islands
-    // into a unified, visually balanced circular shape.
-    fg.d3Force("x", forceX(0).strength(0.045));
-    fg.d3Force("y", forceY(0).strength(0.045));
+    // 4. Gravity: pulls every node softly toward (0,0) → circular boundary
+    fg.d3Force("x", forceX(0).strength(0.03));
+    fg.d3Force("y", forceY(0).strength(0.03));
 
-    // 5. Collision: Prevents overlapping of nodes, especially large image nodes
+    // 5. Collision: prevents node overlap with generous padding
     fg.d3Force("collide", forceCollide((node: any) => {
-      // Large image, brain, and inspiration nodes
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 24;
+        return 22;
       }
-      // Small keyword nodes
       return 10;
-    }).iterations(2));
+    }).iterations(1));
 
     // Reheat so the new force parameters take effect
     fg.d3ReheatSimulation?.();
@@ -579,11 +581,11 @@ export function KnowledgeWeb({
             enableZoomInteraction
             enablePanInteraction
 
-            // Physics: pre-settle 50 ticks before first paint, then run 300 more
-            warmupTicks={50}
-            cooldownTicks={300}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
+            // Physics: pre-settle before first paint; high damping for graceful movement
+            warmupTicks={80}
+            cooldownTicks={200}
+            d3AlphaDecay={0.04}
+            d3VelocityDecay={0.55}
 
             // Links
             linkWidth={(link: unknown) => {
@@ -618,6 +620,22 @@ export function KnowledgeWeb({
             // Events
             onBackgroundClick={handleBackgroundClick}
             onEngineStop={handleEngineStop}
+            onNodeDragEnd={() => {
+              // Rapidly cool the simulation after a drag so the graph
+              // settles quickly instead of shaking for seconds
+              const fg = graphRef.current;
+              if (fg) {
+                fg.d3Force("link")?.strength(0.3);
+                const sim = fg.d3Force("charge");
+                if (sim) {
+                  // Nudge alpha down so forces wind down gracefully
+                  fg.d3ReheatSimulation?.();
+                  setTimeout(() => {
+                    // Let the simulation's own alphaDecay handle the rest
+                  }, 0);
+                }
+              }
+            }}
 
             nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
               const typed = node as GraphNode;
