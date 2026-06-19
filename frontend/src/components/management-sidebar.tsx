@@ -74,7 +74,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
       'Critique: Brutally dismissive of "flat" designs; demands emotional weight and structural integrity.',
       "Pivot: Adds dark, romantic elements to sterile concepts (e.g., adding lace to concrete)."
     ].join("\n"),
-    model: "GPT-Image-2",
+    model: "Midjourney",
     heartbeatMinutes: 0
   },
   {
@@ -91,7 +91,7 @@ const DEFAULT_AGENTS: AgentRecord[] = [
       "Critique: Rejects static or heavy silhouettes; looks for rhythmic patterns and scientific accuracy.",
       "Pivot: Translates rigid structures into transparent, flowing energy fields."
     ].join("\n"),
-    model: "GPT-Image-2",
+    model: "Midjourney",
     heartbeatMinutes: 0
   }
 ];
@@ -101,7 +101,7 @@ function createAgent(index: number, existingNames: string[] = []): AgentRecord {
     id: `agent-${index}-${Math.random().toString(36).slice(2, 8)}`,
     name: generateFictionalAgentName(existingNames),
     persona: DEFAULT_PERSONA,
-    model: "GPT-Image-2",
+    model: "Midjourney",
     heartbeatMinutes: 0,
     referenceImages: [],
     active: true
