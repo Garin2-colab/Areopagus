@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,11 +107,11 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
         {feedThreads.map((thread, index) => {
           const counts = countCommentsAndReplies(thread);
           const totalComments = counts.comments + counts.replies;
-          
+
           const lastActivityTime = new Date(thread.updated_at).getTime();
           const hrs24Ms = 24 * 60 * 60 * 1000;
           const isHighlighted = index < 3 && !isNaN(lastActivityTime) && (Date.now() - lastActivityTime <= hrs24Ms);
-          
+
           const threadTurns = [thread.root.turn, ...thread.root.replies.map((r) => r.turn)];
 
           return (
@@ -142,14 +142,100 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
   );
 }
 
+/* ── Media Slide Component (Eager loading / preloaded DOM caching) ── */
+
+interface MediaSlideProps {
+  turn: PostTurn;
+  isActive: boolean;
+  onEnded?: () => void;
+}
+
+function MediaSlide({ turn, isActive, onEnded }: MediaSlideProps) {
+  const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
+  const foregroundVideoRef = useRef<HTMLVideoElement>(null);
+  const backdropVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (isVideo) {
+      if (isActive) {
+        if (foregroundVideoRef.current) {
+          foregroundVideoRef.current.currentTime = 0;
+          foregroundVideoRef.current.play().catch(() => {});
+        }
+        if (backdropVideoRef.current) {
+          backdropVideoRef.current.currentTime = 0;
+          backdropVideoRef.current.play().catch(() => {});
+        }
+      } else {
+        if (foregroundVideoRef.current) {
+          foregroundVideoRef.current.pause();
+        }
+        if (backdropVideoRef.current) {
+          backdropVideoRef.current.pause();
+        }
+      }
+    }
+  }, [isActive, isVideo]);
+
+  return (
+    <div
+      className={`absolute inset-0 bg-[#FAF9F6] transition-opacity duration-300 ease-in-out ${
+        isActive ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"
+      }`}
+    >
+      {/* Zoomed/Blurred Backdrop */}
+      {isVideo ? (
+        <video
+          ref={backdropVideoRef}
+          src={turn.image_url}
+          className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45 select-none pointer-events-none"
+          style={{ filter: "blur(40px)" }}
+          muted
+          playsInline
+          loop
+        />
+      ) : (
+        <Image
+          src={turn.image_url}
+          alt=""
+          fill
+          className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45 select-none pointer-events-none"
+          style={{ filter: "blur(40px)" }}
+          unoptimized
+        />
+      )}
+      {/* Crisp Centered Media */}
+      <div className="relative h-full w-full flex items-center justify-center z-10">
+        {isVideo ? (
+          <video
+            ref={foregroundVideoRef}
+            src={turn.image_url}
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+            muted
+            playsInline
+            onEnded={onEnded}
+          />
+        ) : (
+          <Image
+            src={turn.image_url}
+            alt={`Post ${turn.image_id}`}
+            fill
+            sizes="(max-width: 640px) 100vw, 380px"
+            className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
+            unoptimized
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Compact Media Slideshow Viewer ─────────────────────────────── */
 
 function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [prevTurn, setPrevTurn] = useState<PostTurn | null>(null);
 
   const handleNext = () => {
-    setPrevTurn(turns[currentIndex]);
     setCurrentIndex((prev) => (prev + 1) % turns.length);
   };
 
@@ -160,14 +246,11 @@ function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
     const isVideo = currentTurn.image_webp?.format === "mp4" || currentTurn.image_url.includes("format=mp4");
 
     if (isVideo) {
-      // For videos, display entire length and transition on ended.
-      // We also add a fallback timeout of 15 seconds so we never get stuck on a broken video.
       const fallbackTimer = setTimeout(() => {
         handleNext();
       }, 15000);
       return () => clearTimeout(fallbackTimer);
     } else {
-      // For images, transition after 1 second.
       const timer = setTimeout(() => {
         handleNext();
       }, 1000);
@@ -177,108 +260,17 @@ function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
 
   if (turns.length === 0) return null;
 
-  const currentTurn = turns[currentIndex];
-  const isVideo = currentTurn.image_webp?.format === "mp4" || currentTurn.image_url.includes("format=mp4");
-  const prevIsVideo = prevTurn ? (prevTurn.image_webp?.format === "mp4" || prevTurn.image_url.includes("format=mp4")) : false;
-
   return (
     <div className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]">
-      {/* Background (Previous Slide) */}
-      {prevTurn && (
-        <div className="absolute inset-0 z-0 select-none pointer-events-none">
-          {/* Zoomed/Blurred Backdrop */}
-          {prevIsVideo ? (
-            <video
-              src={prevTurn.image_url}
-              className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45"
-              style={{ filter: "blur(80px)" }}
-              muted
-              playsInline
-              autoPlay
-            />
-          ) : (
-            <Image
-              src={prevTurn.image_url}
-              alt=""
-              fill
-              className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45"
-              style={{ filter: "blur(80px)" }}
-              unoptimized
-            />
-          )}
-          {/* Crisp Centered Media */}
-          <div className="relative h-full w-full flex items-center justify-center z-10">
-            {prevIsVideo ? (
-              <video
-                src={prevTurn.image_url}
-                className="h-full w-full object-contain"
-                muted
-                playsInline
-                autoPlay
-              />
-            ) : (
-              <Image
-                src={prevTurn.image_url}
-                alt=""
-                fill
-                sizes="(max-width: 640px) 100vw, 380px"
-                className="object-contain"
-                unoptimized
-              />
-            )}
-          </div>
-        </div>
-      )}
+      {turns.map((turn, index) => (
+        <MediaSlide
+          key={turn.image_url}
+          turn={turn}
+          isActive={index === currentIndex}
+          onEnded={handleNext}
+        />
+      ))}
 
-      {/* Foreground (Current Slide with Dissolve Transition) */}
-      <div 
-        key={currentTurn.image_url} 
-        className="absolute inset-0 z-10 animate-dissolve-in"
-      >
-        {/* Zoomed/Blurred Backdrop */}
-        {isVideo ? (
-          <video
-            src={currentTurn.image_url}
-            className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45 select-none pointer-events-none"
-            style={{ filter: "blur(80px)" }}
-            muted
-            playsInline
-            autoPlay
-          />
-        ) : (
-          <Image
-            src={currentTurn.image_url}
-            alt=""
-            fill
-            className="absolute inset-0 h-full w-full object-cover scale-150 opacity-45 select-none pointer-events-none"
-            style={{ filter: "blur(80px)" }}
-            unoptimized
-          />
-        )}
-        {/* Crisp Centered Media */}
-        <div className="relative h-full w-full flex items-center justify-center z-10">
-          {isVideo ? (
-            <video
-              src={currentTurn.image_url}
-              className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.05]"
-              muted
-              playsInline
-              autoPlay
-              onEnded={handleNext}
-            />
-          ) : (
-            <Image
-              src={currentTurn.image_url}
-              alt={`Post ${currentTurn.image_id}`}
-              fill
-              sizes="(max-width: 640px) 100vw, 380px"
-              className="object-contain transition-transform duration-300 group-hover:scale-[1.05]"
-              unoptimized
-            />
-          )}
-        </div>
-      </div>
-      
       {turns.length > 1 && (
         <div className="absolute bottom-2 right-2 bg-[#252422]/80 text-[#FAF9F6] text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wider z-20 select-none">
           {currentIndex + 1} / {turns.length}
@@ -420,7 +412,7 @@ function ThreadPostEntry({
   const turn = node.turn;
   const depth = node.depth;
   const isRoot = depth === 0;
-  
+
   const timestamp = formatTimestamp(turn.created_at);
   const category = getTurnCategory(turn, categoryFrequency);
   const agentName = getAgentName(turn);
@@ -460,9 +452,8 @@ function ThreadPostEntry({
           return (
             <div
               onClick={() => onImageClick?.(turn.image_url)}
-              className={`overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] cursor-zoom-in hover:border-[#858076] transition-colors ${
-                isRoot ? "w-full max-w-3xl rounded-2xl" : "w-[140px] md:w-[240px] rounded-xl"
-              }`}
+              className={`overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] cursor-zoom-in hover:border-[#858076] transition-colors ${isRoot ? "w-full max-w-3xl rounded-2xl" : "w-[140px] md:w-[240px] rounded-xl"
+                }`}
               title="Click to enlarge"
             >
               {isVideo ? (
@@ -472,17 +463,15 @@ function ThreadPostEntry({
                   playsInline
                   autoPlay
                   loop
-                  className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${
-                    isRoot ? "max-h-[80vh]" : ""
-                  }`}
+                  className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${isRoot ? "max-h-[80vh]" : ""
+                    }`}
                 />
               ) : (
                 <img
                   src={turn.image_url}
                   alt={`Post ${turn.image_id}`}
-                  className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${
-                    isRoot ? "max-h-[80vh]" : ""
-                  }`}
+                  className={`w-full h-auto object-contain transition-transform duration-300 hover:scale-[1.01] ${isRoot ? "max-h-[80vh]" : ""
+                    }`}
                 />
               )}
             </div>
