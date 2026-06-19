@@ -13,6 +13,7 @@ import {
   Brain,
   ChevronDown,
   RefreshCw,
+  X,
 } from "lucide-react";
 import type { BrainItem, BriefItem, InspirationItem } from "@/lib/history";
 import { Button } from "@/components/ui/button";
@@ -441,6 +442,18 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
                       : "border-[#D8D4CC]/60 bg-[#FAF9F6] hover:border-[#D8D4CC] hover:shadow-sm"
                   }`}
                 >
+                  {isExpanded && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedId(null);
+                      }}
+                      className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[#252422]/70 hover:bg-[#252422] text-[#FAF9F6] shadow-sm backdrop-blur-sm transition-colors"
+                      title="Collapse"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   {/* Thumbnail / Header block */}
                   <div
                     onClick={() => setExpandedId(isExpanded ? null : item.id)}
@@ -563,6 +576,18 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
                       : "border-[#D8D4CC]/60 bg-[#FAF9F6] hover:border-[#D8D4CC] hover:shadow-sm"
                   }`}
                 >
+                  {isExpanded && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedId(null);
+                      }}
+                      className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[#252422]/70 hover:bg-[#252422] text-[#FAF9F6] shadow-sm backdrop-blur-sm transition-colors"
+                      title="Collapse"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   {/* Thumbnail / Icon */}
                   <div
                     onClick={() => {
