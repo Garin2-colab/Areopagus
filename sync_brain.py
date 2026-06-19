@@ -33,7 +33,7 @@ BRAIN_DIR = Path(__file__).resolve().parent / "brain"
 INDEX_PATH = BRAIN_DIR / ".brain-index.json"
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"}
-NOTE_EXTENSIONS = {".md", ".txt", ".markdown"}
+DOCUMENT_EXTENSIONS = {".md", ".txt", ".markdown"}
 REFERENCE_EXTENSIONS = {".pdf"}
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -58,8 +58,8 @@ def classify_file(path: Path) -> str | None:
     ext = path.suffix.lower()
     if ext in IMAGE_EXTENSIONS:
         return "image"
-    if ext in NOTE_EXTENSIONS:
-        return "note"
+    if ext in DOCUMENT_EXTENSIONS:
+        return "document"
     if ext in REFERENCE_EXTENSIONS:
         return "reference"
     return None
@@ -179,20 +179,20 @@ def gemini_analyze_image(image_bytes: bytes, filename: str, api_key: str) -> dic
     return _parse_json(text)
 
 
-def gemini_analyze_note(text_content: str, filename: str, api_key: str) -> dict[str, Any]:
-    """Analyze a text/markdown note via Gemini and return structured metadata."""
-    # Truncate very long notes to ~8000 chars for the prompt
+def gemini_analyze_document(text_content: str, filename: str, api_key: str) -> dict[str, Any]:
+    """Analyze a text/markdown document via Gemini and return structured metadata."""
+    # Truncate very long documents to ~8000 chars for the prompt
     truncated = text_content[:8000]
 
     prompt = (
         "You are a knowledge analysis engine for a creative design studio's Second Brain.\n\n"
-        "Analyze this text note and return a JSON object with:\n"
+        "Analyze this text document and return a JSON object with:\n"
         "1. \"keywords\": A list of 6-10 hashtag keywords. Each must start with '#', lowercase, no spaces. "
         "Extract the core concepts, themes, references, and design philosophies mentioned. "
-        "NEVER use generic words like #inspiration, #design, #note, #text, #writing.\n"
-        "2. \"summary\": A 2-3 sentence summary of the note's main ideas and creative significance.\n"
+        "NEVER use generic words like #inspiration, #design, #document, #text, #writing.\n"
+        "2. \"summary\": A 2-3 sentence summary of the document's main ideas and creative significance.\n"
         "3. \"mood\": A comma-separated string of 2-4 conceptual descriptors (e.g., 'philosophical, provocative, introspective').\n"
-        "4. \"title\": Extract or generate a concise 2-6 word title for this note.\n"
+        "4. \"title\": Extract or generate a concise 2-6 word title for this document.\n"
         "5. \"excerpt\": The first 200 characters of the most interesting/important passage.\n\n"
         f"Filename: {filename}\n\n"
         f"Content:\n{truncated}\n\n"
@@ -389,15 +389,15 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                 elif ext == ".gif":
                     mime = "image/gif"
                 analysis = gemini_analyze_image(img_bytes, fpath.name, api_key)
-                print(f"           → Title: {analysis.get('title', '?')}")
-                print(f"           → Keywords: {', '.join(analysis.get('keywords', []))}")
+                print(f"           -> Title: {analysis.get('title', '?')}")
+                print(f"           -> Keywords: {', '.join(analysis.get('keywords', []))}")
 
-            elif ftype == "note":
+            elif ftype == "document":
                 text_content = fpath.read_text(encoding="utf-8", errors="replace")
                 full_text = text_content
-                analysis = gemini_analyze_note(text_content, fpath.name, api_key)
-                print(f"           → Title: {analysis.get('title', '?')}")
-                print(f"           → Keywords: {', '.join(analysis.get('keywords', []))}")
+                analysis = gemini_analyze_document(text_content, fpath.name, api_key)
+                print(f"           -> Title: {analysis.get('title', '?')}")
+                print(f"           -> Keywords: {', '.join(analysis.get('keywords', []))}")
 
             elif ftype == "reference":
                 # For PDFs — upload as binary, minimal analysis for now
@@ -410,7 +410,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                     "mood": "reference",
                     "title": fpath.stem.replace("-", " ").replace("_", " ").title(),
                 }
-                print(f"           → Title: {analysis.get('title', '?')}")
+                print(f"           -> Title: {analysis.get('title', '?')}")
 
             # Upload to Modal
             result = upload_brain_item(
@@ -424,7 +424,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             )
 
             if result.get("ok"):
-                print(f"           ✓ Synced to Modal (brain_id: {brain_id})")
+                print(f"           [OK] Synced to Modal (brain_id: {brain_id})")
                 # Update local index
                 existing[rel] = {
                     "local_path": rel,
@@ -437,11 +437,11 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                 }
                 synced += 1
             else:
-                print(f"           ✗ Upload failed: {result.get('error', 'unknown')}")
+                print(f"           [ERROR] Upload failed: {result.get('error', 'unknown')}")
                 errors += 1
 
         except Exception as exc:
-            print(f"           ✗ Error: {exc}")
+            print(f"           [ERROR] Error: {exc}")
             errors += 1
 
         # Small delay to avoid rate limits
@@ -696,19 +696,19 @@ def synthesize_briefs(api_key: str) -> None:
             synthesis = gemini_synthesize_brief(cluster, api_key)
             brief_id = f"brief_{int(time.time())}_{hashlib.md5('_'.join(source_ids).encode()).hexdigest()[:6]}"
 
-            print(f"           → Title: {synthesis.get('title', '?')}")
-            print(f"           → Thesis: {synthesis.get('thesis', '?')[:80]}...")
+            print(f"           -> Title: {synthesis.get('title', '?')}")
+            print(f"           -> Thesis: {synthesis.get('thesis', '?')[:80]}...")
 
             result = upload_brief_to_modal(brief_id, synthesis, source_ids)
             if result.get("ok"):
-                print(f"           ✓ Brief uploaded: {brief_id}")
+                print(f"           [OK] Brief uploaded: {brief_id}")
                 synthesized += 1
                 existing_source_sets.add(source_key)
             else:
-                print(f"           ✗ Upload failed: {result.get('error', 'unknown')}")
+                print(f"           [ERROR] Upload failed: {result.get('error', 'unknown')}")
 
         except Exception as exc:
-            print(f"           ✗ Synthesis error: {exc}")
+            print(f"           [ERROR] Synthesis error: {exc}")
 
         # Rate limit
         if i < len(clusters):

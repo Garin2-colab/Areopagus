@@ -79,7 +79,7 @@ export type InspirationItem = {
 
 export type BrainItem = {
   id: string;
-  type: "image" | "note" | "reference";
+  type: "image" | "note" | "document" | "reference";
   source_file: string;
   title: string;
   keywords: string[];
@@ -209,6 +209,7 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
 
   const brain = (Array.isArray(data.brain) ? data.brain : []).map(item => ({
     ...item,
+    type: item.type === "note" ? "document" : item.type,
     image_url: sanitizeImageUrls(item.image_url)
   }));
 
@@ -218,7 +219,11 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
       ...graph,
       nodes: graph.nodes.map(node => {
         if ((node.type === "image" || node.type === "inspiration" || String(node.type).startsWith("brain")) && typeof node.url === "string") {
-          return { ...node, url: sanitizeImageUrls(node.url) };
+          let nodeType = node.type;
+          if (nodeType === "brain-note") {
+            nodeType = "brain-document";
+          }
+          return { ...node, type: nodeType, url: sanitizeImageUrls(node.url) };
         }
         return node;
       })

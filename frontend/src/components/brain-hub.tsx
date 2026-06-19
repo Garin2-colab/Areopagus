@@ -26,7 +26,7 @@ type BrainHubProps = {
   onImageClick: (url: string) => void;
 };
 
-type FilterType = "all" | "image" | "note" | "reference" | "brief";
+type FilterType = "all" | "image" | "document" | "reference" | "brief";
 
 export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }: BrainHubProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,12 +211,12 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
   };
 
   const filterCounts = useMemo(() => {
-    const counts = { all: allItems.length + briefs.length, image: 0, note: 0, reference: 0, brief: briefs.length };
+    const counts = { all: allItems.length + briefs.length, image: 0, document: 0, reference: 0, brief: briefs.length };
     for (const item of allItems) {
       if (item.type === "image") {
         counts.image++;
-      } else if (item.type === "note") {
-        counts.note++;
+      } else if (item.type === "document" || item.type === "note") {
+        counts.document++;
       } else if (item.type === "reference") {
         counts.reference++;
       }
@@ -242,7 +242,7 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
   }, [briefs, activeFilter, searchQuery]);
 
   const typeIcon = (type: string) => {
-    if (type === "note") return <FileText className="h-3.5 w-3.5" />;
+    if (type === "document" || type === "note") return <FileText className="h-3.5 w-3.5" />;
     if (type === "reference") return <FileArchive className="h-3.5 w-3.5" />;
     return <ImageIcon className="h-3.5 w-3.5" />;
   };
@@ -269,7 +269,7 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
             <div>
               <h3 className="text-base font-semibold text-[#252422]">Second Brain</h3>
               <p className="text-[10px] text-[#858076] mt-0.5">
-                Drop images, notes, and references to expand the collective memory of autonomous agents.
+                Drop images, documents, and references to expand the collective memory of autonomous agents.
               </p>
             </div>
           </div>
@@ -316,7 +316,7 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
           </div>
 
           <div className="flex items-center gap-1.5">
-            {(["all", "image", "note", "reference", "brief"] as FilterType[]).map((filter) => (
+            {(["all", "image", "document", "reference", "brief"] as FilterType[]).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setActiveFilter(filter)}
@@ -518,13 +518,13 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
                         isExpanded ? "aspect-[4/3]" : "aspect-square"
                       }`}
                     >
-                      {item.type === "note" ? (
+                      {item.type === "document" || item.type === "note" ? (
                         <FileText className="h-10 w-10 text-[#858076]/40 stroke-[1.5]" />
                       ) : (
                         <FileArchive className="h-10 w-10 text-[#858076]/40 stroke-[1.5]" />
                       )}
                       <span className="mt-2 text-[10px] font-semibold text-[#858076]/60 uppercase tracking-wider">
-                        {item.type}
+                        {item.type === "note" ? "document" : item.type}
                       </span>
                     </div>
                   )}

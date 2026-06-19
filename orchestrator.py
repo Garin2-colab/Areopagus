@@ -2382,7 +2382,7 @@ def mutate_history_endpoint():
                         "updated_at": utc_now(),
                     }
 
-                    if full_text and item_type == "note":
+                    if full_text and item_type in ("note", "document"):
                         brain_item["full_text"] = full_text
 
                     if existing_item:
