@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { forceX, forceY, forceCollide } from "d3-force";
 
 
 type GraphNode =
@@ -343,13 +344,36 @@ export function KnowledgeWeb({
 
     const fg = graphRef.current;
 
-    // Obsidian-style forces:
-    // - moderate charge repulsion to keep nodes apart
-    // - short link distance for tight hub-spoke clusters
-    // - gentle center force to prevent drift
-    fg.d3Force("charge")?.strength(-120);
-    fg.d3Force("link")?.distance(50);
-    fg.d3Force("center")?.strength(0.05);
+    // Obsidian-style force-directed physics layout:
+    // 1. Repulsion (charge): Keep local nodes pushed apart, with a distance limit to keep the graph compact
+    fg.d3Force("charge")
+      ?.strength(-180)
+      ?.distanceMax(220);
+
+    // 2. Link force: Tight spring pulling connected nodes into neat clusters
+    fg.d3Force("link")
+      ?.distance(45)
+      ?.strength(0.7);
+
+    // 3. Centering force: Keeps the graph center of mass aligned with the container
+    fg.d3Force("center")
+      ?.strength(0.15);
+
+    // 4. Gravity (X & Y forces): Pulls every node gently toward (0, 0) coordinate space.
+    // This replicates the Obsidian "Gravity" slider, wrapping all detached cluster islands
+    // into a unified, visually balanced circular shape.
+    fg.d3Force("x", forceX(0).strength(0.045));
+    fg.d3Force("y", forceY(0).strength(0.045));
+
+    // 5. Collision: Prevents overlapping of nodes, especially large image nodes
+    fg.d3Force("collide", forceCollide((node: any) => {
+      // Large image, brain, and inspiration nodes
+      if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
+        return 24;
+      }
+      // Small keyword nodes
+      return 10;
+    }).iterations(2));
 
     // Reheat so the new force parameters take effect
     fg.d3ReheatSimulation?.();
