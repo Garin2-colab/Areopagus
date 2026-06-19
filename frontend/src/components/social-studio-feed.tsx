@@ -147,10 +147,11 @@ export function SocialStudioFeed({ turns, threads = [], onImageClick }: SocialSt
 interface MediaSlideProps {
   turn: PostTurn;
   isActive: boolean;
+  isPrevious: boolean;
   onEnded?: () => void;
 }
 
-function MediaSlide({ turn, isActive, onEnded }: MediaSlideProps) {
+function MediaSlide({ turn, isActive, isPrevious, onEnded }: MediaSlideProps) {
   const isVideo = turn.image_webp?.format === "mp4" || turn.image_url.includes("format=mp4");
   const foregroundVideoRef = useRef<HTMLVideoElement>(null);
   const backdropVideoRef = useRef<HTMLVideoElement>(null);
@@ -177,11 +178,20 @@ function MediaSlide({ turn, isActive, onEnded }: MediaSlideProps) {
     }
   }, [isActive, isVideo]);
 
+  // Determine visibility classes:
+  // - Active: opacity-100, z-10 (on top)
+  // - Previous: opacity-100, z-0 (stays fully visible underneath active slide during transition)
+  // - Hidden: opacity-0, z-0 (completely hidden)
+  let visibilityClass = "opacity-0 z-0 pointer-events-none";
+  if (isActive) {
+    visibilityClass = "opacity-100 z-10 pointer-events-auto";
+  } else if (isPrevious) {
+    visibilityClass = "opacity-100 z-0 pointer-events-none";
+  }
+
   return (
     <div
-      className={`absolute inset-0 bg-[#FAF9F6] transition-opacity duration-300 ease-in-out ${
-        isActive ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"
-      }`}
+      className={`absolute inset-0 bg-[#FAF9F6] transition-opacity duration-300 ease-in-out ${visibilityClass}`}
     >
       {/* Zoomed/Blurred Backdrop */}
       {isVideo ? (
@@ -234,10 +244,21 @@ function MediaSlide({ turn, isActive, onEnded }: MediaSlideProps) {
 
 function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [previousIndex, setPreviousIndex] = useState<number | null>(null);
 
   const handleNext = () => {
+    setPreviousIndex(currentIndex);
     setCurrentIndex((prev) => (prev + 1) % turns.length);
   };
+
+  // Clear previous index after transition finishes (300ms transition + 50ms buffer)
+  useEffect(() => {
+    if (previousIndex === null) return;
+    const timer = setTimeout(() => {
+      setPreviousIndex(null);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [previousIndex]);
 
   useEffect(() => {
     if (turns.length <= 1) return;
@@ -262,14 +283,19 @@ function CompactMediaViewer({ turns }: { turns: PostTurn[] }) {
 
   return (
     <div className="relative aspect-square w-full shrink-0 overflow-hidden border-b border-[#D8D4CC]/40 bg-[#FAF9F6]">
-      {turns.map((turn, index) => (
-        <MediaSlide
-          key={turn.image_url}
-          turn={turn}
-          isActive={index === currentIndex}
-          onEnded={handleNext}
-        />
-      ))}
+      {turns.map((turn, index) => {
+        const isActive = index === currentIndex;
+        const isPrevious = index === previousIndex;
+        return (
+          <MediaSlide
+            key={turn.image_url}
+            turn={turn}
+            isActive={isActive}
+            isPrevious={isPrevious}
+            onEnded={handleNext}
+          />
+        );
+      })}
 
       {turns.length > 1 && (
         <div className="absolute bottom-2 right-2 bg-[#252422]/80 text-[#FAF9F6] text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wider z-20 select-none">
