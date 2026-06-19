@@ -207,11 +207,23 @@ export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
     image_url: sanitizeImageUrls(item.image_url)
   }));
 
-  const brain = (Array.isArray(data.brain) ? data.brain : []).map(item => ({
-    ...item,
-    type: item.type === "note" ? "document" : item.type,
-    image_url: sanitizeImageUrls(item.image_url)
-  }));
+  const brain = (Array.isArray(data.brain) ? data.brain : []).map(item => {
+    let resolvedType = item.type === "note" ? "document" : item.type;
+    if (item.source_file) {
+      if (item.source_file.startsWith("references/")) {
+        resolvedType = "reference";
+      } else if (item.source_file.startsWith("images/")) {
+        resolvedType = "image";
+      } else if (item.source_file.startsWith("documents/")) {
+        resolvedType = "document";
+      }
+    }
+    return {
+      ...item,
+      type: resolvedType as "image" | "document" | "reference",
+      image_url: sanitizeImageUrls(item.image_url)
+    };
+  });
 
   let graph = data.graph;
   if (graph && Array.isArray(graph.nodes)) {

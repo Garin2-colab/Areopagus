@@ -420,10 +420,20 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                 }
                 print(f"           -> Title: {analysis.get('title', '?')}")
 
+            # Determine logical type based on path for categorization/labeling
+            if rel.startswith("references/"):
+                item_type = "reference"
+            elif rel.startswith("images/"):
+                item_type = "image"
+            elif rel.startswith("documents/"):
+                item_type = "document"
+            else:
+                item_type = ftype
+
             # Upload to Modal
             result = upload_brain_item(
                 brain_id=brain_id,
-                item_type=ftype,
+                item_type=item_type,
                 source_file=rel,
                 image_base64=image_b64,
                 mime_type=mime,
@@ -437,7 +447,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                 existing[rel] = {
                     "local_path": rel,
                     "brain_id": brain_id,
-                    "type": ftype,
+                    "type": item_type,
                     "status": "synced",
                     "synced_at": utc_now(),
                     "hash": entry["hash"],
