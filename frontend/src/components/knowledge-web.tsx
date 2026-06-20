@@ -354,7 +354,7 @@ export function KnowledgeWeb({
     //    letting the link force arrange them around their hub.
     fg.d3Force("charge")
       ?.strength((node: any) => {
-        if (node.kind === "keyword" || node.kind === "comment") return -30;
+        if (node.kind === "keyword" || node.kind === "comment") return -15;
         return -150; // image / inspiration / brain
       })
       ?.distanceMax(300);
@@ -367,7 +367,7 @@ export function KnowledgeWeb({
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 40 : 120;
+        return hasKeyword ? 32 : 120;
       })
       ?.strength((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
@@ -389,8 +389,8 @@ export function KnowledgeWeb({
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
         return 30;
       }
-      return 12; // keyword rendered radius is 6px → 12px prevents overlap with gap
-    }).iterations(3));
+      return 8;
+    }).iterations(2));
 
     fg.d3ReheatSimulation?.();
 
