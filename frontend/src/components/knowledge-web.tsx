@@ -344,27 +344,29 @@ export function KnowledgeWeb({
     const fg = graphRef.current;
 
     // ── Obsidian-style force-directed physics ──
-    // Ultra-soft springs + heavy damping = graceful, fluid movement.
-    // Dragging one node should barely ripple outward; nodes glide to a
-    // stop like they're floating in honey.
+    // Balanced forces: soft enough that dragging feels graceful,
+    // strong enough that connected nodes actually respond and drift.
+    // The simulation stays alive (cooldownTicks=Infinity) so drag
+    // interactions can reheat it — D3's alphaDecay naturally cools
+    // it to near-zero CPU cost when idle.
 
-    // 1. Repulsion: gentle push, short range so distant nodes stay inert
+    // 1. Repulsion: moderate push, limited range
     fg.d3Force("charge")
-      ?.strength(-60)
-      ?.distanceMax(200);
+      ?.strength(-80)
+      ?.distanceMax(250);
 
-    // 2. Links: very soft springs — nodes drift together like loose threads
+    // 2. Links: soft springs — connected nodes drift in response to drags
     fg.d3Force("link")
       ?.distance(60)
-      ?.strength(0.08);
+      ?.strength(0.15);
 
-    // 3. Center: minimal recentering of the center-of-mass
+    // 3. Center: keeps graph center-of-mass aligned
     fg.d3Force("center")
       ?.strength(0.05);
 
-    // 4. Gravity: whisper-light pull toward origin → circular boundary
-    fg.d3Force("x", forceX(0).strength(0.015));
-    fg.d3Force("y", forceY(0).strength(0.015));
+    // 4. Gravity: gentle pull toward origin → circular boundary
+    fg.d3Force("x", forceX(0).strength(0.02));
+    fg.d3Force("y", forceY(0).strength(0.02));
 
     // 5. Collision: prevents node overlap
     fg.d3Force("collide", forceCollide((node: any) => {
@@ -375,6 +377,13 @@ export function KnowledgeWeb({
     }).iterations(1));
 
     fg.d3ReheatSimulation?.();
+
+    // Initial zoom-to-fit after warmup settles the layout.
+    // (onEngineStop won't fire with cooldownTicks=Infinity,
+    // so we schedule a gentle zoom here instead.)
+    setTimeout(() => {
+      fg.zoomToFit?.(800, 60);
+    }, 200);
   });
 
   // Preload images and videos (only refresh canvas visuals, don't reheat physics)
@@ -542,18 +551,8 @@ export function KnowledgeWeb({
 
   const handleBackgroundClick = useCallback(() => {
     requestAnimationFrame(() => {
-      graphRef.current?.zoomToFit?.(250, 60);
+      graphRef.current?.zoomToFit?.(400, 60);
     });
-  }, []);
-
-  // Smooth zoom-to-fit once the simulation fully settles (long duration = no snap)
-  const initialFitDone = useRef(false);
-  const handleEngineStop = useCallback(() => {
-    if (!initialFitDone.current) {
-      initialFitDone.current = true;
-      // First settle: gentle 800ms zoom so the user never sees a jarring snap
-      graphRef.current?.zoomToFit?.(800, 60);
-    }
   }, []);
 
   const getLabelOpacity = (globalScale: number, baseSize: number, hovered: boolean, selected: boolean) => {
@@ -582,12 +581,17 @@ export function KnowledgeWeb({
             enableZoomInteraction
             enablePanInteraction
 
-            // Physics: fully pre-settle before first paint so there's no initial snap.
-            // Heavy velocity decay (0.7) = thick-air damping for graceful movement.
-            warmupTicks={500}
-            cooldownTicks={0}
-            d3AlphaDecay={0.03}
-            d3VelocityDecay={0.7}
+            // Physics:
+            // warmupTicks: pre-settle layout before first paint (no visible snapping).
+            // cooldownTicks=Infinity: NEVER kill the simulation — D3's alphaDecay
+            //   naturally cools it to near-zero cost. This is critical: if the
+            //   simulation is stopped, drag reheat is immediately re-killed and
+            //   only the pinned node moves (everything else is frozen).
+            // velocityDecay=0.4: moderate damping — nodes respond but settle.
+            warmupTicks={200}
+            cooldownTicks={Infinity}
+            d3AlphaDecay={0.025}
+            d3VelocityDecay={0.4}
 
             // Links
             linkWidth={(link: unknown) => {
@@ -621,7 +625,6 @@ export function KnowledgeWeb({
 
             // Events
             onBackgroundClick={handleBackgroundClick}
-            onEngineStop={handleEngineStop}
 
             nodePointerAreaPaint={(node: unknown, color: string, ctx: CanvasRenderingContext2D) => {
               const typed = node as GraphNode;
