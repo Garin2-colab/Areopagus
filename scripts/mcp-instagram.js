@@ -34,36 +34,40 @@ const apiKey = envConfig['RAPIDAPI_KEY'];
 if (!apiKey) {
   console.error('[mcp-wrapper] Error: RAPIDAPI_KEY is not defined in .env');
   process.exit(1);
-} else {
-  console.error(`[mcp-wrapper] Loaded RAPIDAPI_KEY (len: ${apiKey.length}), RAPIDAPI_HOST: ${apiHost}`);
 }
 
-// Resolve local mcp-remote executable path to avoid slow npx registry/cache checks
-const mcpRemoteBin = path.resolve(
-  __dirname,
-  '../node_modules/.bin/mcp-remote' + (process.platform === 'win32' ? '.cmd' : '')
-);
+// Find local proxy.js inside node_modules
+const proxyJs = path.resolve(__dirname, '../node_modules/mcp-remote/dist/proxy.js');
 
-const useLocal = fs.existsSync(mcpRemoteBin);
-const command = useLocal
-  ? (process.platform === 'win32' ? `"${mcpRemoteBin}"` : mcpRemoteBin)
-  : (process.platform === 'win32' ? 'npx.cmd' : 'npx');
-const args = useLocal
-  ? [
-      'https://mcp.rapidapi.com',
-      '--header', `x-api-host: ${apiHost}`,
-      '--header', `x-api-key: ${apiKey}`
-    ]
-  : [
-      'mcp-remote',
-      'https://mcp.rapidapi.com',
-      '--header', `x-api-host: ${apiHost}`,
-      '--header', `x-api-key: ${apiKey}`
-    ];
+let command = process.execPath;
+let args = [];
+let useShell = false;
 
+if (fs.existsSync(proxyJs)) {
+  // Launch proxy.js directly with node - no shell, no cmd echoes, no npx delay!
+  args = [
+    proxyJs,
+    'https://mcp.rapidapi.com',
+    '--header', `x-api-host: ${apiHost}`,
+    '--header', `x-api-key: ${apiKey}`
+  ];
+  useShell = false;
+} else {
+  console.error('[mcp-wrapper] Warning: local node_modules/mcp-remote not found. Falling back to npx.');
+  command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  args = [
+    'mcp-remote',
+    'https://mcp.rapidapi.com',
+    '--header', `x-api-host: ${apiHost}`,
+    '--header', `x-api-key: ${apiKey}`
+  ];
+  useShell = true;
+}
+
+// Spawn child process without shell to prevent cmd.exe echoes and stdout pollution
 const child = spawn(command, args, {
   stdio: ['pipe', 'pipe', 'inherit'],
-  shell: true
+  shell: useShell
 });
 
 // Pipe stdin to the child and stdout back to parent
