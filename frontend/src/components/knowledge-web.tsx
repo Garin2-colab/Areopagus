@@ -558,11 +558,16 @@ export function KnowledgeWeb({
   const getLabelOpacity = (globalScale: number, baseSize: number, hovered: boolean, selected: boolean) => {
     if (hovered || selected) return 1;
 
+    // Labels are invisible at the default zoom-to-fit view and fade in as
+    // the user zooms closer, matching Obsidian's clean macro aesthetic.
+    //   globalScale ~1-2  (default) → renderedSize ~12-24 → opacity 0
+    //   globalScale ~2.5  (zooming) → renderedSize ~30    → opacity 0.33
+    //   globalScale ~3.5+ (close)   → renderedSize ~40+   → opacity 1
     const renderedSize = baseSize * Math.max(globalScale, 0.01);
-    if (renderedSize >= 11) return 1;
-    if (renderedSize <= 6) return 0;
+    if (renderedSize >= 40) return 1;
+    if (renderedSize <= 25) return 0;
 
-    return (renderedSize - 6) / 5;
+    return (renderedSize - 25) / 15;
   };
 
   return (
