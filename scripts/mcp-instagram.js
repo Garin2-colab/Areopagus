@@ -38,17 +38,28 @@ if (!apiKey) {
   console.error(`[mcp-wrapper] Loaded RAPIDAPI_KEY (len: ${apiKey.length}), RAPIDAPI_HOST: ${apiHost}`);
 }
 
-// Arguments for mcp-remote
-const args = [
-  'mcp-remote',
-  'https://mcp.rapidapi.com',
-  '--header', `x-api-host: ${apiHost}`,
-  '--header', `x-api-key: ${apiKey}`
-];
+// Resolve local mcp-remote executable path to avoid slow npx registry/cache checks
+const mcpRemoteBin = path.resolve(
+  __dirname,
+  '../node_modules/.bin/mcp-remote' + (process.platform === 'win32' ? '.cmd' : '')
+);
 
-// Spawn the mcp-remote child process, using npx on Windows/UNIX
-const isWin = process.platform === 'win32';
-const command = isWin ? 'npx.cmd' : 'npx';
+const useLocal = fs.existsSync(mcpRemoteBin);
+const command = useLocal
+  ? (process.platform === 'win32' ? `"${mcpRemoteBin}"` : mcpRemoteBin)
+  : (process.platform === 'win32' ? 'npx.cmd' : 'npx');
+const args = useLocal
+  ? [
+      'https://mcp.rapidapi.com',
+      '--header', `x-api-host: ${apiHost}`,
+      '--header', `x-api-key: ${apiKey}`
+    ]
+  : [
+      'mcp-remote',
+      'https://mcp.rapidapi.com',
+      '--header', `x-api-host: ${apiHost}`,
+      '--header', `x-api-key: ${apiKey}`
+    ];
 
 const child = spawn(command, args, {
   stdio: ['pipe', 'pipe', 'inherit'],
