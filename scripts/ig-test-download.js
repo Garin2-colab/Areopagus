@@ -41,6 +41,7 @@ const items = edges
     };
   })
   .filter(item => item.url && !item.isVideo) // only images
+  .sort((a, b) => b.likes - a.likes) // Sort by likes descending
   .slice(0, 5); // take top 5
 
 console.log(`Downloading ${items.length} images...`);

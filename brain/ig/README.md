@@ -1,37 +1,23 @@
 # Scraped Instagram Design Inspiration
 
-This folder contains a test batch of high-engagement images scraped from Instagram under the tag **#industrialdesign**.
+Ingested on: 2026-06-20 16:37:58
+Source: JSON File: C:\Users\heebo\.gemini\antigravity\brain\0e96c98e-9efd-49cf-9a89-511ee4a9cc17\.system_generated\steps\3903\output.txt
+Filters: min_likes=10, max_images=5
 
+| Post | Engagement | Caption |
+| --- | --- | --- |
+| ![DItYFSRoGFA.jpg](DItYFSRoGFA.jpg) | **30** Likes<br>0 Comments | CAROUSEL l 2020
 
-### 1. [DZ00qc0DERA.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ00qc0DERA.jpg)
-* **Engagement:** 0 Likes | 0 Comments
-* **Caption:** Behind every child who dares to dream is often a father who first lifted them high enough to see the...
-![DZ00qc0DERA.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ00qc0DERA.jpg)
+Safe in structure and safe in perception - minimalistic and clean design of the car... |
+| ![DI3u-eiIc_h.jpg](DI3u-eiIc_h.jpg) | **24** Likes<br>0 Comments | SOUNDPLAY PEBBLE CHIME l  2023
 
+Pebble chime is a sensory play equipment for children playgrounds th... |
+| ![DI3vD9_IVyn.jpg](DI3vD9_IVyn.jpg) | **23** Likes<br>2 Comments | SOUNDPLAY PEBBLE CHIME l  2023
 
-### 2. [DZ0z4XKlwNB.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0z4XKlwNB.jpg)
-* **Engagement:** 0 Likes | 0 Comments
-* **Caption:** In Japan, engineers have developed a way to generate electricity from footsteps. Special floor tiles...
-![DZ0z4XKlwNB.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0z4XKlwNB.jpg)
+Pebble chime is a sensory play equipment for children playgrounds th... |
+| ![DIzOi8FIFhc.jpg](DIzOi8FIFhc.jpg) | **20** Likes<br>0 Comments | WATERPLAY l 2022
 
+Waterplay is a system of 80 products that allows to create rivers and overground s... |
+| ![DIzOg20Ibnx.jpg](DIzOg20Ibnx.jpg) | **20** Likes<br>0 Comments | WATERPLAY l 2022
 
-### 3. [DZ0zvWxk8YA.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0zvWxk8YA.jpg)
-* **Engagement:** 0 Likes | 0 Comments
-* **Caption:** Managing multiple vendors for a single cleanroom project? 🏗️ Stop the fragmentation.
-We integrate y...
-![DZ0zvWxk8YA.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0zvWxk8YA.jpg)
-
-
-### 4. [DZ0zipBmRqM.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0zipBmRqM.jpg)
-* **Engagement:** 0 Likes | 0 Comments
-* **Caption:** "Step into this stunning industrial haven, where rustic charm meets modern elegance! The exposed bri...
-![DZ0zipBmRqM.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0zipBmRqM.jpg)
-
-
-### 5. [DZ0xcsBAd4t.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0xcsBAd4t.jpg)
-* **Engagement:** 0 Likes | 0 Comments
-* **Caption:** A chair became a three-dimensional painting.
-
-The Red and Blue Chair was designed by Gerrit Rietveld...
-![DZ0xcsBAd4t.jpg](file:///c:/Users/heebo/Documents/Vibecoding Projects/Areopagus/brain/ig/DZ0xcsBAd4t.jpg)
-
+Waterplay is a system of 80 products that allows to create rivers and overground s... |

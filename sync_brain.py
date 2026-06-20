@@ -59,6 +59,9 @@ def classify_file(path: Path) -> str | None:
     if ext in IMAGE_EXTENSIONS:
         return "image"
     if ext in DOCUMENT_EXTENSIONS:
+        # Ignore companion text files for Instagram images in brain/ig
+        if path.parent.name == "ig" and (path.with_suffix(".jpg").exists() or path.with_suffix(".png").exists() or path.with_suffix(".jpeg").exists()):
+            return None
         return "document"
     if ext in REFERENCE_EXTENSIONS:
         return "reference"
@@ -115,7 +118,7 @@ def get_mutate_url() -> str:
 # ── Gemini Analysis ───────────────────────────────────────────────────────────
 
 
-def gemini_analyze_image(image_bytes: bytes, filename: str, api_key: str) -> dict[str, Any]:
+def gemini_analyze_image(image_bytes: bytes, filename: str, api_key: str, caption_context: str = "") -> dict[str, Any]:
     """Analyze an image via Gemini vision and return structured metadata."""
     prompt = (
         "You are a visual analysis engine for a creative design studio's Second Brain.\n\n"
@@ -128,8 +131,11 @@ def gemini_analyze_image(image_bytes: bytes, filename: str, api_key: str) -> dic
         "4. \"color_palette\": A list of 3-5 hex color codes representing the dominant colors.\n"
         "5. \"title\": A short 2-5 word poetic title for this image.\n\n"
         f"Filename: {filename}\n\n"
-        "Return ONLY the JSON object. No markdown fences, no commentary."
     )
+    if caption_context:
+        prompt += f"Additional Context (e.g. caption, metadata):\n{caption_context}\n\n"
+        
+    prompt += "Return ONLY the JSON object. No markdown fences, no commentary."
 
     mime_type = "image/jpeg"
     ext = Path(filename).suffix.lower()
@@ -453,7 +459,14 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                     mime = "image/webp"
                 elif ext == ".gif":
                     mime = "image/gif"
-                analysis = gemini_analyze_image(img_bytes, fpath.name, api_key)
+                caption_context = ""
+                txt_path = fpath.with_suffix(".txt")
+                if txt_path.exists():
+                    try:
+                        caption_context = txt_path.read_text(encoding="utf-8", errors="replace")
+                    except Exception as e:
+                        print(f"           [WARNING] Failed to read companion metadata: {e}")
+                analysis = gemini_analyze_image(img_bytes, fpath.name, api_key, caption_context=caption_context)
                 if "keywords" not in analysis or not isinstance(analysis["keywords"], list):
                     analysis["keywords"] = []
                 if rel.startswith("references/"):
@@ -801,6 +814,283 @@ def synthesize_briefs(api_key: str) -> None:
     print("=" * 60)
 
 
+# ── Instagram Scraper & Ingestion ─────────────────────────────────────────────
+
+def get_rapidapi_credentials() -> tuple[str, str]:
+    key = os.environ.get("RAPIDAPI_KEY", "").strip()
+    host = os.environ.get("RAPIDAPI_HOST", "").strip()
+    
+    if not key or not host:
+        env_path = Path(__file__).resolve().parent / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("RAPIDAPI_KEY="):
+                    key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("RAPIDAPI_HOST="):
+                    host = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    
+    if not key:
+        print("ERROR: RAPIDAPI_KEY not found in environment or .env file.")
+        sys.exit(1)
+    if not host:
+        host = "instagram-scraper-stable-api.p.rapidapi.com"
+        
+    return key, host
+
+
+def normalize_instagram_node(node: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(node, dict):
+        return None
+        
+    # Check for User Posts style (which uses 'code' and 'like_count')
+    if "code" in node or "like_count" in node:
+        is_video = node.get("media_type") == 2
+        likes = node.get("like_count", 0)
+        comments = node.get("comment_count", 0)
+        caption_obj = node.get("caption") or {}
+        caption = caption_obj.get("text", "") if isinstance(caption_obj, dict) else ""
+        shortcode = node.get("code")
+        
+        image_url = None
+        img_v2 = node.get("image_versions2", {})
+        candidates = img_v2.get("candidates", [])
+        if candidates:
+            image_url = candidates[0].get("url")
+        elif node.get("display_uri"):
+            image_url = node.get("display_uri")
+        elif node.get("display_url"):
+            image_url = node.get("display_url")
+            
+        return {
+            "id": node.get("id"),
+            "shortcode": shortcode,
+            "likes": likes,
+            "comments": comments,
+            "caption": caption,
+            "image_url": image_url,
+            "is_video": is_video
+        }
+        
+    # Check for Hashtag Search style (which uses 'shortcode' and 'edge_liked_by')
+    elif "shortcode" in node:
+        is_video = node.get("is_video", False)
+        likes = node.get("edge_liked_by", {}).get("count", 0)
+        comments = node.get("edge_media_to_comment", {}).get("count", 0)
+        caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
+        caption = caption_edges[0].get("node", {}).get("text", "") if caption_edges else ""
+        shortcode = node.get("shortcode")
+        image_url = node.get("display_url")
+        
+        return {
+            "id": node.get("id"),
+            "shortcode": shortcode,
+            "likes": likes,
+            "comments": comments,
+            "caption": caption,
+            "image_url": image_url,
+            "is_video": is_video
+        }
+        
+    return None
+
+
+def load_and_normalize_instagram_json(json_path: Path) -> list[dict[str, Any]]:
+    try:
+        with json_path.open("r", encoding="utf-8") as f:
+            res_json = json.load(f)
+    except Exception as e:
+        print(f"  [ERROR] Failed to read JSON file {json_path}: {e}")
+        return []
+        
+    raw_nodes = []
+    
+    if isinstance(res_json, dict):
+        if "posts" in res_json:
+            posts_data = res_json["posts"]
+            if isinstance(posts_data, list):
+                raw_nodes = [item.get("node") for item in posts_data if item.get("node")]
+            elif isinstance(posts_data, dict):
+                edges = posts_data.get("edges", [])
+                raw_nodes = [edge.get("node") for edge in edges if edge.get("node")]
+        elif "edges" in res_json:
+            raw_nodes = [edge.get("node") for edge in res_json.get("edges", []) if edge.get("node")]
+        elif "data" in res_json:
+            data_field = res_json["data"]
+            if isinstance(data_field, list):
+                raw_nodes = data_field
+            elif isinstance(data_field, dict) and "user" in data_field:
+                edges = data_field["user"].get("edge_owner_to_timeline_media", {}).get("edges", [])
+                raw_nodes = [edge.get("node") for edge in edges if edge.get("node")]
+    elif isinstance(res_json, list):
+        raw_nodes = res_json
+        
+    normalized = []
+    for item in raw_nodes:
+        if not isinstance(item, dict):
+            continue
+        node = item.get("node") if "node" in item else item
+        norm = normalize_instagram_node(node)
+        if norm and norm.get("image_url") and not norm.get("is_video"):
+            normalized.append(norm)
+            
+    return normalized
+
+
+def download_instagram_posts(*, username: str | None = None, hashtag: str | None = None, json_file: str | None = None, min_likes: int = 100, max_images: int = 5) -> None:
+    dest_dir = BRAIN_DIR / "ig"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    
+    normalized = []
+    
+    if json_file:
+        json_path = Path(json_file)
+        print("=" * 60)
+        print(f"  INGESTING INSTAGRAM JSON FROM FILE: {json_path}")
+        normalized = load_and_normalize_instagram_json(json_path)
+    else:
+        api_key, api_host = get_rapidapi_credentials()
+        
+        print("=" * 60)
+        if username:
+            print(f"  SCRAPING INSTAGRAM USER: @{username}")
+            url = f"https://{api_host}/get_ig_user_posts.php"
+            payload = {"username_or_url": username}
+            data = urllib.parse.urlencode(payload).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-RapidAPI-Key": api_key,
+                    "X-RapidAPI-Host": api_host,
+                },
+                method="POST"
+            )
+        else:
+            print(f"  SCRAPING INSTAGRAM HASHTAG: #{hashtag}")
+            params = urllib.parse.urlencode({"hashtag": hashtag})
+            url = f"https://{api_host}/search_hashtag.php?{params}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "X-RapidAPI-Key": api_key,
+                    "X-RapidAPI-Host": api_host,
+                },
+                method="GET"
+            )
+            
+        print(f"  Connecting to RapidAPI ({api_host})...")
+        try:
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                res_json = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            print(f"  [ERROR] Scraping failed: {e}")
+            return
+            
+        raw_nodes = []
+        if "posts" in res_json:
+            posts_data = res_json["posts"]
+            if isinstance(posts_data, list):
+                raw_nodes = [item.get("node") for item in posts_data if item.get("node")]
+            elif isinstance(posts_data, dict):
+                edges = posts_data.get("edges", [])
+                raw_nodes = [edge.get("node") for edge in edges if edge.get("node")]
+                
+        print(f"  Retrieved {len(raw_nodes)} raw posts from API.")
+        
+        for node in raw_nodes:
+            norm = normalize_instagram_node(node)
+            if norm and norm.get("image_url") and not norm.get("is_video"):
+                normalized.append(norm)
+                
+    print(f"  Found {len(normalized)} image posts to inspect.")
+    
+    # Sort descending by likes
+    normalized.sort(key=lambda x: x.get("likes", 0), reverse=True)
+    
+    # Apply min_likes filter
+    high_engagement = [item for item in normalized if item.get("likes", 0) >= min_likes]
+    print(f"  Found {len(high_engagement)} posts with >= {min_likes} likes.")
+    
+    # Fallback if none found >= min_likes
+    if not high_engagement:
+        print(f"  [WARNING] No posts found with >= {min_likes} likes. Falling back to top posts regardless of likes.")
+        high_engagement = normalized
+        
+    to_download = high_engagement[:max_images]
+    print(f"  Downloading/writing top {len(to_download)} posts to {dest_dir}...")
+    
+    manifest = []
+    for idx, item in enumerate(to_download, 1):
+        shortcode = item["shortcode"]
+        img_url = item["image_url"]
+        likes = item["likes"]
+        comments = item["comments"]
+        caption = item["caption"]
+        
+        if not shortcode:
+            shortcode = f"post_{idx}_{int(time.time())}"
+            
+        filename = f"{shortcode}.jpg"
+        meta_filename = f"{shortcode}.txt"
+        img_path = dest_dir / filename
+        meta_path = dest_dir / meta_filename
+        
+        print(f"  [{idx}/{len(to_download)}] Post {shortcode} | Likes: {likes} | Comments: {comments}")
+        
+        # Download image
+        try:
+            if img_url:
+                img_req = urllib.request.Request(
+                    img_url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                )
+                with urllib.request.urlopen(img_req, timeout=30) as img_resp:
+                    img_path.write_bytes(img_resp.read())
+            else:
+                print(f"    [WARNING] No image URL found for {shortcode}")
+                continue
+            
+            # Save companion text containing metadata and caption
+            meta_content = (
+                f"Instagram Post Code: {shortcode}\n"
+                f"Likes: {likes}\n"
+                f"Comments: {comments}\n"
+                f"Source Account: {username or 'hashtag #' + (hashtag or 'unknown')}\n"
+                f"URL: https://instagram.com/p/{shortcode}\n\n"
+                f"Caption:\n{caption}"
+            )
+            meta_path.write_text(meta_content, encoding="utf-8")
+            
+            manifest.append({
+                "filename": filename,
+                "likes": likes,
+                "comments": comments,
+                "caption": caption[:100] + ("..." if len(caption) > 100 else "")
+            })
+        except Exception as e:
+            print(f"    [ERROR] Failed downloading post {shortcode}: {e}")
+            
+    if manifest:
+        md_lines = [
+            "# Scraped Instagram Design Inspiration",
+            f"\nIngested on: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Source: {'@' + username if username else ('#' + hashtag if hashtag else ('JSON File: ' + str(json_file)))}",
+            f"Filters: min_likes={min_likes}, max_images={max_images}\n",
+            "| Post | Engagement | Caption |",
+            "| --- | --- | --- |"
+        ]
+        for m in manifest:
+            md_lines.append(f"| ![{m['filename']}]({m['filename']}) | **{m['likes']}** Likes<br>{m['comments']} Comments | {m['caption']} |")
+            
+        readme_path = dest_dir / "README.md"
+        readme_path.write_text("\n".join(md_lines), encoding="utf-8")
+        print(f"  [OK] Saved README.md to {readme_path}")
+    
+    print("=" * 60)
+
+
 # ── CLI Entry Point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -808,7 +1098,24 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true", help="Re-process all files, ignoring cache")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be synced without doing it")
     parser.add_argument("--briefs-only", action="store_true", help="Skip file sync, only re-synthesize briefs")
+    
+    # Instagram Ingestion arguments
+    parser.add_argument("--ig-user", type=str, help="Scrape latest posts from this Instagram username")
+    parser.add_argument("--ig-hashtag", type=str, help="Scrape latest posts matching this hashtag")
+    parser.add_argument("--ig-json", type=str, help="Ingest Instagram scraped posts from this local JSON file path")
+    parser.add_argument("--min-likes", type=int, default=100, help="Minimum likes threshold to filter posts")
+    parser.add_argument("--max-images", type=int, default=5, help="Maximum number of images to ingest")
+    
     args = parser.parse_args()
+
+    if args.ig_user or args.ig_hashtag or args.ig_json:
+        download_instagram_posts(
+            username=args.ig_user,
+            hashtag=args.ig_hashtag,
+            json_file=args.ig_json,
+            min_likes=args.min_likes,
+            max_images=args.max_images
+        )
 
     if args.briefs_only:
         key = get_api_key()
