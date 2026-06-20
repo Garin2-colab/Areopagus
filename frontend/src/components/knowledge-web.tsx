@@ -343,22 +343,38 @@ export function KnowledgeWeb({
 
     const fg = graphRef.current;
 
-    // ── Obsidian-style force-directed physics ──
-    // Balanced forces: soft enough that dragging feels graceful,
-    // strong enough that connected nodes actually respond and drift.
-    // The simulation stays alive (cooldownTicks=Infinity) so drag
-    // interactions can reheat it — D3's alphaDecay naturally cools
-    // it to near-zero CPU cost when idle.
+    // ── Hub-spoke force layout ──
+    // Main nodes (images, references, brain) act as "hubs" — they repel
+    // each other strongly and sit far apart. Keyword nodes act as "spokes"
+    // — pulled close to their hub with tight links and only gentle mutual
+    // repulsion, so they spread evenly in a circular halo.
 
-    // 1. Repulsion: moderate push, limited range
+    // 1. Charge: type-aware repulsion
+    //    Hubs push each other apart strongly; keywords barely repel,
+    //    letting the link force arrange them around their hub.
     fg.d3Force("charge")
-      ?.strength(-80)
-      ?.distanceMax(250);
+      ?.strength((node: any) => {
+        if (node.kind === "keyword" || node.kind === "comment") return -12;
+        return -150; // image / inspiration / brain
+      })
+      ?.distanceMax(300);
 
-    // 2. Links: soft springs — connected nodes drift in response to drags
+    // 2. Links: type-aware distance & strength
+    //    keyword↔hub: short + strong → tight spoke ring
+    //    hub↔hub (parent-child images): long + soft → spread apart
     fg.d3Force("link")
-      ?.distance(60)
-      ?.strength(0.15);
+      ?.distance((link: any) => {
+        const s = typeof link.source === "object" ? link.source : null;
+        const t = typeof link.target === "object" ? link.target : null;
+        const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
+        return hasKeyword ? 30 : 120;
+      })
+      ?.strength((link: any) => {
+        const s = typeof link.source === "object" ? link.source : null;
+        const t = typeof link.target === "object" ? link.target : null;
+        const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
+        return hasKeyword ? 0.7 : 0.08;
+      });
 
     // 3. Center: keeps graph center-of-mass aligned
     fg.d3Force("center")
@@ -368,13 +384,13 @@ export function KnowledgeWeb({
     fg.d3Force("x", forceX(0).strength(0.02));
     fg.d3Force("y", forceY(0).strength(0.02));
 
-    // 5. Collision: prevents node overlap
+    // 5. Collision: hubs get wide padding; keywords stay compact
     fg.d3Force("collide", forceCollide((node: any) => {
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 20;
+        return 30;
       }
-      return 8;
-    }).iterations(1));
+      return 5;
+    }).iterations(2));
 
     fg.d3ReheatSimulation?.();
 
