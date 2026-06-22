@@ -1,0 +1,29 @@
+{
+  "description": "Curated Instagram accounts for design inspiration scraping. Tier: elite (100k+), mid (10k-100k), niche (<10k but high quality).",
+  "accounts": [
+    {"username": "luxigon", "category": "archviz", "tier": "mid", "note": "Elite architectural visualization studio"},
+    {"username": "visualatelier8", "category": "architecture", "tier": "elite", "note": "Architecture and design curation"},
+    {"username": "nowness", "category": "cinematic", "tier": "elite", "note": "Cinematic short films and visual culture"},
+    {"username": "itsnicethat", "category": "design-culture", "tier": "elite", "note": "Design, illustration, photography curation"},
+    {"username": "ignant", "category": "design-culture", "tier": "elite", "note": "Art, design, and photography magazine"},
+    {"username": "archdaily", "category": "architecture", "tier": "elite", "note": "World's most visited architecture website"},
+    {"username": "dezeen", "category": "architecture", "tier": "elite", "note": "Architecture and design magazine"},
+    {"username": "divisare_architecture", "category": "architecture", "tier": "mid", "note": "Curated architectural photography"},
+    {"username": "thehardt", "category": "motion-design", "tier": "mid", "note": "Motion design and visual effects studio"},
+    {"username": "gmunk", "category": "cinematic", "tier": "mid", "note": "Visual artist, cinematographer, designer"},
+    {"username": "bfrnd", "category": "motion-design", "tier": "mid", "note": "Motion design and 3D art"},
+    {"username": "beautyof_architecture", "category": "architecture", "tier": "mid", "note": "Architectural beauty curation"},
+    {"username": "stfrancisfolle", "category": "archviz", "tier": "niche", "note": "Architectural visualization"},
+    {"username": "thedesigntip", "category": "design-culture", "tier": "elite", "note": "Design tips and inspiration"},
+    {"username": "minimalzine", "category": "photography", "tier": "mid", "note": "Minimalist photography and design"}
+  ],
+  "categories": {
+    "archviz": "Architectural visualization renders and CGI",
+    "architecture": "Built architecture photography and projects",
+    "cinematic": "Cinematic visual storytelling and film",
+    "design-culture": "Broad design curation and culture",
+    "motion-design": "Motion graphics, VFX, and animation",
+    "photography": "Fine art and editorial photography"
+  },
+  "last_updated": "2026-06-22"
+}

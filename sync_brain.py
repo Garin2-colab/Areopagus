@@ -814,7 +814,12 @@ def synthesize_briefs(api_key: str) -> None:
     print("=" * 60)
 
 
-# ── Instagram Scraper & Ingestion ─────────────────────────────────────────────
+# ── Instagram Scraper & Ingestion (Enhanced) ──────────────────────────────────
+
+IG_CACHE_DIR = BRAIN_DIR / "ig" / ".cache"
+IG_SEED_PATH = BRAIN_DIR / "ig" / "seed_accounts.json"
+IG_CACHE_MAX_AGE_DAYS = 7
+
 
 def get_rapidapi_credentials() -> tuple[str, str]:
     key = os.environ.get("RAPIDAPI_KEY", "").strip()
@@ -839,19 +844,64 @@ def get_rapidapi_credentials() -> tuple[str, str]:
     return key, host
 
 
+def load_seed_accounts(category: str | None = None) -> list[dict[str, Any]]:
+    """Load curated seed accounts from the registry, optionally filtered by category."""
+    if not IG_SEED_PATH.exists():
+        return []
+    try:
+        with IG_SEED_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        accounts = data.get("accounts", [])
+        if category:
+            accounts = [a for a in accounts if a.get("category") == category]
+        return accounts
+    except Exception as e:
+        print(f"  [WARNING] Failed to load seed accounts: {e}")
+        return []
+
+
+def get_ig_cache(cache_key: str) -> dict[str, Any] | None:
+    """Return cached API response if fresh enough, else None."""
+    IG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = IG_CACHE_DIR / f"{cache_key}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+        cached_at = data.get("_cached_at", "")
+        if cached_at:
+            age = time.time() - float(cached_at)
+            if age < IG_CACHE_MAX_AGE_DAYS * 86400:
+                return data
+    except Exception:
+        pass
+    return None
+
+
+def set_ig_cache(cache_key: str, data: dict[str, Any]) -> None:
+    """Store API response in local cache."""
+    IG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    data["_cached_at"] = str(time.time())
+    cache_file = IG_CACHE_DIR / f"{cache_key}.json"
+    cache_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
 def normalize_instagram_node(node: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize an Instagram node into a consistent schema. Supports images AND video/Reels."""
     if not isinstance(node, dict):
         return None
         
-    # Check for User Posts style (which uses 'code' and 'like_count')
+    # User Posts style (uses 'code' and 'like_count')
     if "code" in node or "like_count" in node:
         is_video = node.get("media_type") == 2
         likes = node.get("like_count", 0)
         comments = node.get("comment_count", 0)
+        play_count = node.get("play_count", 0)
         caption_obj = node.get("caption") or {}
         caption = caption_obj.get("text", "") if isinstance(caption_obj, dict) else ""
         shortcode = node.get("code")
         
+        # Image URL (works for both images and video thumbnails)
         image_url = None
         img_v2 = node.get("image_versions2", {})
         candidates = img_v2.get("candidates", [])
@@ -861,18 +911,27 @@ def normalize_instagram_node(node: dict[str, Any]) -> dict[str, Any] | None:
             image_url = node.get("display_uri")
         elif node.get("display_url"):
             image_url = node.get("display_url")
+        
+        # Video URL for Reels
+        video_url = None
+        if is_video:
+            video_versions = node.get("video_versions", [])
+            if video_versions:
+                video_url = video_versions[0].get("url")
             
         return {
             "id": node.get("id"),
             "shortcode": shortcode,
             "likes": likes,
             "comments": comments,
+            "play_count": play_count,
             "caption": caption,
             "image_url": image_url,
-            "is_video": is_video
+            "video_url": video_url,
+            "is_video": is_video,
         }
         
-    # Check for Hashtag Search style (which uses 'shortcode' and 'edge_liked_by')
+    # Hashtag Search style (uses 'shortcode' and 'edge_liked_by')
     elif "shortcode" in node:
         is_video = node.get("is_video", False)
         likes = node.get("edge_liked_by", {}).get("count", 0)
@@ -887,9 +946,11 @@ def normalize_instagram_node(node: dict[str, Any]) -> dict[str, Any] | None:
             "shortcode": shortcode,
             "likes": likes,
             "comments": comments,
+            "play_count": 0,
             "caption": caption,
             "image_url": image_url,
-            "is_video": is_video
+            "video_url": None,
+            "is_video": is_video,
         }
         
     return None
@@ -931,115 +992,349 @@ def load_and_normalize_instagram_json(json_path: Path) -> list[dict[str, Any]]:
             continue
         node = item.get("node") if "node" in item else item
         norm = normalize_instagram_node(node)
-        if norm and norm.get("image_url") and not norm.get("is_video"):
+        if norm and norm.get("image_url"):
             normalized.append(norm)
             
     return normalized
 
 
-def download_instagram_posts(*, username: str | None = None, hashtag: str | None = None, json_file: str | None = None, min_likes: int = 100, max_images: int = 5) -> None:
+def compute_breakout_score(post: dict[str, Any], follower_count: int, avg_engagement_rate: float | None = None) -> float:
+    """
+    Compute a Breakout Score for a post relative to the account's size.
+    
+    Formula: engagement_rate / account_average_engagement_rate
+    Where engagement_rate = (likes + comments * 3) / follower_count
+    
+    Returns:
+      > 2.0 = Breakout (dramatically outperforms account norm)
+      > 1.5 = Strong  
+      > 1.0 = Normal
+      < 0.5 = Underperform
+    """
+    if follower_count <= 0:
+        return 0.0
+    
+    likes = post.get("likes", 0)
+    comments = post.get("comments", 0)
+    
+    engagement_rate = (likes + comments * 3) / follower_count
+    
+    if avg_engagement_rate and avg_engagement_rate > 0:
+        return engagement_rate / avg_engagement_rate
+    
+    # If no average known, use raw engagement rate scaled for interpretability
+    # Typical engagement rates: 1-3% = normal, 5%+ = strong, 10%+ = breakout
+    return engagement_rate * 50  # e.g., 2% rate → score 1.0, 4% → 2.0
+
+
+def gemini_aesthetic_gate(image_url: str, api_key: str) -> dict[str, Any]:
+    """
+    Use Gemini to score an image on design/aesthetic quality (1-10).
+    Returns {"score": int, "reason": str, "pass": bool}
+    """
+    prompt = (
+        "You are judging whether this image is high-quality DESIGN INSPIRATION "
+        "suitable for an architectural/cinematic AI generation pipeline.\n\n"
+        "Score 1-10 on these criteria:\n"
+        "- Compositional quality (rule of thirds, leading lines, symmetry)\n"
+        "- Color sophistication (harmonious palette, not chaotic)\n"
+        "- Visual production value (CGI render quality, photographic technique)\n"
+        "- Relevance to architectural, cinematic, or high-end design inspiration\n"
+        "- ABSENCE of: text overlays, memes, infographics, phone screenshots, selfies\n\n"
+        "Return ONLY a JSON object: {\"score\": <1-10>, \"reason\": \"<one sentence>\"}\n"
+        "Score 7+ = download-worthy. Score 5-6 = borderline. Score 1-4 = reject."
+    )
+    
+    # Download the image thumbnail for Gemini analysis
+    try:
+        img_req = urllib.request.Request(image_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(img_req, timeout=15) as resp:
+            img_bytes = resp.read()
+    except Exception:
+        return {"score": 5, "reason": "Failed to download image for analysis", "pass": False}
+    
+    img_b64 = base64.b64encode(img_bytes).decode("ascii")
+    
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+                {"text": prompt},
+            ],
+        }],
+        "generationConfig": {"temperature": 0.3, "responseMimeType": "application/json"},
+    }
+    
+    req = urllib.request.Request(
+        url=f"{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent?key={api_key}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        text = ""
+        for candidate in data.get("candidates", []):
+            for part in candidate.get("content", {}).get("parts", []):
+                text += part.get("text", "")
+        result = _parse_json(text)
+        score = int(result.get("score", 5))
+        return {"score": score, "reason": result.get("reason", ""), "pass": score >= 7}
+    except Exception as e:
+        return {"score": 5, "reason": f"Gemini analysis failed: {e}", "pass": False}
+
+
+def download_instagram_posts(
+    *,
+    username: str | None = None,
+    hashtag: str | None = None,
+    json_file: str | None = None,
+    min_likes: int = 100,
+    max_images: int = 5,
+    use_aesthetic_gate: bool = True,
+    seed_batch: bool = False,
+    seed_category: str | None = None,
+    follower_count: int | None = None,
+) -> None:
+    """
+    Enhanced Instagram scraper with:
+    - Cache-first API calls (skip if data < 7 days old)
+    - Breakout Score engagement analysis
+    - Gemini aesthetic gate (optional)
+    - Video/Reels thumbnail support
+    - Seed account batch mode
+    """
     dest_dir = BRAIN_DIR / "ig"
     dest_dir.mkdir(parents=True, exist_ok=True)
     
-    normalized = []
-    
+    api_key = get_api_key()  # Gemini key for aesthetic gate
+
+    # ── Seed Batch Mode ──────────────────────────────────────────────────
+    if seed_batch:
+        accounts = load_seed_accounts(category=seed_category)
+        if not accounts:
+            print("  [ERROR] No seed accounts found. Check brain/ig/seed_accounts.json")
+            return
+        print("=" * 60)
+        print(f"  SEED BATCH MODE — Processing {len(accounts)} accounts")
+        if seed_category:
+            print(f"  Category filter: {seed_category}")
+        print("=" * 60)
+        for i, acct in enumerate(accounts, 1):
+            uname = acct["username"]
+            print(f"\n  -- [{i}/{len(accounts)}] @{uname} ({acct.get('category', '?')}) --")
+            download_instagram_posts(
+                username=uname,
+                min_likes=min_likes,
+                max_images=max_images,
+                use_aesthetic_gate=use_aesthetic_gate,
+                follower_count=None,  # Will be fetched from API
+            )
+            if i < len(accounts):
+                time.sleep(2)  # Rate limiting between accounts
+        return
+
+    # ── Single Account / Hashtag / JSON Mode ─────────────────────────────
+    normalized: list[dict[str, Any]] = []
+    source_label = ""
+    effective_follower_count = follower_count or 0
+
     if json_file:
         json_path = Path(json_file)
         print("=" * 60)
         print(f"  INGESTING INSTAGRAM JSON FROM FILE: {json_path}")
+        source_label = f"JSON: {json_path.name}"
         normalized = load_and_normalize_instagram_json(json_path)
     else:
-        api_key, api_host = get_rapidapi_credentials()
+        rapid_key, api_host = get_rapidapi_credentials()
         
         print("=" * 60)
         if username:
-            print(f"  SCRAPING INSTAGRAM USER: @{username}")
-            url = f"https://{api_host}/get_ig_user_posts.php"
-            payload = {"username_or_url": username}
-            data = urllib.parse.urlencode(payload).encode("utf-8")
-            req = urllib.request.Request(
-                url,
-                data=data,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "X-RapidAPI-Key": api_key,
-                    "X-RapidAPI-Host": api_host,
-                },
-                method="POST"
-            )
+            source_label = f"@{username}"
+            print(f"  SCRAPING INSTAGRAM USER: {source_label}")
+            
+            # Cache-first: check if we already have fresh data
+            cache_key = f"user_{username}"
+            cached = get_ig_cache(cache_key)
+            if cached:
+                print(f"  [CACHE HIT] Using cached data (< {IG_CACHE_MAX_AGE_DAYS} days old)")
+                res_json = cached
+            else:
+                url = f"https://{api_host}/get_ig_user_posts.php"
+                payload = {"username_or_url": username}
+                data = urllib.parse.urlencode(payload).encode("utf-8")
+                req = urllib.request.Request(
+                    url,
+                    data=data,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-RapidAPI-Key": rapid_key,
+                        "X-RapidAPI-Host": api_host,
+                    },
+                    method="POST"
+                )
+                print(f"  Connecting to RapidAPI ({api_host})...")
+                try:
+                    with urllib.request.urlopen(req, timeout=45) as resp:
+                        res_json = json.loads(resp.read().decode("utf-8"))
+                    # Check for quota error
+                    if isinstance(res_json, dict) and "message" in res_json and "quota" in res_json.get("message", "").lower():
+                        print(f"  [ERROR] API quota exceeded: {res_json['message']}")
+                        return
+                    set_ig_cache(cache_key, res_json)
+                except Exception as e:
+                    print(f"  [ERROR] Scraping failed: {e}")
+                    return
+
+            # Extract follower count from user_data if available
+            if isinstance(res_json, dict):
+                user_data = res_json.get("user_data", {})
+                if user_data and not effective_follower_count:
+                    effective_follower_count = user_data.get("follower_count", 0)
+                    print(f"  Follower count: {effective_follower_count:,}")
         else:
-            print(f"  SCRAPING INSTAGRAM HASHTAG: #{hashtag}")
-            params = urllib.parse.urlencode({"hashtag": hashtag})
-            url = f"https://{api_host}/search_hashtag.php?{params}"
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "X-RapidAPI-Key": api_key,
-                    "X-RapidAPI-Host": api_host,
-                },
-                method="GET"
-            )
+            source_label = f"#{hashtag}"
+            print(f"  SCRAPING INSTAGRAM HASHTAG: {source_label}")
             
-        print(f"  Connecting to RapidAPI ({api_host})...")
-        try:
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                res_json = json.loads(resp.read().decode("utf-8"))
-        except Exception as e:
-            print(f"  [ERROR] Scraping failed: {e}")
-            return
-            
-        raw_nodes = []
-        if "posts" in res_json:
-            posts_data = res_json["posts"]
-            if isinstance(posts_data, list):
-                raw_nodes = [item.get("node") for item in posts_data if item.get("node")]
-            elif isinstance(posts_data, dict):
-                edges = posts_data.get("edges", [])
-                raw_nodes = [edge.get("node") for edge in edges if edge.get("node")]
-                
+            cache_key = f"hashtag_{hashtag}"
+            cached = get_ig_cache(cache_key)
+            if cached:
+                print(f"  [CACHE HIT] Using cached data")
+                res_json = cached
+            else:
+                params = urllib.parse.urlencode({"hashtag": hashtag})
+                url = f"https://{api_host}/search_hashtag.php?{params}"
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "X-RapidAPI-Key": rapid_key,
+                        "X-RapidAPI-Host": api_host,
+                    },
+                    method="GET"
+                )
+                print(f"  Connecting to RapidAPI ({api_host})...")
+                try:
+                    with urllib.request.urlopen(req, timeout=45) as resp:
+                        res_json = json.loads(resp.read().decode("utf-8"))
+                    if isinstance(res_json, dict) and "message" in res_json and "quota" in res_json.get("message", "").lower():
+                        print(f"  [ERROR] API quota exceeded: {res_json['message']}")
+                        return
+                    set_ig_cache(cache_key, res_json)
+                except Exception as e:
+                    print(f"  [ERROR] Scraping failed: {e}")
+                    return
+
+        # Extract nodes from API response
+        raw_nodes: list[dict[str, Any]] = []
+        if isinstance(res_json, dict):
+            # user_posts format
+            if "user_posts" in res_json:
+                for item in res_json["user_posts"]:
+                    node = item.get("node", {})
+                    media = node.get("media_dict", node)
+                    raw_nodes.append(media)
+            elif "posts" in res_json:
+                posts_data = res_json["posts"]
+                if isinstance(posts_data, list):
+                    raw_nodes = [item.get("node", item) for item in posts_data]
+                elif isinstance(posts_data, dict):
+                    edges = posts_data.get("edges", [])
+                    raw_nodes = [edge.get("node") for edge in edges if edge.get("node")]
+
         print(f"  Retrieved {len(raw_nodes)} raw posts from API.")
-        
+
         for node in raw_nodes:
             norm = normalize_instagram_node(node)
-            if norm and norm.get("image_url") and not norm.get("is_video"):
+            if norm and norm.get("image_url"):
                 normalized.append(norm)
-                
-    print(f"  Found {len(normalized)} image posts to inspect.")
-    
-    # Sort descending by likes
-    normalized.sort(key=lambda x: x.get("likes", 0), reverse=True)
-    
-    # Apply min_likes filter
+
+    print(f"  Found {len(normalized)} posts to inspect (images + videos).")
+
+    # ── Breakout Scoring ─────────────────────────────────────────────────
+    if effective_follower_count > 0:
+        # Calculate average engagement rate across all posts
+        total_er = 0.0
+        for p in normalized:
+            er = (p.get("likes", 0) + p.get("comments", 0) * 3) / effective_follower_count
+            total_er += er
+        avg_er = total_er / len(normalized) if normalized else 0.01
+
+        for p in normalized:
+            p["breakout_score"] = compute_breakout_score(p, effective_follower_count, avg_er)
+
+        # Sort by breakout score (highest first)
+        normalized.sort(key=lambda x: x.get("breakout_score", 0), reverse=True)
+        print(f"\n  -- Breakout Analysis (follower count: {effective_follower_count:,}) --")
+        for i, p in enumerate(normalized[:10], 1):
+            bs = p.get("breakout_score", 0)
+            label = "** BREAKOUT" if bs > 2.0 else ("^  Strong" if bs > 1.5 else ("   Normal" if bs > 1.0 else ("v  Weak")))
+            media_type = "[Reel]" if p.get("is_video") else "[Image]"
+            print(f"    {i:2d}. [{bs:.2f}] {label} | {p['likes']:>6,} likes | {media_type} | {p.get('shortcode', '?')}")
+    else:
+        # Fallback: sort by raw likes
+        normalized.sort(key=lambda x: x.get("likes", 0), reverse=True)
+
+    # ── Apply min_likes filter ───────────────────────────────────────────
     high_engagement = [item for item in normalized if item.get("likes", 0) >= min_likes]
-    print(f"  Found {len(high_engagement)} posts with >= {min_likes} likes.")
-    
-    # Fallback if none found >= min_likes
+    print(f"\n  {len(high_engagement)} posts pass min_likes={min_likes} filter.")
+
     if not high_engagement:
-        print(f"  [WARNING] No posts found with >= {min_likes} likes. Falling back to top posts regardless of likes.")
+        print(f"  [WARNING] No posts with >= {min_likes} likes. Using top {max_images} by score.")
         high_engagement = normalized
-        
-    to_download = high_engagement[:max_images]
-    print(f"  Downloading/writing top {len(to_download)} posts to {dest_dir}...")
-    
+
+    candidates = high_engagement[:max_images * 2]  # Get extra for aesthetic gate filtering
+
+    # ── Gemini Aesthetic Gate ────────────────────────────────────────────
+    to_download: list[dict[str, Any]] = []
+    if use_aesthetic_gate and candidates:
+        print(f"\n  -- Gemini Aesthetic Gate (scoring {len(candidates)} candidates) --")
+        for i, item in enumerate(candidates, 1):
+            if len(to_download) >= max_images:
+                break
+            img_url = item.get("image_url", "")
+            if not img_url:
+                continue
+            gate = gemini_aesthetic_gate(img_url, api_key)
+            score = gate["score"]
+            passed = gate["pass"]
+            icon = "[PASS]" if passed else ("[WARN]" if score >= 5 else "[FAIL]")
+            print(f"    {i}. {icon} Score {score}/10 - {gate['reason'][:60]}")
+            if passed:
+                item["aesthetic_score"] = score
+                item["aesthetic_reason"] = gate["reason"]
+                to_download.append(item)
+            time.sleep(0.5)  # Rate limit Gemini calls
+        print(f"  {len(to_download)} posts passed aesthetic gate.")
+    else:
+        to_download = candidates[:max_images]
+
+    if not to_download:
+        print("  [WARNING] No posts survived filtering. Relaxing to top posts by engagement.")
+        to_download = normalized[:max_images]
+
+    # ── Download ─────────────────────────────────────────────────────────
+    print(f"\n  Downloading top {len(to_download)} posts to {dest_dir}...")
     manifest = []
     for idx, item in enumerate(to_download, 1):
-        shortcode = item["shortcode"]
+        shortcode = item.get("shortcode") or f"post_{idx}_{int(time.time())}"
         img_url = item["image_url"]
-        likes = item["likes"]
-        comments = item["comments"]
-        caption = item["caption"]
-        
-        if not shortcode:
-            shortcode = f"post_{idx}_{int(time.time())}"
-            
+        likes = item.get("likes", 0)
+        comments = item.get("comments", 0)
+        caption = item.get("caption", "")
+        is_video = item.get("is_video", False)
+
         filename = f"{shortcode}.jpg"
         meta_filename = f"{shortcode}.txt"
         img_path = dest_dir / filename
         meta_path = dest_dir / meta_filename
-        
-        print(f"  [{idx}/{len(to_download)}] Post {shortcode} | Likes: {likes} | Comments: {comments}")
-        
-        # Download image
+
+        bs_label = f" | Breakout: {item.get('breakout_score', 0):.2f}" if "breakout_score" in item else ""
+        media_label = "Reel" if is_video else "Image"
+        print(f"  [{idx}/{len(to_download)}] {media_label} {shortcode} | {likes:,} likes{bs_label}")
+
         try:
             if img_url:
                 img_req = urllib.request.Request(
@@ -1049,45 +1344,71 @@ def download_instagram_posts(*, username: str | None = None, hashtag: str | None
                 with urllib.request.urlopen(img_req, timeout=30) as img_resp:
                     img_path.write_bytes(img_resp.read())
             else:
-                print(f"    [WARNING] No image URL found for {shortcode}")
+                print(f"    [WARNING] No image URL for {shortcode}")
                 continue
-            
-            # Save companion text containing metadata and caption
-            meta_content = (
-                f"Instagram Post Code: {shortcode}\n"
-                f"Likes: {likes}\n"
-                f"Comments: {comments}\n"
-                f"Source Account: {username or 'hashtag #' + (hashtag or 'unknown')}\n"
-                f"URL: https://instagram.com/p/{shortcode}\n\n"
-                f"Caption:\n{caption}"
-            )
-            meta_path.write_text(meta_content, encoding="utf-8")
-            
+
+            # Build enhanced metadata sidecar
+            meta_lines = [
+                f"Instagram Post Code: {shortcode}",
+                f"Media Type: {'Reel/Video' if is_video else 'Image'}",
+                f"Likes: {likes:,}",
+                f"Comments: {comments:,}",
+            ]
+            if item.get("play_count"):
+                meta_lines.append(f"Play Count: {item['play_count']:,}")
+            if item.get("breakout_score"):
+                meta_lines.append(f"Breakout Score: {item['breakout_score']:.2f}")
+            if item.get("aesthetic_score"):
+                meta_lines.append(f"Aesthetic Score: {item['aesthetic_score']}/10")
+                meta_lines.append(f"Aesthetic Reason: {item.get('aesthetic_reason', '')}")
+            meta_lines.extend([
+                f"Source Account: {source_label}",
+                f"Follower Count: {effective_follower_count:,}" if effective_follower_count else "",
+                f"URL: https://instagram.com/p/{shortcode}",
+                f"Scraped At: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+                "",
+                "Caption:",
+                caption,
+            ])
+            meta_path.write_text("\n".join(line for line in meta_lines if line is not None), encoding="utf-8")
+
             manifest.append({
                 "filename": filename,
                 "likes": likes,
                 "comments": comments,
-                "caption": caption[:100] + ("..." if len(caption) > 100 else "")
+                "breakout_score": item.get("breakout_score", 0),
+                "aesthetic_score": item.get("aesthetic_score", 0),
+                "is_video": is_video,
+                "caption": caption[:100] + ("..." if len(caption) > 100 else ""),
             })
         except Exception as e:
-            print(f"    [ERROR] Failed downloading post {shortcode}: {e}")
-            
+            print(f"    [ERROR] Failed downloading {shortcode}: {e}")
+
+    # ── Generate README manifest ─────────────────────────────────────────
     if manifest:
         md_lines = [
             "# Scraped Instagram Design Inspiration",
             f"\nIngested on: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"Source: {'@' + username if username else ('#' + hashtag if hashtag else ('JSON File: ' + str(json_file)))}",
-            f"Filters: min_likes={min_likes}, max_images={max_images}\n",
-            "| Post | Engagement | Caption |",
-            "| --- | --- | --- |"
+            f"Source: {source_label}",
+            f"Filters: min_likes={min_likes}, max_images={max_images}, aesthetic_gate={'ON' if use_aesthetic_gate else 'OFF'}\n",
+            "| Post | Engagement | Scores | Caption |",
+            "| --- | --- | --- | --- |",
         ]
         for m in manifest:
-            md_lines.append(f"| ![{m['filename']}]({m['filename']}) | **{m['likes']}** Likes<br>{m['comments']} Comments | {m['caption']} |")
-            
+            media_icon = "[Reel]" if m["is_video"] else "[Image]"
+            scores = f"BS: {m['breakout_score']:.1f}"
+            if m["aesthetic_score"]:
+                scores += f" / AS: {m['aesthetic_score']}/10"
+            md_lines.append(
+                f"| {media_icon} ![{m['filename']}]({m['filename']}) "
+                f"| **{m['likes']:,}** Likes<br>{m['comments']:,} Comments "
+                f"| {scores} | {m['caption']} |"
+            )
+
         readme_path = dest_dir / "README.md"
         readme_path.write_text("\n".join(md_lines), encoding="utf-8")
-        print(f"  [OK] Saved README.md to {readme_path}")
-    
+        print(f"\n  [OK] Saved README.md with {len(manifest)} entries.")
+
     print("=" * 60)
 
 
@@ -1102,19 +1423,25 @@ if __name__ == "__main__":
     # Instagram Ingestion arguments
     parser.add_argument("--ig-user", type=str, help="Scrape latest posts from this Instagram username")
     parser.add_argument("--ig-hashtag", type=str, help="Scrape latest posts matching this hashtag")
-    parser.add_argument("--ig-json", type=str, help="Ingest Instagram scraped posts from this local JSON file path")
-    parser.add_argument("--min-likes", type=int, default=100, help="Minimum likes threshold to filter posts")
-    parser.add_argument("--max-images", type=int, default=5, help="Maximum number of images to ingest")
+    parser.add_argument("--ig-json", type=str, help="Ingest Instagram posts from a local JSON file")
+    parser.add_argument("--ig-seed-batch", action="store_true", help="Batch scrape all seed accounts")
+    parser.add_argument("--ig-seed-category", type=str, help="Filter seed accounts by category (e.g. archviz, cinematic)")
+    parser.add_argument("--min-likes", type=int, default=100, help="Minimum likes threshold (default: 100)")
+    parser.add_argument("--max-images", type=int, default=5, help="Maximum images to download per source (default: 5)")
+    parser.add_argument("--no-aesthetic-gate", action="store_true", help="Disable Gemini aesthetic scoring")
     
     args = parser.parse_args()
 
-    if args.ig_user or args.ig_hashtag or args.ig_json:
+    if args.ig_user or args.ig_hashtag or args.ig_json or args.ig_seed_batch:
         download_instagram_posts(
             username=args.ig_user,
             hashtag=args.ig_hashtag,
             json_file=args.ig_json,
             min_likes=args.min_likes,
-            max_images=args.max_images
+            max_images=args.max_images,
+            use_aesthetic_gate=not args.no_aesthetic_gate,
+            seed_batch=args.ig_seed_batch,
+            seed_category=args.ig_seed_category,
         )
 
     if args.briefs_only:
@@ -1122,4 +1449,5 @@ if __name__ == "__main__":
         synthesize_briefs(key)
     else:
         sync(force=args.force, dry_run=args.dry_run)
+
 
