@@ -84,9 +84,8 @@ Builds the JSON prompts that get sent to image generation models. Three function
   Mood: austere, monumental
   ```
 - Up to 2 briefs can be injected per prompt.
-- The helper function `retrieve_matching_briefs()` handles matching and ranking.
 
-### 🧬 The Second Brain (Karpathy 3-Layer Architecture)
+### 🧠 The Second Brain (Karpathy 3-Layer Architecture)
 
 Implements Andrej Karpathy's 3-layer Second Brain architecture adapted for autonomous creative agents.
 
@@ -100,6 +99,9 @@ Areopagus/
     ├── images/          ← drag-drop images here
     ├── notes/           ← .md files, text notes, manifestos
     ├── references/      ← PDFs, articles, screenshots (also sync target)
+    ├── ig/              ← Instagram curation pipeline output
+    │   ├── seed_accounts.json  ← curated account registry
+    │   └── .cache/             ← API response cache (7-day TTL)
     └── .brain-index.json  ← local manifest of processed items
 ```
 
@@ -127,13 +129,47 @@ Briefs appear in the Knowledge Graph with `"synthesized_from"` edges connecting 
 
 Active briefs are automatically matched against the agent's current creative context and injected into `build_initiate_prompt_json` and `build_pivot_prompt_json`. No manual intervention — fully autonomous.
 
+#### Instagram Curation Pipeline
+
+A high-fidelity design scraper that discovers "breakout" visual content from curated Instagram accounts and feeds it into the Second Brain for autonomous creative direction.
+
+**Architecture (3-layer enhancement):**
+
+| Layer | Feature | Description |
+|---|---|---|
+| **Data** | Seed Account Registry | `brain/ig/seed_accounts.json` — 15 curated accounts across 6 categories (archviz, architecture, cinematic, design-culture, motion-design, photography) |
+| **Data** | Cache-First API | Local `.cache/` with 7-day TTL prevents redundant RapidAPI calls. Quota-aware with graceful 429 handling |
+| **Data** | Video/Reels Support | Reels and video content are no longer filtered out — thumbnails are downloaded alongside images |
+| **Scoring** | Breakout Score | `(likes + comments*3) / followers / avg_engagement_rate` — normalizes engagement relative to account size to surface viral outliers vs. raw likes |
+| **Aesthetic** | Gemini Aesthetic Gate | Each candidate thumbnail is scored 1-10 by Gemini on composition, color sophistication, production value, and design relevance. Threshold: 7/10 to pass |
+
+**Seed Account Categories:**
+- `archviz` — Architectural visualization renders and CGI
+- `architecture` — Built architecture photography and projects
+- `cinematic` — Cinematic visual storytelling and film
+- `design-culture` — Broad design curation and culture
+- `motion-design` — Motion graphics, VFX, and animation
+- `photography` — Fine art and editorial photography
+
+**Enhanced Metadata Sidecars:**
+Each downloaded post gets a `.txt` companion with: media type, likes, comments, play count (Reels), breakout score, aesthetic score/reason, follower count, source account, and caption.
+
 #### CLI
 
 ```bash
+# Second Brain sync
 python sync_brain.py                  # Sync files + auto-synthesize briefs
 python sync_brain.py --force          # Re-process everything
 python sync_brain.py --dry-run        # Preview what would sync
 python sync_brain.py --briefs-only    # Re-synthesize briefs only
+
+# Instagram curation
+python sync_brain.py --ig-user luxigon                         # Single account
+python sync_brain.py --ig-seed-batch                           # Batch all seed accounts
+python sync_brain.py --ig-seed-batch --ig-seed-category archviz  # Filter by category
+python sync_brain.py --ig-user dezeen --no-aesthetic-gate      # Skip Gemini scoring
+python sync_brain.py --ig-hashtag brutalism --min-likes 5000   # Hashtag search
+python sync_brain.py --ig-json data.json --max-images 10       # From local JSON file
 ```
 
 ### 🖼️ The Studio (Next.js Frontend)
@@ -235,6 +271,7 @@ Agent names are auto-generated from a pool of Greek philosopher-inspired names a
 ### Prerequisites
 - [Modal](https://modal.com/) account and CLI configured.
 - [Node.js](https://nodejs.org/) (v18+) and `npm`.
+- [RapidAPI](https://rapidapi.com/) key for Instagram scraping (optional, for IG curation pipeline).
 - API Keys for Runway and Google Gemini.
 
 ### Setup
@@ -292,7 +329,7 @@ Agent names are auto-generated from a pool of Greek philosopher-inspired names a
 Areopagus/
 ├── orchestrator.py          # Modal backend — pulse engine, endpoints, graph
 ├── prompt_builder.py        # Prompt construction + brief injection
-├── sync_brain.py            # Second Brain sync CLI + synthesis engine
+├── sync_brain.py            # Second Brain sync CLI + IG curation engine
 ├── agents_config.json       # Agent personas and model settings
 ├── history.json             # Local copy of history (source of truth on Modal)
 ├── design_style.md          # UI design system reference
@@ -301,6 +338,9 @@ Areopagus/
 │   ├── images/              # Raw image dumps
 │   ├── notes/               # Markdown notes and manifestos
 │   ├── references/          # PDFs, synced server images
+│   ├── ig/                  # Instagram curation output
+│   │   ├── seed_accounts.json  # Curated account registry
+│   │   └── .cache/          # RapidAPI response cache (7-day TTL)
 │   └── .brain-index.json    # SHA-256 dedup index
 ├── frontend/
 │   ├── src/
