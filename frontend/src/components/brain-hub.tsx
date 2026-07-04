@@ -39,6 +39,8 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<{ id: string; isLegacy: boolean } | null>(null);
+  const [optimisticDeletedIds, setOptimisticDeletedIds] = useState<Set<string>>(new Set());
 
   // Merge brain items with legacy inspiration items (shown as references)
   const allItems = useMemo(() => {
@@ -73,7 +75,7 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
     // Briefs are handled separately
     if (activeFilter === "brief") return [];
 
-    let items = allItems;
+    let items = allItems.filter((item) => !optimisticDeletedIds.has(item.id));
 
     if (activeFilter !== "all") {
       items = items.filter((item) => item.type === activeFilter);
@@ -177,10 +179,21 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
     }
   };
 
-  const handleDelete = async (id: string, isLegacy: boolean) => {
-    if (!confirm("Delete this item from the Second Brain?")) return;
+  const handleDeleteClick = (id: string, isLegacy: boolean) => {
+    setConfirmDeleteId({ id, isLegacy });
+  };
 
+  const executeDelete = async () => {
+    if (!confirmDeleteId) return;
+    const { id, isLegacy } = confirmDeleteId;
+    
+    setConfirmDeleteId(null);
     setDeletingId(id);
+    setOptimisticDeletedIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     setUploadError(null);
 
     try {
@@ -203,8 +216,21 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
 
       if (expandedId === id) setExpandedId(null);
       await onRefresh();
+      
+      // Successfully refreshed, remove from optimistic delete tracking
+      setOptimisticDeletedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (error) {
       console.error("Delete error:", error);
+      // Revert optimistic delete tracking on error so the card restores
+      setOptimisticDeletedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       setUploadError(error instanceof Error ? error.message : "Failed to delete.");
     } finally {
       setDeletingId(null);
@@ -212,8 +238,9 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
   };
 
   const filterCounts = useMemo(() => {
-    const counts = { all: allItems.length + briefs.length, image: 0, document: 0, reference: 0, brief: briefs.length };
+    const counts = { all: 0, image: 0, document: 0, reference: 0, brief: briefs.length };
     for (const item of allItems) {
+      if (optimisticDeletedIds.has(item.id)) continue;
       if (item.type === "image") {
         counts.image++;
       } else if (item.type === "document" || item.type === "note") {
@@ -222,8 +249,9 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
         counts.reference++;
       }
     }
+    counts.all = counts.image + counts.document + counts.reference + counts.brief;
     return counts;
-  }, [allItems, briefs]);
+  }, [allItems, briefs, optimisticDeletedIds]);
 
   // Filter briefs by search query
   const filteredBriefs = useMemo(() => {
@@ -649,7 +677,7 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
                         size="icon"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDelete(item.id, isLegacy);
+                          handleDeleteClick(item.id, isLegacy);
                         }}
                         disabled={deletingId === item.id}
                         className="h-6 w-6 shrink-0 text-[#858076]/40 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
@@ -727,6 +755,47 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
               );
             }
           })}
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-[#252422]/40 backdrop-blur-sm"
+            onClick={() => setConfirmDeleteId(null)}
+          />
+          {/* Dialog Container */}
+          <div className="relative w-full max-w-sm overflow-hidden rounded-[2rem] border border-[#D8D4CC] bg-[#FAF9F6] p-6 shadow-2xl animate-in zoom-in-95 duration-200 z-10">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-base font-bold text-[#252422]">Delete Item?</h4>
+                <p className="text-xs text-[#858076] leading-relaxed">
+                  Are you sure you want to permanently delete this item from your Second Brain? This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex w-full gap-2 pt-2">
+                <Button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="flex-1 rounded-full border border-[#D8D4CC] bg-white hover:bg-[#F5F2EB] text-[#44423E] font-semibold text-xs h-9 px-4 transition-all"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={executeDelete}
+                  className="flex-1 rounded-full border-transparent bg-red-600 hover:bg-red-700 text-[#FAF9F6] font-semibold text-xs h-9 px-4 shadow-sm transition-all"
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
