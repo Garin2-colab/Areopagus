@@ -189,7 +189,7 @@ python sync_brain.py --ig-json data.json --max-images 10       # From local JSON
 
 | Component | File | Purpose |
 |---|---|---|
-| `BrainHub` | `brain-hub.tsx` | Second Brain manager — upload, sync, search, filter (All/Image/Note/Reference/Brief), expandable detail cards |
+| `BrainHub` | `brain-hub.tsx` | Second Brain manager — upload, sync, search, filter (All/Image/Note/Reference/Brief), expandable detail cards, with optimistic deletion updates and a premium custom confirmation dialog |
 | `KnowledgeWeb` | `knowledge-web.tsx` | D3 force graph with animated dots traveling along edges, orange pulses during agent work |
 | `ManagementSidebar` | `management-sidebar.tsx` | Agent persona editor, model selection, heartbeat config, auto-generated Greek philosopher names |
 | `SocialStudioFeed` | `social-studio-feed.tsx` | Threaded feed with hero cards, critique/pivot nesting |
