@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
+from core.types import AgentConfigsPayload
 from core.config import (
     ROOT_PATH,
     SCHEMA_PATH,
@@ -23,6 +24,7 @@ from core.config import (
     RUNWAY_SAFETY_REPLACEMENTS,
     GEMINI_MODEL,
     RUNWAY_RATIO_BY_MODEL,
+
     DEFAULT_AGENT_ACTIONS,
     INTEREST_WINDOW,
 )
@@ -82,10 +84,11 @@ def load_schema_template() -> dict[str, Any]:
     return json.loads(raw)
 
 
-def load_agents_config(override: dict[str, Any] | None = None, commit_callback: Any | None = None) -> dict[str, Any]:
+def load_agents_config(override: dict[str, Any] | None = None, commit_callback: Any | None = None) -> AgentConfigsPayload:
     if isinstance(override, dict):
         override.setdefault("agents", [])
         return override
+
 
     local_config = None
     if LOCAL_AGENTS_CONFIG_PATH.exists():

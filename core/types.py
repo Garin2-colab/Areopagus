@@ -79,3 +79,8 @@ class AgentConfig(TypedDict):
     heartbeatMinutes: int
     referenceImages: list[str]
     active: bool
+
+class AgentConfigsPayload(TypedDict):
+    agents: list[AgentConfig]
+    updated_at: NotRequired[str]
+
