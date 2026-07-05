@@ -12,7 +12,7 @@ import { cn, compressImage } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudioStatus } from "@/lib/useStudioStatus";
 
-type ModelName = "GPT-Image-2" | "Gemini-3-Pro" | "Midjourney" | "Seedance-v2" | "Ideogram-V4";
+type ModelName = "GPT-Image-2" | "Gemini-3-Pro" | "Midjourney" | "Seedance-v2" | "Ideogram-V4" | "KREA2";
 
 type AgentRecord = {
   id: string;
@@ -122,7 +122,7 @@ function sanitizeClientImageUrl(url: string | undefined): string {
 }
 
 function isModelName(value: unknown): value is ModelName {
-  return value === "GPT-Image-2" || value === "Gemini-3-Pro" || value === "Midjourney" || value === "Seedance-v2" || value === "Ideogram-V4";
+  return value === "GPT-Image-2" || value === "Gemini-3-Pro" || value === "Midjourney" || value === "Seedance-v2" || value === "Ideogram-V4" || value === "KREA2";
 }
 
 function normalizeStoredAgent(value: unknown, index: number, existingNames: string[]): AgentRecord | null {
@@ -722,6 +722,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
                         <option value="Midjourney">Midjourney</option>
                         <option value="Seedance-v2">Seedance-v2</option>
                         <option value="Ideogram-V4">Ideogram-V4</option>
+                        <option value="KREA2">KREA2</option>
                       </select>
                       <Button
                         type="button"

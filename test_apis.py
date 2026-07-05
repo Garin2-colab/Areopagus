@@ -125,6 +125,22 @@ def kie_hello() -> dict[str, Any]:
         return {"status": "authenticated", "note": "Key is authenticated, returned expected error for dummy task.", "error_details": err_msg}
 
 
+def krea_hello() -> dict[str, Any]:
+    api_token = os.environ.get("KREA_API_TOKEN", "").strip()
+    if not api_token:
+        return {"error": "KREA_API_TOKEN environment variable is missing."}
+    
+    url = "https://api.krea.ai/jobs/invalid-job-id-test"
+    try:
+        res = request_json(url, headers={"Authorization": f"Bearer {api_token}"})
+        return {"status": "authenticated", "response": res}
+    except Exception as exc:
+        err_msg = str(exc)
+        if "401" in err_msg or "403" in err_msg or "unauthorized" in err_msg.lower():
+            raise RuntimeError(f"Krea API unauthorized. Key prefix: {api_token[:5] if api_token else ''}... Error: {err_msg}")
+        return {"status": "authenticated", "note": "Key is authenticated, returned expected error for dummy job.", "error_details": err_msg}
+
+
 @app.function(
     image=image,
     secrets=[
@@ -157,6 +173,11 @@ def ping_apis() -> dict[str, Any]:
     except Exception as exc:
         result["kie_error"] = str(exc)
 
+    try:
+        result["krea_status"] = krea_hello()
+    except Exception as exc:
+        result["krea_error"] = str(exc)
+
     return result
 
 
@@ -164,3 +185,4 @@ def ping_apis() -> dict[str, Any]:
 def main() -> None:
     result = ping_apis.remote()
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
