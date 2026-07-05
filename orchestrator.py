@@ -576,42 +576,47 @@ def history_endpoint(request: Request) -> dict[str, Any]:
     item_type = request.query_params.get("type", "")
     search = request.query_params.get("search", "")
     
-    if "brain" in history and isinstance(history["brain"], list):
-        brain_list = history["brain"]
-        
-        # 1. Filter by type
-        if item_type:
-            req_type = "document" if item_type == "note" else item_type
-            brain_list = [item for item in brain_list if item.get("type") == req_type]
-            
-        # 2. Filter by search
-        if search:
-            q = search.lower()
-            brain_list = [
-                item for item in brain_list
-                if q in item.get("title", "").lower() or
-                   q in item.get("summary", "").lower() or
-                   any(q in kw.lower() for kw in item.get("keywords", []))
-            ]
-            
-        total_count = len(brain_list)
-        
-        # 3. Paginate
-        if limit > 0:
-            brain_list = brain_list[offset:offset+limit]
-            
+    # Use SQLite pagination if available (avoids loading all brain items into memory)
+    try:
+        from core.database import get_db
+        db = get_db()
+        brain_list, total_count = db.list_brain_items(
+            limit=limit, offset=offset, item_type=item_type, search=search
+        )
         history["brain"] = brain_list
         history["total_brain_items"] = total_count
         history["limit"] = limit
         history["offset"] = offset
-        
-        # Exclude massive arrays to keep pagination response light and fast
-        if limit > 0 or offset > 0 or item_type or search:
-            history["turns"] = []
-            history["threads"] = []
-            history["inspiration"] = []
-            history["briefs"] = []
-            history["graph"] = {"nodes": [], "edges": []}
+    except Exception:
+        # Fallback to in-memory filtering
+        if "brain" in history and isinstance(history["brain"], list):
+            brain_list = history["brain"]
+            if item_type:
+                req_type = "document" if item_type == "note" else item_type
+                brain_list = [item for item in brain_list if item.get("type") == req_type]
+            if search:
+                q = search.lower()
+                brain_list = [
+                    item for item in brain_list
+                    if q in item.get("title", "").lower() or
+                       q in item.get("summary", "").lower() or
+                       any(q in kw.lower() for kw in item.get("keywords", []))
+                ]
+            total_count = len(brain_list)
+            if limit > 0:
+                brain_list = brain_list[offset:offset+limit]
+            history["brain"] = brain_list
+            history["total_brain_items"] = total_count
+            history["limit"] = limit
+            history["offset"] = offset
+    
+    # Exclude massive arrays to keep pagination response light and fast
+    if limit > 0 or offset > 0 or item_type or search:
+        history["turns"] = []
+        history["threads"] = []
+        history["inspiration"] = []
+        history["briefs"] = []
+        history["graph"] = {"nodes": [], "edges": []}
         
     return history
 
