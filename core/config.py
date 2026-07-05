@@ -10,6 +10,7 @@ STUDIO_STATUS_PATH = DATA_DIR / "status.json"
 HEARTBEAT_PATH = DATA_DIR / "last_heartbeat.json"
 IMAGE_DIR = DATA_DIR / "images"
 PENDING_TASKS_PATH = DATA_DIR / "pending_tasks.json"
+DB_PATH = DATA_DIR / "areopagus.db"
 
 ROOT_PATH = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = ROOT_PATH / "example" / "exampleJson.json"
