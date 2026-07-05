@@ -7,6 +7,9 @@ import time
 import traceback
 import urllib.parse
 import urllib.request
+import urllib.error
+import logging
+import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
@@ -23,6 +26,51 @@ from core.config import (
     DEFAULT_AGENT_ACTIONS,
     INTEREST_WINDOW,
 )
+
+class UTCFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, timezone.utc)
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.isoformat()
+
+logger = logging.getLogger("areopagus")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = UTCFormatter('[%(asctime)s] [%(levelname)s] %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+def urlopen_with_retry(request, *args, retries: int = 3, delay: float = 1.0, backoff: float = 2.0, **kwargs):
+    """
+    Wrapper around urllib.request.urlopen that retries on transient errors:
+    - URLError (network connection issues, DNS timeouts)
+    - HTTPError with status code 429 or 5xx (500, 502, 503, 504)
+    """
+    current_delay = delay
+    for attempt in range(retries + 1):
+        try:
+            return urllib.request.urlopen(request, *args, **kwargs)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504) or attempt >= retries:
+                raise
+            logger.warning(
+                f"[urlopen_with_retry] HTTP {exc.code} calling {request.full_url} (attempt {attempt + 1}/{retries}). "
+                f"Retrying in {current_delay:.2f} seconds..."
+            )
+            time.sleep(current_delay)
+            current_delay *= backoff
+        except urllib.error.URLError as exc:
+            if attempt >= retries:
+                raise
+            logger.warning(
+                f"[urlopen_with_retry] URLError: {exc.reason} calling {request.full_url} (attempt {attempt + 1}/{retries}). "
+                f"Retrying in {current_delay:.2f} seconds..."
+            )
+            time.sleep(current_delay)
+            current_delay *= backoff
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()

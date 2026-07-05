@@ -35,7 +35,8 @@ def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
         )
-        with urllib.request.urlopen(req) as response:
+        from core.utils import urlopen_with_retry
+        with urlopen_with_retry(req) as response:
             content_type = response.headers.get_content_type() or "image/png"
             return response.read(), content_type
     except urllib.error.HTTPError as exc:

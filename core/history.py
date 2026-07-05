@@ -25,7 +25,38 @@ from core.graph import rebuild_history_graph
 
 def load_history() -> dict[str, Any]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not HISTORY_PATH.exists():
+    
+    history = None
+    if HISTORY_PATH.exists():
+        try:
+            with HISTORY_PATH.open("r", encoding="utf-8") as fh:
+                history = json.load(fh)
+        except Exception as exc:
+            print(f"[load_history] CRITICAL: history.json is corrupted or unreadable: {exc}. Attempting automatic recovery from backups...", flush=True)
+            backup_dir = DATA_DIR / "backups"
+            if backup_dir.exists():
+                import shutil
+                backups = sorted(backup_dir.glob("history_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+                for backup_path in backups:
+                    try:
+                        with backup_path.open("r", encoding="utf-8") as bfh:
+                            loaded_backup = json.load(bfh)
+                        print(f"[load_history] SUCCESS: Recovered history from valid backup: {backup_path.name}", flush=True)
+                        shutil.copy2(backup_path, HISTORY_PATH)
+                        try:
+                            from orchestrator import data_volume
+                            data_volume.commit()
+                        except Exception:
+                            pass
+                        history = loaded_backup
+                        break
+                    except Exception as e:
+                        print(f"[load_history] Backup {backup_path.name} is invalid/corrupted: {e}", flush=True)
+            
+            if history is None:
+                print("[load_history] CRITICAL: No valid backup could be loaded! Creating default history.", flush=True)
+
+    if history is None:
         default_history = {
             "project": "Areopagus",
             "created_at": utc_now(),
@@ -46,9 +77,6 @@ def load_history() -> dict[str, Any]:
         except Exception:
             pass
         return default_history
-
-    with HISTORY_PATH.open("r", encoding="utf-8") as fh:
-        history = json.load(fh)
 
     history.setdefault("turns", [])
     history.setdefault("threads", [])
@@ -80,6 +108,32 @@ def load_history() -> dict[str, Any]:
 def save_history(history: dict[str, Any]) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history["updated_at"] = utc_now()
+    
+    # Create backup before writing if history.json exists and is valid
+    if HISTORY_PATH.exists():
+        try:
+            with HISTORY_PATH.open("r", encoding="utf-8") as fh:
+                json.load(fh)
+            # Valid JSON, proceed with backup
+            backup_dir = DATA_DIR / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            import shutil
+            import time
+            timestamp = int(time.time())
+            backup_path = backup_dir / f"history_{timestamp}.json"
+            shutil.copy2(HISTORY_PATH, backup_path)
+            
+            # Keep only the last 10 backups
+            backups = sorted(backup_dir.glob("history_*.json"))
+            if len(backups) > 10:
+                for old_backup in backups[:-10]:
+                    try:
+                        old_backup.unlink()
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[save_history] Backup creation warning: {e}", flush=True)
+
     with HISTORY_PATH.open("w", encoding="utf-8") as fh:
         json.dump(history, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
@@ -276,9 +330,12 @@ def update_studio_status(message: str, active: bool = True, agent_name: str | No
     if active_nodes is not None:
         status["active_nodes"] = active_nodes
 
-    with STUDIO_STATUS_PATH.open("w", encoding="utf-8") as fh:
-        json.dump(status, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
+    try:
+        with STUDIO_STATUS_PATH.open("w", encoding="utf-8") as fh:
+            json.dump(status, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+    except Exception:
+        pass
     try:
         from orchestrator import data_volume
         data_volume.commit()

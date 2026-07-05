@@ -14,6 +14,7 @@ from core.utils import (
     gemini_api_key,
     extract_json_object,
     dedupe_keywords,
+    urlopen_with_retry,
 )
 from core.media import fetch_image_bytes
 
@@ -70,7 +71,7 @@ def gemini_generate(
     )
 
     try:
-        with urllib.request.urlopen(request) as response:
+        with urlopen_with_retry(request) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""

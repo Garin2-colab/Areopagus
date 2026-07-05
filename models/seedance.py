@@ -55,8 +55,9 @@ class SeedanceModel(BaseModel):
             method=method,
         )
 
+        from core.utils import urlopen_with_retry
         try:
-            with urllib.request.urlopen(request) as response:
+            with urlopen_with_retry(request) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""

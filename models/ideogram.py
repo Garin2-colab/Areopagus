@@ -146,8 +146,9 @@ MODEL SPECIFIC GUIDANCE FOR IDEOGRAM V4:
 
         print(f"[ideogram] Sending generate request, prompt length={len(prompt_text)}", flush=True)
 
+        from core.utils import urlopen_with_retry
         try:
-            with urllib.request.urlopen(request, timeout=180) as response:
+            with urlopen_with_retry(request, timeout=180) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body_text = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
@@ -194,8 +195,9 @@ MODEL SPECIFIC GUIDANCE FOR IDEOGRAM V4:
 
         print(f"[ideogram] Sending remix request, prompt length={len(prompt_text)}, image size={len(image_bytes)} bytes", flush=True)
 
+        from core.utils import urlopen_with_retry
         try:
-            with urllib.request.urlopen(request, timeout=180) as response:
+            with urlopen_with_retry(request, timeout=180) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body_text = exc.read().decode("utf-8", errors="replace") if exc.fp else ""

@@ -46,6 +46,7 @@ from core import (
     load_agents_config,
     save_history,
     update_studio_status,
+    logger,
     utc_now,
     normalize_action,
     get_active_agents,
@@ -280,7 +281,7 @@ def dispatch_agent_action(
 ) -> dict[str, Any]:
     action = normalize_action(assessment.get("action"))
     agent_name = agent.get("name", agent.get("id", "Agent"))
-    print(f"[dispatch_agent_action] Dispatched action '{action}' for agent '{agent_name}' target_turn={assessment.get('selected_turn')}", flush=True)
+    logger.info(f"[dispatch_agent_action] Dispatched action '{action}' for agent '{agent_name}' target_turn={assessment.get('selected_turn')}")
     turn_number = next_turn_number(history)
     selected_turn_number = assessment.get("selected_turn")
     selected_turn = None
@@ -459,11 +460,11 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
 
         jitter_log: list[dict[str, Any]] = []
 
-        print(f"[orchestrate] Processing {len(active_agents)} agents: {[a.get('name', a.get('id')) for a in active_agents]}", flush=True)
+        logger.info(f"[orchestrate] Processing {len(active_agents)} agents: {[a.get('name', a.get('id')) for a in active_agents]}")
 
         for index, agent in enumerate(active_agents):
             agent_name = str(agent.get("name", agent.get("id", "Agent")))
-            print(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})", flush=True)
+            logger.info(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})")
             try:
                 # Collect node IDs the agent is examining during scoring
                 scoring_nodes = [t.get("image_id") for t in recent_turns if t.get("image_id")]
@@ -471,7 +472,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     scoring_nodes.extend(t.get("keywords", []))
                 update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name, active_nodes=scoring_nodes)
                 assessment = assess_agent_interest(agent, recent_turns, history)
-                print(f"[orchestrate] Assessment for '{agent_name}': {json.dumps(assessment, indent=2)}", flush=True)
+                logger.info(f"[orchestrate] Assessment for '{agent_name}': {json.dumps(assessment, indent=2)}")
 
                 # Build focused active_nodes for the selected action
                 selected_id = assessment.get("selected_image_id", "")
@@ -492,7 +493,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     recent_turns=recent_turns,
                     schema_template=schema_template,
                 )
-                print(f"[orchestrate] Completed action '{assessment.get('action')}' for agent '{agent_name}'. Result: {json.dumps(action_result, indent=2)}", flush=True)
+                logger.info(f"[orchestrate] Completed action '{assessment.get('action')}' for agent '{agent_name}'. Result: {json.dumps(action_result, indent=2)}")
                 update_studio_status(f"{agent_name} complete: {assessment.get('action')}", active=True, agent_name=agent_name, active_nodes=[])
                 recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
                 results.append(
@@ -504,8 +505,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     }
                 )
             except Exception as exc:
-                print(f"[orchestrate] ERROR for agent {agent_name}: {exc}", flush=True)
-                traceback.print_exc()
+                logger.error(f"[orchestrate] ERROR for agent {agent_name}: {exc}", exc_info=True)
                 update_studio_status(f"Error for agent {agent_name}: {str(exc)}", active=True, agent_name=agent_name)
                 skipped_agents.append(
                     {
@@ -548,8 +548,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
             "latest_turn": history.get("turns", [])[-1] if history.get("turns") else None,
         }
     except Exception as exc:
-        print(f"[orchestrate] GLOBAL ERROR: {exc}", flush=True)
-        traceback.print_exc()
+        logger.error(f"[orchestrate] GLOBAL ERROR: {exc}", exc_info=True)
         try:
             update_studio_status(f"Error: {str(exc)}", active=False)
         except Exception:
@@ -1467,7 +1466,7 @@ def heartbeat_cron() -> None:
     freq = max_heartbeat_frequency(agents_config)
 
     if freq <= 0:
-        print("[heartbeat_cron] No active agents with heartbeat > 0. Skipping.", flush=True)
+        logger.info("[heartbeat_cron] No active agents with heartbeat > 0. Skipping.")
         return
 
     interval = heartbeat_interval_seconds(freq)
@@ -1477,15 +1476,14 @@ def heartbeat_cron() -> None:
     if last_run_iso:
         last_run = datetime.fromisoformat(last_run_iso)
         elapsed = (datetime.now(timezone.utc) - last_run).total_seconds()
-        print(
+        logger.info(
             f"[heartbeat_cron] freq={freq}x/day, interval={interval:.0f}s, "
-            f"elapsed={elapsed:.0f}s, due={'YES' if elapsed >= interval else 'NO'}",
-            flush=True,
+            f"elapsed={elapsed:.0f}s, due={'YES' if elapsed >= interval else 'NO'}"
         )
         if elapsed < interval:
             return
     else:
-        print(f"[heartbeat_cron] First run. freq={freq}x/day. Starting pulse.", flush=True)
+        logger.info(f"[heartbeat_cron] First run. freq={freq}x/day. Starting pulse.")
 
     # Record the heartbeat timestamp BEFORE running (prevents double-fire)
     write_heartbeat_state({
@@ -1497,14 +1495,12 @@ def heartbeat_cron() -> None:
     # Fire the orchestration
     try:
         result = orchestrate.local(agents_config)
-        print(
+        logger.info(
             f"[heartbeat_cron] Pulse complete. "
-            f"processed={result.get('processed', 0)}, skipped={result.get('skipped', 0)}",
-            flush=True,
+            f"processed={result.get('processed', 0)}, skipped={result.get('skipped', 0)}"
         )
     except Exception as exc:
-        print(f"[heartbeat_cron] ERROR: {exc}", flush=True)
-        traceback.print_exc()
+        logger.error(f"[heartbeat_cron] ERROR: {exc}", exc_info=True)
 
 
 @app.local_entrypoint()

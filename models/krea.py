@@ -152,8 +152,9 @@ MODEL SPECIFIC GUIDANCE FOR KREA 2:
             method="POST",
         )
 
+        from core.utils import urlopen_with_retry
         try:
-            with urllib.request.urlopen(request) as response:
+            with urlopen_with_retry(request) as response:
                 res = json.loads(response.read().decode("utf-8"))
                 image_url = res.get("image_url")
                 if not image_url:
@@ -194,8 +195,9 @@ MODEL SPECIFIC GUIDANCE FOR KREA 2:
             method=method,
         )
 
+        from core.utils import urlopen_with_retry
         try:
-            with urllib.request.urlopen(request) as response:
+            with urlopen_with_retry(request) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
