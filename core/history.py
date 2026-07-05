@@ -466,13 +466,13 @@ Return JSON only with this shape:
 }}
 
 Agent profile:
-{json.dumps({{
+{json.dumps({
     "id": agent.get("id"),
     "name": agent.get("name"),
     "active": agent.get("active", True),
     "persona": agent.get("persona", ""),
     "model": agent.get("model", ""),
-}}, indent=2, ensure_ascii=False)}
+}, indent=2, ensure_ascii=False)}
 
 Recent posts:
 {json.dumps([summarize_turn_for_agent(turn) for turn in recent_turns], indent=2, ensure_ascii=False)}

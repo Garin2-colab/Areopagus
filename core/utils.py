@@ -34,7 +34,7 @@ def load_schema_template() -> dict[str, Any]:
     return json.loads(raw)
 
 
-def load_agents_config(override: dict[str, Any] | None = None) -> dict[str, Any]:
+def load_agents_config(override: dict[str, Any] | None = None, commit_callback: Any | None = None) -> dict[str, Any]:
     if isinstance(override, dict):
         override.setdefault("agents", [])
         return override
@@ -61,8 +61,19 @@ def load_agents_config(override: dict[str, Any] | None = None) -> dict[str, Any]
         local_agents = {a.get("name") for a in local_config.get("agents", []) if a.get("name")}
         volume_agents = {a.get("name") for a in volume_config.get("agents", []) if a.get("name")} if volume_config else set()
         
-        # If volume is missing or holds completely different agents, overwrite with local config
-        if not volume_config or local_agents != volume_agents:
+        # Check if local config has a newer updated_at timestamp
+        local_updated = local_config.get("updated_at", "")
+        volume_updated = volume_config.get("updated_at", "") if volume_config else ""
+        is_newer = False
+        if local_updated and volume_updated:
+            try:
+                if local_updated > volume_updated:
+                    is_newer = True
+            except Exception:
+                pass
+
+        # If volume is missing, holds completely different agents, or local config is newer, overwrite/seed
+        if not volume_config or local_agents != volume_agents or is_newer:
             print(f"[load_agents_config] Overwriting/Seeding volume config with local config", flush=True)
             config = local_config
             try:
@@ -70,7 +81,11 @@ def load_agents_config(override: dict[str, Any] | None = None) -> dict[str, Any]
                 with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
                     json.dump(config, fh, indent=2, ensure_ascii=False)
                     fh.write("\n")
-                # Note: data_volume.commit() will be called by callers who have access to the volume object
+                if commit_callback is not None:
+                    try:
+                        commit_callback()
+                    except Exception as commit_err:
+                        print(f"[load_agents_config] Error invoking commit_callback: {commit_err}", flush=True)
             except Exception as e:
                 print(f"[load_agents_config] Error updating volume config: {e}", flush=True)
         else:
