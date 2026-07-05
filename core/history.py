@@ -355,6 +355,122 @@ def retrieve_associative_memory(
     return candidates[0][2]
 
 
+
+def retrieve_from_brain(
+    history: dict[str, Any],
+    current_keywords: list[str],
+    exclude_thread_id: str | None = None
+) -> dict[str, Any]:
+    """
+    Search history['brain'] and history['inspiration'] to find:
+    1. The best matching image-based reference (type='image', 'reference', or 'inspiration')
+    2. The best matching note-based reference (type='note')
+    
+    Returns a dict:
+    {
+        "image": image_item_or_none,
+        "note": note_item_or_none
+    }
+    """
+    if not history:
+        return {"image": None, "note": None}
+
+    current_keywords_set = {k.lower().lstrip('#') for k in current_keywords}
+    
+    best_image = None
+    best_image_score = 0
+    best_note = None
+    best_note_score = 0
+
+    # 1. Search Second Brain items (history.get("brain", []))
+    for item in history.get("brain", []):
+        if not isinstance(item, dict) or "id" not in item:
+            continue
+            
+        score = 0
+        item_keywords = {k.lower().lstrip('#') for k in item.get("keywords", [])}
+        
+        # Check overlaps
+        overlap = item_keywords.intersection(current_keywords_set)
+        score += len(overlap) * 10
+        
+        # Add substring search for text content
+        title = item.get("title", "").lower()
+        summary = item.get("summary", "").lower()
+        full_text = item.get("full_text", "").lower()
+        mood = item.get("mood", "").lower()
+        
+        for kw in current_keywords_set:
+            if kw in title:
+                score += 3
+            if kw in summary:
+                score += 3
+            if kw in full_text:
+                score += 2
+            if kw in mood:
+                score += 2
+                
+        if score <= 0:
+            continue
+            
+        item_type = item.get("type", "image")
+        if item_type == "note":
+            if score > best_note_score:
+                best_note_score = score
+                best_note = item
+        else:
+            # image or reference
+            if score > best_image_score:
+                best_image_score = score
+                best_image = item
+
+    # 2. Search user-uploaded inspiration images (history.get("inspiration", []))
+    for insp in history.get("inspiration", []):
+        if not isinstance(insp, dict) or "id" not in insp:
+            continue
+            
+        score = 0
+        insp_keywords = {k.lower().lstrip('#') for k in insp.get("keywords", [])}
+        overlap = insp_keywords.intersection(current_keywords_set)
+        score += len(overlap) * 10
+        
+        # simulated higher default priority for legacy inspiration overlap
+        score += 5 
+        
+        if score > best_image_score:
+            best_image_score = score
+            # Map id to image_id, and turn to simulated values so caller parses cleanly
+            insp_copy = dict(insp)
+            insp_copy["image_id"] = insp["id"]
+            insp_copy["turn"] = "Inspiration"
+            insp_copy["proposal"] = "User Uploaded Inspiration"
+            best_image = insp_copy
+
+    # 3. Search historical turns for image references if no brain image matches
+    if not best_image:
+        best_turn = None
+        best_turn_score = 0
+        for turn in history.get("turns", []):
+            if not isinstance(turn, dict) or "image_id" not in turn:
+                continue
+            if exclude_thread_id and turn.get("thread_id") == exclude_thread_id:
+                continue
+                
+            score = 0
+            turn_keywords = {k.lower().lstrip('#') for k in turn.get("keywords", [])}
+            overlap = turn_keywords.intersection(current_keywords_set)
+            score += len(overlap) * 10
+            
+            if score > best_turn_score:
+                best_turn_score = score
+                best_turn = turn
+                
+        if best_turn:
+            best_image = best_turn
+
+    return {"image": best_image, "note": best_note}
+
+
 def read_heartbeat_state() -> dict[str, Any]:
     """Load the last heartbeat timestamp from volume."""
     if HEARTBEAT_PATH.exists():

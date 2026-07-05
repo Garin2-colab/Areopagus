@@ -117,6 +117,59 @@ def get_mutate_url() -> str:
     return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run"
 
 
+class FileLock:
+    def __init__(self, lock_path: Path, max_age: int = 3600):
+        self.lock_path = lock_path
+        self.max_age = max_age
+
+    def __enter__(self):
+        if self.lock_path.exists():
+            try:
+                mtime = self.lock_path.stat().st_mtime
+                if time.time() - mtime < self.max_age:
+                    print("=" * 60)
+                    print(f"  [ERROR] Another sync or scraping process is running (lock file exists).")
+                    print(f"  Lock file: {self.lock_path}")
+                    print("  If you are sure no other sync is running, delete the lock file.")
+                    print("=" * 60)
+                    sys.exit(1)
+                else:
+                    print(f"  [WARNING] Stale lock file found (older than {self.max_age}s). Overwriting...")
+                    self.lock_path.unlink(missing_ok=True)
+            except Exception as e:
+                print(f"  [WARNING] Failed checking lock file: {e}")
+        try:
+            self.lock_path.write_text(str(os.getpid()))
+        except Exception as e:
+            print(f"  [ERROR] Could not create lock file: {e}")
+            sys.exit(1)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.lock_path.exists():
+            try:
+                self.lock_path.unlink()
+            except Exception:
+                pass
+
+
+def update_local_history_json() -> None:
+    """Fetch the latest history from Modal and save it to the local history.json."""
+    print("  [history] Fetching latest history from Modal to update local history.json...")
+    history = fetch_history_for_synthesis()
+    if history:
+        local_path = Path(__file__).resolve().parent / "history.json"
+        try:
+            with open(local_path, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            print(f"  [history] Successfully updated local history.json ({local_path.name}).")
+        except Exception as e:
+            print(f"  [history] ERROR: Failed to write local history.json: {e}")
+    else:
+        print("  [history] WARNING: Could not fetch history from Modal to update local history.json.")
+
+
 # ── Gemini Analysis ───────────────────────────────────────────────────────────
 
 
@@ -610,6 +663,10 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     # Auto-synthesize Creative Briefs from clustered brain items
     print()
     synthesize_briefs(api_key)
+
+    # Update local history.json with the latest changes from Modal
+    print()
+    update_local_history_json()
 
 
 # ── Creative Brief Synthesis (Layer 2) ────────────────────────────────────────
@@ -1548,23 +1605,30 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    if args.ig_user or args.ig_hashtag or args.ig_json or args.ig_seed_batch:
-        download_instagram_posts(
-            username=args.ig_user,
-            hashtag=args.ig_hashtag,
-            json_file=args.ig_json,
-            min_likes=args.min_likes,
-            max_images=args.max_images,
-            use_aesthetic_gate=not args.no_aesthetic_gate,
-            seed_batch=args.ig_seed_batch,
-            seed_category=args.ig_seed_category,
-            cache_days=args.ig_cache_days,
-        )
+    # Define lock path
+    lock_path = BRAIN_DIR / ".sync.lock"
+    BRAIN_DIR.mkdir(parents=True, exist_ok=True)
 
-    if args.briefs_only:
-        key = get_api_key()
-        synthesize_briefs(key)
-    else:
-        sync(force=args.force, dry_run=args.dry_run)
+    with FileLock(lock_path):
+        if args.ig_user or args.ig_hashtag or args.ig_json or args.ig_seed_batch:
+            download_instagram_posts(
+                username=args.ig_user,
+                hashtag=args.ig_hashtag,
+                json_file=args.ig_json,
+                min_likes=args.min_likes,
+                max_images=args.max_images,
+                use_aesthetic_gate=not args.no_aesthetic_gate,
+                seed_batch=args.ig_seed_batch,
+                seed_category=args.ig_seed_category,
+                cache_days=args.ig_cache_days,
+            )
+
+        if args.briefs_only:
+            key = get_api_key()
+            synthesize_briefs(key)
+            print()
+            update_local_history_json()
+        else:
+            sync(force=args.force, dry_run=args.dry_run)
 
 

@@ -109,6 +109,7 @@ def build_initiate_prompt_json(
     from core import (
         fetch_image_bytes,
         retrieve_associative_memory,
+        retrieve_from_brain,
         agent_style_slots,
         agent_gemini_model,
         gemini_generate,
@@ -133,28 +134,44 @@ def build_initiate_prompt_json(
     extra_images = []
     inspiration_image_id = None
     inspiration_meta = None
-    if history and recent_turns:
+    inspiration_note_id = None
+    inspiration_note_meta = None
+    if history:
         recent_keywords = []
         recent_thread_ids = set()
-        for turn in recent_turns:
-            recent_keywords.extend(turn.get("keywords", []))
-            if turn.get("thread_id"):
-                recent_thread_ids.add(turn["thread_id"])
+        if recent_turns:
+            for turn in recent_turns:
+                recent_keywords.extend(turn.get("keywords", []))
+                if turn.get("thread_id"):
+                    recent_thread_ids.add(turn["thread_id"])
         
+        # Fallback to style slots keywords if recent turns empty (initiator startup)
+        if not recent_keywords and agent.get("style_slots"):
+            for key, val in agent.get("style_slots", {}).items():
+                if isinstance(val, dict) and "keywords" in val:
+                    recent_keywords.extend(val["keywords"])
+
         if recent_keywords:
-            memory = retrieve_associative_memory(history, recent_keywords)
-            # Ensure it is not from the immediate active thread contexts
-            if memory and memory.get("thread_id") not in recent_thread_ids:
-                inspiration_url = memory.get("image_url")
+            brain_result = retrieve_from_brain(history, recent_keywords)
+            image_memory = brain_result.get("image")
+            note_memory = brain_result.get("note")
+
+            if image_memory and image_memory.get("thread_id") not in recent_thread_ids:
+                inspiration_url = image_memory.get("image_url")
                 if inspiration_url:
                     try:
                         mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
                         extra_images.append((mem_bytes, mem_mime))
-                        inspiration_image_id = memory.get("image_id")
-                        inspiration_meta = memory
-                        print(f"[inspiration] Initiator recalled Turn {memory.get('turn')} ({inspiration_image_id}) via keywords {memory.get('keywords')}", flush=True)
+                        inspiration_image_id = image_memory.get("image_id") or image_memory.get("id")
+                        inspiration_meta = image_memory
+                        print(f"[inspiration] Initiator recalled Image/Turn {image_memory.get('turn', 'Brain')} ({inspiration_image_id}) via keywords {image_memory.get('keywords')}", flush=True)
                     except Exception as e:
                         print(f"[warning] Failed to fetch inspiration image for initiation: {e}", flush=True)
+
+            if note_memory:
+                inspiration_note_id = note_memory.get("id")
+                inspiration_note_meta = note_memory
+                print(f"[inspiration] Initiator recalled Note {inspiration_note_id} ({note_memory.get('title')}) via keywords {note_memory.get('keywords')}", flush=True)
 
     style_slots = agent_style_slots(agent)
     agent_profile = {
@@ -182,6 +199,20 @@ NOTE: An associative memory from the Knowledge Web has been recalled:
 - Inspiration Proposal: "{inspiration_meta.get('proposal')}"
 
 This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+"""
+
+    if inspiration_note_id and inspiration_note_meta:
+        prompt += f"""
+NOTE: A conceptual reference from your Second Brain has been recalled:
+- Note ID: {inspiration_note_id}
+- Note Title: {inspiration_note_meta.get('title', 'Untitled Note')}
+- Note Summary: {inspiration_note_meta.get('summary', '')}
+- Note Keywords: {inspiration_note_meta.get('keywords', [])}
+- Note Mood: {inspiration_note_meta.get('mood', '')}
+- Note Content:
+{inspiration_note_meta.get('full_text', '')}
+
+You should incorporate these concepts, themes, philosophy, or mood into your response. If you choose to incorporate this note, you must set `"inspiration_note_id": "{inspiration_note_id}"` in the returned JSON. Otherwise, set `"inspiration_note_id": null`.
 """
 
     # Layer 2→3: Inject matching Creative Briefs
@@ -222,7 +253,7 @@ Schema template:
 Rules:
 - Keep the same top-level keys from the schema template: scene_description, aspect_ratio.
 - `scene_description` should be highly diverse in structure and length. It can be a simple direct sentence, an abstract/surreal conceptual description, or a complex hyper-detailed visual shoot script (1 to 5 sentences) blending subject, attire, lighting, environment, style, and camera. Do not follow a rigid template.
-- Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
+- Add turn, debate_context, proposal, keywords, reference_image_id, inspiration_image_id, and inspiration_note_id.
 - proposal should be 2 to 3 sentences and should explain the design move the agent is initiating.
 - keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
 - For `aspect_ratio`, dynamically select the most appropriate aspect ratio for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
@@ -237,6 +268,7 @@ Rules:
 
     prompt += f"""
 - inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
+- inspiration_note_id: Set this to the string ID of the inspiration note (e.g., "{inspiration_note_id or ''}") if you referenced it, or null.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
 """
     suffix_text = model_handler.get_prompt_suffix_text(bool(prompt_img_url))
@@ -266,6 +298,8 @@ Rules:
     prompt_json["turn"] = turn_number
     if "inspiration_image_id" not in prompt_json:
         prompt_json["inspiration_image_id"] = inspiration_image_id
+    if "inspiration_note_id" not in prompt_json:
+        prompt_json["inspiration_note_id"] = inspiration_note_id
     return prompt_json
 
 
@@ -282,6 +316,7 @@ def build_pivot_prompt_json(
     from core import (
         fetch_image_bytes,
         retrieve_associative_memory,
+        retrieve_from_brain,
         agent_style_slots,
         agent_gemini_model,
         gemini_generate,
@@ -308,22 +343,32 @@ def build_pivot_prompt_json(
     extra_images = []
     inspiration_image_id = None
     inspiration_meta = None
+    inspiration_note_id = None
+    inspiration_note_meta = None
     if history and selected_turn:
         selected_keywords = selected_turn.get("keywords", [])
         exclude_thread_id = selected_turn.get("thread_id")
         if selected_keywords:
-            memory = retrieve_associative_memory(history, selected_keywords, exclude_thread_id=exclude_thread_id)
-            if memory:
-                inspiration_url = memory.get("image_url")
+            brain_result = retrieve_from_brain(history, selected_keywords)
+            image_memory = brain_result.get("image")
+            note_memory = brain_result.get("note")
+
+            if image_memory and image_memory.get("thread_id") not in [exclude_thread_id]:
+                inspiration_url = image_memory.get("image_url")
                 if inspiration_url:
                     try:
                         mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
                         extra_images.append((mem_bytes, mem_mime))
-                        inspiration_image_id = memory.get("image_id")
-                        inspiration_meta = memory
-                        print(f"[inspiration] Pivot recalled Turn {memory.get('turn')} ({inspiration_image_id}) via keywords {memory.get('keywords')}", flush=True)
+                        inspiration_image_id = image_memory.get("image_id") or image_memory.get("id")
+                        inspiration_meta = image_memory
+                        print(f"[inspiration] Pivot recalled Image/Turn {image_memory.get('turn', 'Brain')} ({inspiration_image_id}) via keywords {image_memory.get('keywords')}", flush=True)
                     except Exception as e:
                         print(f"[warning] Failed to fetch inspiration image for pivot: {e}", flush=True)
+
+            if note_memory:
+                inspiration_note_id = note_memory.get("id")
+                inspiration_note_meta = note_memory
+                print(f"[inspiration] Pivot recalled Note {inspiration_note_id} ({note_memory.get('title')}) via keywords {note_memory.get('keywords')}", flush=True)
 
     style_slots = agent_style_slots(agent)
     agent_profile = {
@@ -349,6 +394,20 @@ NOTE: An associative memory from the Knowledge Web has been recalled:
 - Inspiration Proposal: "{inspiration_meta.get('proposal')}"
 
 This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+"""
+
+    if inspiration_note_id and inspiration_note_meta:
+        prompt += f"""
+NOTE: A conceptual reference from your Second Brain has been recalled:
+- Note ID: {inspiration_note_id}
+- Note Title: {inspiration_note_meta.get('title', 'Untitled Note')}
+- Note Summary: {inspiration_note_meta.get('summary', '')}
+- Note Keywords: {inspiration_note_meta.get('keywords', [])}
+- Note Mood: {inspiration_note_meta.get('mood', '')}
+- Note Content:
+{inspiration_note_meta.get('full_text', '')}
+
+You should incorporate these concepts, themes, philosophy, or mood into your response. If you choose to incorporate this note, you must set `"inspiration_note_id": "{inspiration_note_id}"` in the returned JSON. Otherwise, set `"inspiration_note_id": null`.
 """
 
     # Layer 2→3: Inject matching Creative Briefs for pivot
@@ -388,10 +447,9 @@ Schema template:
 {json.dumps(sanitize_for_runway(schema_template), indent=2, ensure_ascii=False)}
 
 Rules:
-Rules:
 - Keep the same top-level keys from the schema template: scene_description, aspect_ratio.
 - `scene_description` should be highly diverse in structure and length. It can be a simple direct sentence, an abstract/surreal conceptual description, or a complex hyper-detailed visual shoot script (1 to 5 sentences) blending subject, attire, lighting, environment, style, and camera. Do not follow a rigid template.
-- Add turn, debate_context, proposal, keywords, reference_image_id, and inspiration_image_id.
+- Add turn, debate_context, proposal, keywords, reference_image_id, inspiration_image_id, and inspiration_note_id.
 - proposal should explain what changed from the selected prompt and why.
 - keywords must be exactly 5 simple, intuitive, hash-tagged strings. Avoid complex, composite/merged words like '#impossiblegeometryflux' or '#monochromeminimalism'. Instead, split them into separate simple concepts (e.g. '#impossiblegeometry', '#flux'; '#monochrome', '#minimalism'). NEVER use generic words like '#inspiration', '#design', '#image', '#photo', '#art', or '#aesthetic'.
 - For `aspect_ratio`, dynamically select the most appropriate aspect ratio for the visual composition you are designing. Choose strictly from the following allowed ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "2:3", "3:2", "4:5", "5:4"]. For example, use "16:9" or "21:9" for expansive horizontal landscapes, "9:16" or "3:4" for vertical/portrait/human figures, and "1:1" for focused central/abstract compositions.
@@ -409,6 +467,7 @@ Rules:
 
     prompt += f"""
 - inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
+- inspiration_note_id: Set this to the string ID of the inspiration note (e.g., "{inspiration_note_id or ''}") if you referenced it, or null.
 - Return JSON only.
 """
 
@@ -433,6 +492,8 @@ Rules:
     prompt_json["turn"] = turn_number
     if "inspiration_image_id" not in prompt_json:
         prompt_json["inspiration_image_id"] = inspiration_image_id
+    if "inspiration_note_id" not in prompt_json:
+        prompt_json["inspiration_note_id"] = inspiration_note_id
     return prompt_json
 
 

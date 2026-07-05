@@ -255,6 +255,16 @@ class RunwayModel(BaseModel):
                             if turn.get("image_id") == ref_decision:
                                 target_url = turn.get("image_url")
                                 break
+                    if not target_url and history and isinstance(history.get("brain"), list):
+                        for item in history["brain"]:
+                            if item.get("id") == ref_decision or item.get("image_id") == ref_decision:
+                                target_url = item.get("image_url")
+                                break
+                    if not target_url and history and isinstance(history.get("inspiration"), list):
+                        for insp in history["inspiration"]:
+                            if insp.get("id") == ref_decision or insp.get("image_id") == ref_decision:
+                                target_url = insp.get("image_url")
+                                break
                     if target_url:
                         add_reference(target_url, "ReferenceImage")
         else:
@@ -276,6 +286,16 @@ class RunwayModel(BaseModel):
                 for turn in history["turns"]:
                     if turn.get("image_id") == inspiration_id:
                         target_url = turn.get("image_url")
+                        break
+            if not target_url and history and isinstance(history.get("brain"), list):
+                for item in history["brain"]:
+                    if item.get("id") == inspiration_id or item.get("image_id") == inspiration_id:
+                        target_url = item.get("image_url")
+                        break
+            if not target_url and history and isinstance(history.get("inspiration"), list):
+                for insp in history["inspiration"]:
+                    if insp.get("id") == inspiration_id or insp.get("image_id") == inspiration_id:
+                        target_url = insp.get("image_url")
                         break
             if target_url:
                 add_reference(target_url, "InspirationRef")

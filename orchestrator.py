@@ -221,6 +221,8 @@ def record_generated_turn(
         "interest_score": assessment.get("interest_score", 0),
         "selected_turn": assessment.get("selected_turn"),
         "selected_image_id": assessment.get("selected_image_id", ""),
+        "inspiration_image_id": prompt_json.get("inspiration_image_id"),
+        "inspiration_note_id": prompt_json.get("inspiration_note_id"),
         "prompt_json": prompt_json,
         "prompt_text": prompt_text,
         "proposal": prompt_json.get("proposal", ""),
@@ -434,7 +436,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
     try:
         schema_template = load_schema_template()
         history = load_history()
-        agents_config = load_agents_config(agents_config_payload)
+        agents_config = load_agents_config(agents_config_payload, commit_callback=data_volume.commit)
         active_agents = get_active_agents(agents_config)
         recent_turns = recent_turns_for_agents(history, INTEREST_WINDOW)
         results: list[dict[str, Any]] = []
@@ -603,6 +605,14 @@ def history_endpoint(request: Request) -> dict[str, Any]:
         history["total_brain_items"] = total_count
         history["limit"] = limit
         history["offset"] = offset
+        
+        # Exclude massive arrays to keep pagination response light and fast
+        if limit > 0 or offset > 0 or item_type or search:
+            history["turns"] = []
+            history["threads"] = []
+            history["inspiration"] = []
+            history["briefs"] = []
+            history["graph"] = {"nodes": [], "edges": []}
         
     return history
 
@@ -778,7 +788,7 @@ def mutate_history_endpoint():
                 return {"ok": True, "message": "Config saved to Modal volume."}
 
             elif action == "load_agents":
-                config = load_agents_config()
+                config = load_agents_config(commit_callback=data_volume.commit)
                 return {"ok": True, "config": config}
 
             elif action == "update_category":
@@ -1453,7 +1463,7 @@ def heartbeat_cron() -> None:
     """Automatic pulse triggered by cron. Respects the heartbeat frequency setting."""
     data_volume.reload()
 
-    agents_config = load_agents_config()
+    agents_config = load_agents_config(commit_callback=data_volume.commit)
     freq = max_heartbeat_frequency(agents_config)
 
     if freq <= 0:
