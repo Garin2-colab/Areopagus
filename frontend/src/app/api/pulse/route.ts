@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -33,9 +34,7 @@ export async function POST(request: Request) {
     
     const response = await fetch(pulseUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: modalAuthHeaders(),
       body: JSON.stringify(config)
     });
     

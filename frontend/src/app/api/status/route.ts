@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export async function GET() {
     const response = await fetch(endpoint, {
       cache: "no-store",
       headers: {
-        Accept: "application/json"
+        Accept: "application/json",
+        ...modalAuthHeaders()
       }
     });
 

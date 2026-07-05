@@ -131,6 +131,23 @@ image = (
 )
 
 
+def verify_api_key(request) -> dict[str, Any] | None:
+    """Check X-API-Key header or api_key query param. Returns error dict or None if OK."""
+    expected = os.environ.get("AREOPAGUS_API_KEY", "").strip()
+    if not expected:
+        # No key configured — allow all (backwards compatibility during rollout)
+        return None
+    # Check header first, then query param
+    provided = ""
+    if hasattr(request, "headers"):
+        provided = (request.headers.get("x-api-key") or "").strip()
+    if not provided and hasattr(request, "query_params"):
+        provided = (request.query_params.get("api_key") or "").strip()
+    if provided == expected:
+        return None
+    return {"ok": False, "error": "Unauthorized. Invalid or missing API key."}
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -1874,10 +1891,15 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
 @app.function(
     image=image,
     volumes={"/data": data_volume},
+    secrets=[modal.Secret.from_dotenv()],
     timeout=60,
+    min_containers=1,
 )
 @modal.fastapi_endpoint(method="GET")
 def history_endpoint(request: Request) -> dict[str, Any]:
+    auth_error = verify_api_key(request)
+    if auth_error:
+        return auth_error
     data_volume.reload()
     history = load_history()
     
@@ -1922,10 +1944,15 @@ def history_endpoint(request: Request) -> dict[str, Any]:
 @app.function(
     image=image,
     volumes={"/data": data_volume},
+    secrets=[modal.Secret.from_dotenv()],
     timeout=60,
+    min_containers=1,
 )
 @modal.fastapi_endpoint(method="GET")
-def status_endpoint() -> dict[str, Any]:
+def status_endpoint(request: Request) -> dict[str, Any]:
+    auth_error = verify_api_key(request)
+    if auth_error:
+        return auth_error
     data_volume.reload()
     if not STUDIO_STATUS_PATH.exists():
         return update_studio_status("Studio Reset. Ready for a new era.", active=False)
@@ -2053,6 +2080,14 @@ def mutate_history_endpoint():
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @mutate_api.middleware("http")
+    async def auth_middleware(request, call_next):
+        auth_error = verify_api_key(request)
+        if auth_error:
+            from starlette.responses import JSONResponse as StarletteJSONResponse
+            return StarletteJSONResponse(content=auth_error, status_code=401)
+        return await call_next(request)
 
     @mutate_api.post("/")
     def handle_mutate(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2734,10 +2769,14 @@ def mutate_history_endpoint():
 @app.function(
     image=image,
     volumes={"/data": data_volume},
+    secrets=[modal.Secret.from_dotenv()],
     timeout=60,
 )
 @modal.fastapi_endpoint(method="POST")
-def pulse_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
+def pulse_endpoint(request: Request, payload: dict[str, Any]) -> dict[str, Any]:
+    auth_error = verify_api_key(request)
+    if auth_error:
+        return auth_error
     AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 import { revalidateTag } from "next/cache";
 
 export const runtime = "nodejs";
@@ -45,9 +46,7 @@ export async function POST() {
 
     const response = await fetch(mutateUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: modalAuthHeaders(),
       body: JSON.stringify(payload)
     });
 

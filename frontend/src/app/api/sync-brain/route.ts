@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 import fs from "fs";
 import path from "path";
 
@@ -30,7 +31,7 @@ export async function POST() {
 
     const historyRes = await fetch(historyUrl, {
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...modalAuthHeaders() },
     });
 
     if (!historyRes.ok) {

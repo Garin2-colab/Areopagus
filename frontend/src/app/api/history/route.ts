@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +34,8 @@ export async function GET(request: Request) {
   try {
     const fetchOptions: RequestInit = {
       headers: {
-        Accept: "application/json"
+        Accept: "application/json",
+        ...modalAuthHeaders()
       }
     };
 

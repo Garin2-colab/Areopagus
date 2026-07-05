@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,9 +38,7 @@ export async function GET() {
 
     const response = await fetch(mutateUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: modalAuthHeaders(),
       body: JSON.stringify({ action: "load_agents" }),
       cache: "no-store"
     });
@@ -75,9 +74,7 @@ export async function POST(request: Request) {
     
     const response = await fetch(mutateUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: modalAuthHeaders(),
       body: JSON.stringify(payload)
     });
     
