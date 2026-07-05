@@ -42,7 +42,8 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchHistory(true)
+    // Lightweight initial fetch: skip brain items (Brain Hub loads them lazily)
+    fetchHistory(true, undefined, undefined, undefined, undefined, true)
       .then((data) => {
         if (cancelled) return;
         setHistory(data);

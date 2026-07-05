@@ -167,7 +167,8 @@ export async function fetchHistory(
   limit?: number,
   offset?: number,
   type?: string,
-  search?: string
+  search?: string,
+  skipBrain?: boolean
 ): Promise<HistoryData> {
   const source = resolveHistorySource();
   const isClient = typeof window !== "undefined";
@@ -189,6 +190,7 @@ export async function fetchHistory(
   if (offset !== undefined) queryParams.append("offset", String(offset));
   if (type !== undefined) queryParams.append("type", type);
   if (search !== undefined) queryParams.append("search", search);
+  if (skipBrain) queryParams.append("skip_brain", "true");
 
   const queryString = queryParams.toString();
   if (queryString) {

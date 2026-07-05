@@ -96,6 +96,9 @@ function getGraphImageUrl(url: string, format?: string) {
   return url;
 }
 
+// Maximum brain items to render in the graph to prevent D3 performance degradation
+const MAX_GRAPH_BRAIN_NODES = 200;
+
 function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: InspirationItem[] = [], brain: BrainItem[] = []) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
@@ -159,8 +162,12 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
 
-  // Brain items
-  for (const item of brain) {
+  // Brain items — cap at MAX_GRAPH_BRAIN_NODES to keep D3 responsive
+  const cappedBrain = brain.length > MAX_GRAPH_BRAIN_NODES
+    ? brain.slice(0, MAX_GRAPH_BRAIN_NODES)
+    : brain;
+
+  for (const item of cappedBrain) {
     const brainNode: GraphNode = {
       id: item.id,
       kind: "brain",
