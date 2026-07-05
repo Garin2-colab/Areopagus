@@ -25,11 +25,11 @@ class SeedanceModel(BaseModel):
         return "\n- Do NOT use the '@ReferenceImage' tag or any style slot tags (like '@AgentRef1', '@AgentRef2') inside `scene_description` or anywhere in prompt text under any circumstances (as this model does not support them)."
 
     def post_process_prompt_json(self, prompt_json: Dict[str, Any]) -> Dict[str, Any]:
-        from orchestrator import remove_reference_tags
+        from core import remove_reference_tags
         return remove_reference_tags(prompt_json)
 
     def _get_api_key(self) -> str:
-        from orchestrator import kie_api_key
+        from core import kie_api_key
         return kie_api_key()
 
     def kie_request(
@@ -132,7 +132,7 @@ class SeedanceModel(BaseModel):
         # Formulate Runway references first for consistency
         from models.runway import RunwayModel
         runway_handler = RunwayModel()
-        from orchestrator import load_history
+        from core import load_history
         history = None
         try:
             history = load_history()
@@ -229,6 +229,6 @@ class SeedanceModel(BaseModel):
         image_id: str,
         aspect_ratio: str,
     ) -> Dict[str, Any]:
-        from orchestrator import save_mp4_video
+        from core import save_mp4_video
         closest_ratio = self.get_closest_seedance_aspect_ratio(aspect_ratio)
         return save_mp4_video(raw_media_url, image_id, aspect_ratio=closest_ratio)

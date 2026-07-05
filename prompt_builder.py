@@ -36,7 +36,7 @@ def build_futurist_prompt(
     turn_index: int,
     previous_turns: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    from orchestrator import gemini_generate, sanitize_for_runway, prompt_theme, dedupe_keywords
+    from core import gemini_generate, sanitize_for_runway, prompt_theme, dedupe_keywords
     previous_summary = [
         {
             "turn": turn.get("turn"),
@@ -106,7 +106,7 @@ def build_initiate_prompt_json(
     history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from models import get_model
-    from orchestrator import (
+    from core import (
         fetch_image_bytes,
         retrieve_associative_memory,
         agent_style_slots,
@@ -279,7 +279,7 @@ def build_pivot_prompt_json(
     history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from models import get_model
-    from orchestrator import (
+    from core import (
         fetch_image_bytes,
         retrieve_associative_memory,
         agent_style_slots,
@@ -441,7 +441,7 @@ def build_comment_json(
     selected_turn: dict[str, Any],
     assessment: dict[str, Any],
 ) -> dict[str, Any]:
-    from orchestrator import (
+    from core import (
         agent_gemini_model,
         gemini_generate,
         summarize_turn_for_agent,

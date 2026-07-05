@@ -51,7 +51,7 @@ MODEL SPECIFIC GUIDANCE FOR IDEOGRAM V4:
         return ""
 
     def post_process_prompt_json(self, prompt_json: Dict[str, Any]) -> Dict[str, Any]:
-        from orchestrator import remove_reference_tags
+        from core import remove_reference_tags
         return remove_reference_tags(prompt_json)
 
     def _get_api_key(self) -> str:
@@ -216,7 +216,7 @@ MODEL SPECIFIC GUIDANCE FOR IDEOGRAM V4:
         # Build reference images using RunwayModel's helper
         from models.runway import RunwayModel
         runway_handler = RunwayModel()
-        from orchestrator import load_history, fetch_image_bytes
+        from core import load_history, fetch_image_bytes
         history = None
         try:
             history = load_history()
@@ -286,5 +286,5 @@ MODEL SPECIFIC GUIDANCE FOR IDEOGRAM V4:
         image_id: str,
         aspect_ratio: str,
     ) -> Dict[str, Any]:
-        from orchestrator import save_webp_image
+        from core import save_webp_image
         return save_webp_image(raw_media_url, image_id)

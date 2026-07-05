@@ -107,7 +107,7 @@ class RunwayModel(BaseModel):
 
 
     def _get_api_key(self) -> str:
-        from orchestrator import runway_api_key
+        from core import runway_api_key
         return runway_api_key()
 
     def runway_request(self, method: str, path: str, payload: dict | None = None) -> dict:
@@ -366,7 +366,7 @@ class RunwayModel(BaseModel):
         canonical_model = "gemini_image3_pro" if "gemini" in model else "gpt_image_2"
 
         # Read history context if available from caller
-        from orchestrator import load_history
+        from core import load_history
         history = None
         try:
             history = load_history()
@@ -416,5 +416,5 @@ class RunwayModel(BaseModel):
         image_id: str,
         aspect_ratio: str,
     ) -> Dict[str, Any]:
-        from orchestrator import save_webp_image
+        from core import save_webp_image
         return save_webp_image(raw_media_url, image_id)

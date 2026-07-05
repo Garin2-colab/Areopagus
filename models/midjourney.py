@@ -33,7 +33,7 @@ MODEL SPECIFIC GUIDANCE FOR MIDJOURNEY:
 """
 
     def post_process_prompt_json(self, prompt_json: Dict[str, Any]) -> Dict[str, Any]:
-        from orchestrator import remove_reference_tags
+        from core import remove_reference_tags
         return remove_reference_tags(prompt_json)
 
     def _get_api_key(self) -> str:
@@ -318,7 +318,7 @@ Return a JSON object containing:
 Return JSON only:
 {{"choice": 1, "reasoning": "..."}}
 """
-        from orchestrator import gemini_generate, GEMINI_MODEL
+        from core import gemini_generate, GEMINI_MODEL
         try:
             res = gemini_generate(
                 selection_prompt,
@@ -349,7 +349,7 @@ Return JSON only:
         # Formulate Runway references just to tag Midjourney srefs
         from models.runway import RunwayModel
         runway_handler = RunwayModel()
-        from orchestrator import load_history
+        from core import load_history
         history = None
         try:
             history = load_history()
@@ -384,7 +384,7 @@ Return JSON only:
             raise RuntimeError(f"No image URL in UserAPI task result: {completed_task}")
         print(f"[midjourney] Completed grid URL: {grid_url}", flush=True)
         
-        from orchestrator import fetch_image_bytes
+        from core import fetch_image_bytes
         grid_bytes, mime_type = fetch_image_bytes(grid_url)
         choice = self.midjourney_select_best_image(grid_url, grid_bytes, mime_type, agent, prompt_json, action)
         print(f"[midjourney] Gemini selected quadrant: {choice}", flush=True)
@@ -397,7 +397,8 @@ Return JSON only:
         image_id: str,
         aspect_ratio: str,
     ) -> Dict[str, Any]:
-        from orchestrator import save_webp_image, fetch_image_bytes, IMAGE_DIR, WEBP_QUALITY, get_image
+        from core import save_webp_image, fetch_image_bytes, IMAGE_DIR, WEBP_QUALITY
+        from orchestrator import get_image
         from io import BytesIO
         from PIL import Image
 
