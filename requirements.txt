@@ -1,4 +1,17 @@
-runwayml
-modal
-python-dotenv
-pillow
+# ==============================================================================
+# Areopagus System Dependencies
+# ==============================================================================
+
+# --- Core Production & Deployment Runtime ---
+modal>=0.63.0             # Modal orchestrator and serverless compute deployment
+pillow>=10.0.0            # Image processing, scaling, and quality optimization
+fastapi[standard]>=0.110.0 # Web API frame used for orchestrator endpoints
+python-dotenv>=1.0.0      # Local environment variable configuration (.env loading)
+
+# --- Development, Testing, & Static Analysis ---
+pytest>=8.0.0             # Unit and integration test suite execution
+mypy>=1.9.0               # Static typing checker for core python schemas
+black>=24.0.0             # Standardized code formatting
+
+# --- Optional API Integrations ---
+runwayml>=0.2.0           # Runway Gen-2/Gen-3 Alpha image & video generations

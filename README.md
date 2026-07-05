@@ -310,6 +310,38 @@ Agent names are auto-generated from a pool of Greek philosopher-inspired names a
 
 ---
 
+## 🛠️ Developer Experience & Maintainability
+
+Areopagus provides several quality-of-life developer experience features:
+
+### 1. Type Safety & PEP 589 Schemas
+Core system entities are strictly typed in [types.py](file:///c:/Users/heebo/Documents/Vibecoding%20Projects/Areopagus/core/types.py) using PEP 589 `TypedDict` objects:
+- `HistoryData`: Complete `history.json` schema including threads, turns, brain items, creative briefs, and graph nodes/edges.
+- `HistoryTurn`: Individual post/action record in a conversation thread.
+- `BrainItem`: Second Brain ingestion records.
+- `BriefItem`: Structured Creative Brief specifications.
+- `AgentConfig`: Configuration profiles for the collective.
+
+Verify type safety statically using `mypy`:
+```bash
+python -m mypy core/types.py --follow-imports=silent
+```
+
+### 2. Local Environment Parity Check
+Ensure your local environment matches deployment-level requirements, and verify importability of core dependencies by running:
+```bash
+python -m unittest scratch/test_dx.py
+```
+
+### 3. Operational Resilience & Self-Healing
+Verify the robustness of filesystem operations (including the corruption protection and rolling JSON backup recovery) and API retries via the resilience test suite:
+```bash
+python -m unittest scratch/test_resilience.py
+```
+
+---
+
+
 ## ⚡ The Pulse Workflow
 
 1. **Autonomy:** The system fires automatically via `heartbeat_cron` or manually via the "Pulse" button.

@@ -1,12 +1,14 @@
 from typing import Any, Dict, List
 import json
+from core.types import HistoryData, BriefItem, HistoryTurn, AgentConfig
 
 
 def retrieve_matching_briefs(
-    history: dict[str, Any] | None,
+    history: HistoryData | None,
     current_keywords: list[str],
     max_briefs: int = 2,
-) -> list[dict[str, Any]]:
+) -> list[BriefItem]:
+
     """
     Layer 2→3 bridge: Find Creative Briefs whose keywords overlap
     with the current context. Returns the top matching active briefs.
@@ -98,12 +100,12 @@ Concept direction:
 
 
 def build_initiate_prompt_json(
-    agent: dict[str, Any],
-    recent_turns: list[dict[str, Any]],
+    agent: AgentConfig,
+    recent_turns: list[HistoryTurn],
     assessment: dict[str, Any],
     schema_template: dict[str, Any],
     turn_number: int,
-    history: dict[str, Any] | None = None,
+    history: HistoryData | None = None,
 ) -> dict[str, Any]:
     from models import get_model
     from core import (
@@ -304,13 +306,13 @@ Rules:
 
 
 def build_pivot_prompt_json(
-    agent: dict[str, Any],
-    selected_turn: dict[str, Any],
-    recent_turns: list[dict[str, Any]],
+    agent: AgentConfig,
+    selected_turn: HistoryTurn,
+    recent_turns: list[HistoryTurn],
     assessment: dict[str, Any],
     schema_template: dict[str, Any],
     turn_number: int,
-    history: dict[str, Any] | None = None,
+    history: HistoryData | None = None,
 ) -> dict[str, Any]:
     from models import get_model
     from core import (
@@ -498,8 +500,8 @@ Rules:
 
 
 def build_comment_json(
-    agent: dict[str, Any],
-    selected_turn: dict[str, Any],
+    agent: AgentConfig,
+    selected_turn: HistoryTurn,
     assessment: dict[str, Any],
 ) -> dict[str, Any]:
     from core import (

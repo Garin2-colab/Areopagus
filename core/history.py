@@ -22,9 +22,11 @@ from core.utils import (
 )
 from core.gemini import gemini_generate
 from core.graph import rebuild_history_graph
+from core.types import HistoryData
 
-def load_history() -> dict[str, Any]:
+def load_history() -> HistoryData:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     
     history = None
     if HISTORY_PATH.exists():
@@ -105,7 +107,7 @@ def load_history() -> dict[str, Any]:
     return history
 
 
-def save_history(history: dict[str, Any]) -> None:
+def save_history(history: HistoryData) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history["updated_at"] = utc_now()
     
@@ -144,7 +146,7 @@ def save_history(history: dict[str, Any]) -> None:
         pass
 
 
-def ensure_threads(history: dict[str, Any]) -> list[dict[str, Any]]:
+def ensure_threads(history: HistoryData) -> list[dict[str, Any]]:
     threads = history.setdefault("threads", [])
     if not threads:
         for turn in history.get("turns", []):
@@ -170,23 +172,24 @@ def ensure_threads(history: dict[str, Any]) -> list[dict[str, Any]]:
     return threads
 
 
-def find_thread(history: dict[str, Any], thread_id: str) -> dict[str, Any] | None:
+def find_thread(history: HistoryData, thread_id: str) -> dict[str, Any] | None:
     for thread in ensure_threads(history):
         if thread.get("thread_id") == thread_id:
             return thread
     return None
 
 
-def find_thread_for_image(history: dict[str, Any], image_id: str) -> dict[str, Any] | None:
+def find_thread_for_image(history: HistoryData, image_id: str) -> dict[str, Any] | None:
     for thread in ensure_threads(history):
         if thread.get("root_image_id") == image_id or image_id in thread.get("posts", []):
             return thread
     return None
 
 
-def upsert_thread(history: dict[str, Any], *, thread_id: str, root_image_id: str, title: str, agent_id: str, interest_score: int, action: str) -> dict[str, Any]:
+def upsert_thread(history: HistoryData, *, thread_id: str, root_image_id: str, title: str, agent_id: str, interest_score: int, action: str) -> dict[str, Any]:
     threads = ensure_threads(history)
     existing = find_thread(history, thread_id)
+
     if existing is None:
         existing = {
             "thread_id": thread_id,
