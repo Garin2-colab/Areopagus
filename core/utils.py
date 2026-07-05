@@ -72,8 +72,15 @@ def load_agents_config(override: dict[str, Any] | None = None, commit_callback: 
             except Exception:
                 pass
 
+        # Check if volume has a completely different set of agents/IDs
+        local_ids = {a.get("id") for a in local_config.get("agents", []) if a.get("id")}
+        volume_ids = {a.get("id") for a in volume_config.get("agents", []) if a.get("id")} if volume_config else set()
+        completely_different = False
+        if volume_config:
+            completely_different = local_agents.isdisjoint(volume_agents) and local_ids.isdisjoint(volume_ids)
+
         # If volume is missing, holds completely different agents, or local config is newer, overwrite/seed
-        if not volume_config or local_agents != volume_agents or is_newer:
+        if not volume_config or completely_different or is_newer:
             print(f"[load_agents_config] Overwriting/Seeding volume config with local config", flush=True)
             config = local_config
             try:

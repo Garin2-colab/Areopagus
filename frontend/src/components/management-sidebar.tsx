@@ -286,7 +286,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
         }
 
         if (didMigrate) {
-          console.log("Migrating agents config (removing philosopher names & default heartbeat 15x/day)");
+          console.log("Migrating agents config (applying normalization/sanitization checks)");
           saveAgents(loaded);
         } else {
           const payload: StoredAgentsPayload = {
