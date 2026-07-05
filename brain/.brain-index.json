@@ -243,60 +243,6 @@
       "synced_at": "2026-06-19T09:29:05.648078+00:00",
       "hash": "sha256:0bf112a5c54c73f11e3e401486f3d946619b32c49fd5391ffce30d0d294537f2",
       "title": "Golden Glimmer, Regal Drape"
-    },
-    {
-      "local_path": "ig/DI3u-eiIc_h.jpg",
-      "brain_id": "brain_1783216497_8b39aa",
-      "type": "image",
-      "status": "synced",
-      "synced_at": "2026-07-05T01:55:06.135928+00:00",
-      "hash": "sha256:8d5bac24597e0b6a60ca2562df06c733f35eef2dcac0821305c4da8175d80a6a",
-      "title": "Stone's Whisper, Metal's Song"
-    },
-    {
-      "local_path": "ig/DI3vD9_IVyn.jpg",
-      "brain_id": "brain_1783216507_05a710",
-      "type": "image",
-      "status": "synced",
-      "synced_at": "2026-07-05T01:55:15.079711+00:00",
-      "hash": "sha256:f9f8b77cbbcb8698667e3acf0ee159d0a9cbcd836fde7d17ef2b248ff84c9da9",
-      "title": "Metallic Bloom, Stone Song"
-    },
-    {
-      "local_path": "ig/DItYFSRoGFA.jpg",
-      "brain_id": "brain_1783216516_703690",
-      "type": "image",
-      "status": "synced",
-      "synced_at": "2026-07-05T01:55:26.169471+00:00",
-      "hash": "sha256:fb653c0fae5caa8318c751f9916d2dfbfe441d8f08a0099d96cf75f69dca07e2",
-      "title": "Modern Play, Gentle Spin"
-    },
-    {
-      "local_path": "ig/DIzOg20Ibnx.jpg",
-      "brain_id": "brain_1783216527_50d1b5",
-      "type": "image",
-      "status": "synced",
-      "synced_at": "2026-07-05T01:55:36.774761+00:00",
-      "hash": "sha256:9c1e0fab6215e68044d290cfbc84fd902b146f0c32b2c725963466e9ce70e12b",
-      "title": "Playful Fluid Dynamics"
-    },
-    {
-      "local_path": "ig/DIzOi8FIFhc.jpg",
-      "brain_id": "brain_1783216537_b09e85",
-      "type": "image",
-      "status": "synced",
-      "synced_at": "2026-07-05T01:55:45.276399+00:00",
-      "hash": "sha256:cd07675afad2904c76d42d8c3fd01472fc7bb2eb6c7815e0284fc4745a2db40b",
-      "title": "Water Wheel Serenity"
-    },
-    {
-      "local_path": "ig/README.md",
-      "brain_id": "brain_1783216546_09bb60",
-      "type": "document",
-      "status": "synced",
-      "synced_at": "2026-07-05T01:59:40.130107+00:00",
-      "hash": "sha256:a08c898ecfba503db8fd41c005b9661520bd5257b71cbfca3b91c47b5eeca189",
-      "title": "Scraped Instagram Design Inspiration"
     }
   ],
   "last_pull": "2026-06-19T03:42:39.881Z",
