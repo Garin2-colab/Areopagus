@@ -11,6 +11,7 @@ from core.config import (
     PENDING_TASKS_PATH,
     HEARTBEAT_PATH,
     STUDIO_STATUS_PATH,
+    DB_PATH,
 )
 from core.utils import (
     utc_now,
@@ -23,11 +24,39 @@ from core.utils import (
 from core.gemini import gemini_generate
 from core.graph import rebuild_history_graph
 from core.types import HistoryData
+from core.database import AreopagusDB, get_db, migrate_json_to_sqlite
+
+
+def _commit_volume() -> None:
+    """Best-effort Modal volume commit."""
+    try:
+        from orchestrator import data_volume
+        data_volume.commit()
+    except Exception:
+        pass
+
 
 def load_history() -> HistoryData:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    
+    # ── SQLite path (preferred) ─────────────────────────────────────────
+    if DB_PATH.exists():
+        try:
+            db = get_db()
+            history = db.export_as_history_dict()
+            # Brain items are loaded separately (full list for in-memory callers)
+            brain_items, _ = db.list_brain_items()
+            history["brain"] = brain_items
+            history.setdefault("turns", [])
+            history.setdefault("threads", [])
+            history.setdefault("graph", {"nodes": [], "edges": []})
+            history["graph"].setdefault("nodes", [])
+            history["graph"].setdefault("edges", [])
+            return history
+        except Exception as exc:
+            print(f"[load_history] WARNING: SQLite read failed ({exc}), falling back to JSON.", flush=True)
+
+    # ── JSON path (legacy / first-run migration) ────────────────────────
     history = None
     if HISTORY_PATH.exists():
         try:
@@ -45,11 +74,7 @@ def load_history() -> HistoryData:
                             loaded_backup = json.load(bfh)
                         print(f"[load_history] SUCCESS: Recovered history from valid backup: {backup_path.name}", flush=True)
                         shutil.copy2(backup_path, HISTORY_PATH)
-                        try:
-                            from orchestrator import data_volume
-                            data_volume.commit()
-                        except Exception:
-                            pass
+                        _commit_volume()
                         history = loaded_backup
                         break
                     except Exception as e:
@@ -70,12 +95,13 @@ def load_history() -> HistoryData:
                 "edges": [],
             },
         }
-        with HISTORY_PATH.open("w", encoding="utf-8") as fh:
-            json.dump(default_history, fh, indent=2, ensure_ascii=False)
-            fh.write("\n")
+        # Initialize empty SQLite DB
         try:
-            from orchestrator import data_volume
-            data_volume.commit()
+            db = get_db()
+            db.set_meta("project", "Areopagus")
+            db.set_meta("created_at", default_history["created_at"])
+            db.set_meta("updated_at", default_history["updated_at"])
+            _commit_volume()
         except Exception:
             pass
         return default_history
@@ -85,6 +111,16 @@ def load_history() -> HistoryData:
     history.setdefault("graph", {"nodes": [], "edges": []})
     history["graph"].setdefault("nodes", [])
     history["graph"].setdefault("edges", [])
+
+    # ── Auto-migrate JSON to SQLite on first load ───────────────────────
+    if not DB_PATH.exists():
+        try:
+            print("[load_history] Migrating history.json -> SQLite...", flush=True)
+            migrate_json_to_sqlite(HISTORY_PATH, DB_PATH)
+            _commit_volume()
+            print("[load_history] SQLite migration complete.", flush=True)
+        except Exception as exc:
+            print(f"[load_history] WARNING: SQLite migration failed ({exc}). Continuing with JSON.", flush=True)
 
     # Check if we should upgrade the graph nodes to the connected-mesh schema
     has_connected_mesh = False
@@ -98,11 +134,7 @@ def load_history() -> HistoryData:
         with HISTORY_PATH.open("w", encoding="utf-8") as fh:
             json.dump(history, fh, indent=2, ensure_ascii=False)
             fh.write("\n")
-        try:
-            from orchestrator import data_volume
-            data_volume.commit()
-        except Exception:
-            pass
+        _commit_volume()
 
     return history
 
@@ -110,8 +142,53 @@ def load_history() -> HistoryData:
 def save_history(history: HistoryData) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history["updated_at"] = utc_now()
-    
-    # Create backup before writing if history.json exists and is valid
+
+    # ── Write to SQLite ─────────────────────────────────────────────────
+    try:
+        db = get_db()
+        db.set_meta("updated_at", history["updated_at"])
+        db.set_meta("project", history.get("project", "Areopagus"))
+        if history.get("created_at"):
+            db.set_meta("created_at", history["created_at"])
+
+        # Sync turns
+        for turn in history.get("turns", []):
+            if isinstance(turn, dict) and turn.get("turn") is not None:
+                db.insert_turn(turn)
+
+        # Sync threads
+        for thread in history.get("threads", []):
+            if isinstance(thread, dict) and "thread_id" in thread:
+                db.upsert_thread(thread)
+
+        # Sync brain items
+        for item in history.get("brain", []):
+            if isinstance(item, dict) and "id" in item:
+                db.upsert_brain_item(item)
+
+        # Sync briefs
+        for brief in history.get("briefs", []):
+            if isinstance(brief, dict) and "brief_id" in brief:
+                db.upsert_brief(brief)
+
+        # Sync inspiration
+        for item in history.get("inspiration", []):
+            if isinstance(item, dict) and "id" in item:
+                db.upsert_inspiration(item)
+
+        # Sync graph (incremental — insert new nodes, ignore existing)
+        graph = history.get("graph", {})
+        nodes = graph.get("nodes", [])
+        edges = graph.get("edges", [])
+        if nodes or edges:
+            db.batch_insert_graph(
+                [n for n in nodes if isinstance(n, dict) and "id" in n],
+                [e for e in edges if isinstance(e, dict)],
+            )
+    except Exception as exc:
+        print(f"[save_history] WARNING: SQLite write failed ({exc}). Falling back to JSON only.", flush=True)
+
+    # ── Also write JSON for backwards compatibility during transition ───
     if HISTORY_PATH.exists():
         try:
             with HISTORY_PATH.open("r", encoding="utf-8") as fh:
@@ -139,11 +216,7 @@ def save_history(history: HistoryData) -> None:
     with HISTORY_PATH.open("w", encoding="utf-8") as fh:
         json.dump(history, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
-    try:
-        from orchestrator import data_volume
-        data_volume.commit()
-    except Exception:
-        pass
+    _commit_volume()
 
 
 def ensure_threads(history: HistoryData) -> list[dict[str, Any]]:
