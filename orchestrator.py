@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any
 
 import modal
+try:
+    from fastapi import Request
+except ImportError:
+    class Request:
+        pass
 
 APP_NAME = "areopagus"
 VOLUME_NAME = "areopagus-data"
@@ -1872,9 +1877,46 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
     timeout=60,
 )
 @modal.fastapi_endpoint(method="GET")
-def history_endpoint() -> dict[str, Any]:
+def history_endpoint(request: Request) -> dict[str, Any]:
     data_volume.reload()
-    return load_history()
+    history = load_history()
+    
+    limit = int(request.query_params.get("limit", 0))
+    offset = int(request.query_params.get("offset", 0))
+    item_type = request.query_params.get("type", "")
+    search = request.query_params.get("search", "")
+    
+    if "brain" in history and isinstance(history["brain"], list):
+        brain_list = history["brain"]
+        
+        # 1. Filter by type
+        if item_type:
+            # Handle standardizing 'note' to 'document' if requested
+            req_type = "document" if item_type == "note" else item_type
+            brain_list = [item for item in brain_list if item.get("type") == req_type]
+            
+        # 2. Filter by search
+        if search:
+            q = search.lower()
+            brain_list = [
+                item for item in brain_list
+                if q in item.get("title", "").lower() or
+                   q in item.get("summary", "").lower() or
+                   any(q in kw.lower() for kw in item.get("keywords", []))
+            ]
+            
+        total_count = len(brain_list)
+        
+        # 3. Paginate
+        if limit > 0:
+            brain_list = brain_list[offset:offset+limit]
+            
+        history["brain"] = brain_list
+        history["total_brain_items"] = total_count
+        history["limit"] = limit
+        history["offset"] = offset
+        
+    return history
 
 
 @app.function(
@@ -2857,4 +2899,3 @@ def generate_missing_thumbnails():
                 print(f"Failed to extract for {mp4_path.name}: {e}")
                 
     data_volume.commit()
-

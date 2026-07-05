@@ -147,6 +147,7 @@ export default function Home() {
                   brain={brain}
                   inspiration={inspiration}
                   briefs={briefs}
+                  totalBrainItems={history?.total_brain_items}
                   onRefresh={reloadHistory}
                   onImageClick={setLightboxSrc}
                 />

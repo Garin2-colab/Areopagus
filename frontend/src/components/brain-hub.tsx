@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from "react";
 import {
   Upload,
   Trash2,
@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import type { BrainItem, BriefItem, InspirationItem } from "@/lib/history";
+import { fetchHistory } from "@/lib/history";
 import { Button } from "@/components/ui/button";
 import { compressImage } from "@/lib/utils";
 
@@ -23,13 +24,14 @@ type BrainHubProps = {
   brain: BrainItem[];
   inspiration: InspirationItem[];
   briefs: BriefItem[];
+  totalBrainItems?: number;
   onRefresh: () => Promise<void>;
   onImageClick: (url: string) => void;
 };
 
 type FilterType = "all" | "image" | "document" | "reference" | "brief";
 
-export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }: BrainHubProps) {
+export function BrainHub({ brain, inspiration, briefs, totalBrainItems, onRefresh, onImageClick }: BrainHubProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -42,14 +44,100 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
   const [confirmDeleteId, setConfirmDeleteId] = useState<{ id: string; isLegacy: boolean } | null>(null);
   const [optimisticDeletedIds, setOptimisticDeletedIds] = useState<Set<string>>(new Set());
 
+  // Pagination and local data states
+  const [loadedBrain, setLoadedBrain] = useState<BrainItem[]>(brain);
+  const [loadedInspiration, setLoadedInspiration] = useState<InspirationItem[]>(inspiration);
+  const [totalBrainItemsState, setTotalBrainItemsState] = useState(totalBrainItems ?? brain.length);
+  const [offset, setOffset] = useState(brain.length);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(brain.length < (totalBrainItems ?? brain.length));
+
+  // Sync state if props change (e.g. from parent refresh)
+  useEffect(() => {
+    setLoadedBrain(brain);
+    setLoadedInspiration(inspiration);
+    setTotalBrainItemsState(totalBrainItems ?? brain.length);
+    setOffset(brain.length);
+    setHasMore(brain.length < (totalBrainItems ?? brain.length));
+  }, [brain, inspiration, totalBrainItems]);
+
+  // Debounced search query
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  const fetchPage = async (reset: boolean, currentFilter: FilterType, currentSearch: string) => {
+    setIsLoading(true);
+    setUploadError(null);
+    try {
+      const newOffset = reset ? 0 : offset;
+      const limit = 24;
+      let apiType = "";
+      if (currentFilter !== "all" && currentFilter !== "brief") {
+        apiType = currentFilter;
+      }
+      
+      const data = await fetchHistory(true, limit, newOffset, apiType, currentSearch);
+      const newBrain = data.brain || [];
+      
+      if (reset) {
+        setLoadedBrain(newBrain);
+        setOffset(newBrain.length);
+      } else {
+        setLoadedBrain((prev) => [...prev, ...newBrain]);
+        setOffset((prev) => prev + newBrain.length);
+      }
+      
+      if (data.total_brain_items !== undefined) {
+        setTotalBrainItemsState(data.total_brain_items);
+        setHasMore((reset ? 0 : offset) + newBrain.length < data.total_brain_items);
+      } else {
+        setHasMore(newBrain.length === limit);
+      }
+    } catch (error) {
+      console.error("Failed to fetch page:", error);
+      setUploadError(error instanceof Error ? error.message : "Failed to load brain items.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch when filter or debounced search changes
+  useEffect(() => {
+    // Skip the very first render if we already have props and search/filter are default
+    if (activeFilter === "all" && !debouncedSearch) {
+      return;
+    }
+    fetchPage(true, activeFilter, debouncedSearch);
+  }, [activeFilter, debouncedSearch]);
+
   // Merge brain items with legacy inspiration items (shown as references)
   const allItems = useMemo(() => {
-    const brainItems: (BrainItem & { _source: "brain" })[] = brain.map((b) => ({
+    const brainItems: (BrainItem & { _source: "brain" })[] = loadedBrain.map((b) => ({
       ...b,
       _source: "brain" as const,
     }));
 
-    const legacyItems: (BrainItem & { _source: "brain" })[] = inspiration.map((insp) => ({
+    // If searching or filtering, filter local inspiration items
+    let filteredLegacy = loadedInspiration;
+    if (activeFilter !== "all" && activeFilter !== "reference") {
+      filteredLegacy = [];
+    }
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      filteredLegacy = filteredLegacy.filter(
+        (insp) =>
+          insp.id.toLowerCase().includes(q) ||
+          insp.keywords.some((k) => k.toLowerCase().includes(q))
+      );
+    }
+
+    const legacyItems: (BrainItem & { _source: "brain" })[] = filteredLegacy.map((insp) => ({
       id: insp.id,
       type: "reference" as const,
       source_file: "",
@@ -68,7 +156,7 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
     return [...brainItems, ...legacyItems].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [brain, inspiration]);
+  }, [loadedBrain, loadedInspiration, activeFilter, debouncedSearch]);
 
   // Filter and search
   const filteredItems = useMemo(() => {
@@ -239,19 +327,21 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
 
   const filterCounts = useMemo(() => {
     const counts = { all: 0, image: 0, document: 0, reference: 0, brief: briefs.length };
-    for (const item of allItems) {
+    for (const item of brain) {
       if (optimisticDeletedIds.has(item.id)) continue;
       if (item.type === "image") {
         counts.image++;
       } else if (item.type === "document" || item.type === "note") {
         counts.document++;
-      } else if (item.type === "reference") {
-        counts.reference++;
       }
+    }
+    for (const item of inspiration) {
+      if (optimisticDeletedIds.has(item.id)) continue;
+      counts.reference++;
     }
     counts.all = counts.image + counts.document + counts.reference + counts.brief;
     return counts;
-  }, [allItems, briefs, optimisticDeletedIds]);
+  }, [brain, inspiration, briefs, optimisticDeletedIds]);
 
   // Filter briefs by search query
   const filteredBriefs = useMemo(() => {
@@ -755,6 +845,27 @@ export function BrainHub({ brain, inspiration, briefs, onRefresh, onImageClick }
               );
             }
           })}
+        </div>
+      )}
+
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="flex justify-center pt-4">
+          <Button
+            type="button"
+            onClick={() => fetchPage(false, activeFilter, debouncedSearch)}
+            disabled={isLoading}
+            className="flex items-center gap-2 rounded-full border border-[#D8D4CC] bg-[#FAF9F6] hover:bg-[#F5F2EB] text-[#44423E] font-semibold text-xs h-9 px-6 shadow-sm transition-all"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D45113]" />
+                <span>Loading...</span>
+              </>
+            ) : (
+              <span>Load More</span>
+            )}
+          </Button>
         </div>
       )}
 

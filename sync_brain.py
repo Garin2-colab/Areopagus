@@ -23,6 +23,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -350,6 +352,52 @@ def delete_remote_brain_item(brain_id: str) -> None:
         print(f"  [delete] Error deleting brain item {brain_id}: {exc}")
 
 
+def preprocess_image(fpath: Path, max_dim: int = 1024) -> tuple[bytes, str]:
+    """
+    Read image from fpath, downscale it if any dimension exceeds max_dim,
+    and return compressed WebP bytes and the corresponding mime type 'image/webp'.
+    """
+    from PIL import Image
+    from io import BytesIO
+    try:
+        with Image.open(fpath) as img:
+            # Check format and convert transparency if needed
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                background.paste(img, (0, 0), img)
+                img = background.convert("RGB")
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+
+            # Downscale if needed
+            width, height = img.size
+            if width > max_dim or height > max_dim:
+                if width > height:
+                    new_width = max_dim
+                    new_height = int(height * (max_dim / width))
+                else:
+                    new_height = max_dim
+                    new_width = int(width * (max_dim / height))
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                
+            # Compress to WebP
+            buf = BytesIO()
+            img.save(buf, "WEBP", quality=80)
+            return buf.getvalue(), "image/webp"
+    except Exception as e:
+        # Fallback to raw bytes if PIL fails
+        print(f"           [WARNING] PIL preprocessing failed, using raw: {e}")
+        ext = fpath.suffix.lower()
+        mime = "image/jpeg"
+        if ext == ".png":
+            mime = "image/png"
+        elif ext == ".webp":
+            mime = "image/webp"
+        elif ext == ".gif":
+            mime = "image/gif"
+        return fpath.read_bytes(), mime
+
+
 def sync(*, force: bool = False, dry_run: bool = False) -> None:
     print("=" * 60)
     print("  AREOPAGUS SECOND BRAIN — Sync")
@@ -428,20 +476,28 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
 
     synced = 0
     errors = 0
+    completed_count = 0
+    counter_lock = threading.Lock()
+    existing_lock = threading.Lock()
 
-    for i, entry in enumerate(to_process, 1):
+    def process_entry(entry: dict[str, Any]) -> None:
+        nonlocal synced, errors, completed_count
         rel = entry["relative"]
         ftype = entry["type"]
         fpath: Path = entry["path"]
-        
-        # Reuse existing brain_id if available, to update the remote record instead of duplicating it
-        prev = existing.get(rel)
-        if prev and prev.get("brain_id"):
-            brain_id = prev["brain_id"]
-        else:
-            brain_id = f"brain_{int(time.time())}_{hashlib.md5(rel.encode()).hexdigest()[:6]}"
 
-        print(f"  [{i}/{len(to_process)}] Processing {rel} ({ftype})...")
+        with existing_lock:
+            prev = existing.get(rel)
+            if prev and prev.get("brain_id"):
+                brain_id = prev["brain_id"]
+            else:
+                brain_id = f"brain_{int(time.time())}_{hashlib.md5(rel.encode()).hexdigest()[:6]}"
+
+        with counter_lock:
+            completed_count += 1
+            idx = completed_count
+
+        print(f"  [{idx}/{len(to_process)}] Processing {rel} ({ftype})...")
 
         try:
             analysis: dict[str, Any] = {}
@@ -450,22 +506,16 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             full_text: str | None = None
 
             if ftype == "image":
-                img_bytes = fpath.read_bytes()
+                # Preprocess image (downscale and WebP compression)
+                img_bytes, mime = preprocess_image(fpath, max_dim=1024)
                 image_b64 = base64.b64encode(img_bytes).decode("ascii")
-                ext = fpath.suffix.lower()
-                if ext == ".png":
-                    mime = "image/png"
-                elif ext == ".webp":
-                    mime = "image/webp"
-                elif ext == ".gif":
-                    mime = "image/gif"
                 caption_context = ""
                 txt_path = fpath.with_suffix(".txt")
                 if txt_path.exists():
                     try:
                         caption_context = txt_path.read_text(encoding="utf-8", errors="replace")
                     except Exception as e:
-                        print(f"           [WARNING] Failed to read companion metadata: {e}")
+                        print(f"           [WARNING] Failed to read companion metadata for {rel}: {e}")
                 analysis = gemini_analyze_image(img_bytes, fpath.name, api_key, caption_context=caption_context)
                 if "keywords" not in analysis or not isinstance(analysis["keywords"], list):
                     analysis["keywords"] = []
@@ -475,18 +525,17 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                 elif rel.startswith("images/"):
                     if "#image" not in analysis["keywords"]:
                         analysis["keywords"].append("#image")
-                print(f"           -> Title: {analysis.get('title', '?')}")
-                print(f"           -> Keywords: {', '.join(analysis.get('keywords', []))}")
+                print(f"           [{rel}] -> Title: {analysis.get('title', '?')}")
+                print(f"           [{rel}] -> Keywords: {', '.join(analysis.get('keywords', []))}")
 
             elif ftype == "document":
                 text_content = fpath.read_text(encoding="utf-8", errors="replace")
                 full_text = text_content
                 analysis = gemini_analyze_document(text_content, fpath.name, api_key)
-                print(f"           -> Title: {analysis.get('title', '?')}")
-                print(f"           -> Keywords: {', '.join(analysis.get('keywords', []))}")
+                print(f"           [{rel}] -> Title: {analysis.get('title', '?')}")
+                print(f"           [{rel}] -> Keywords: {', '.join(analysis.get('keywords', []))}")
 
             elif ftype == "reference":
-                # For PDFs — upload as binary, minimal analysis for now
                 ref_bytes = fpath.read_bytes()
                 image_b64 = base64.b64encode(ref_bytes).decode("ascii")
                 mime = "application/pdf"
@@ -496,7 +545,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
                     "mood": "reference",
                     "title": fpath.stem.replace("-", " ").replace("_", " ").title(),
                 }
-                print(f"           -> Title: {analysis.get('title', '?')}")
+                print(f"           [{rel}] -> Title: {analysis.get('title', '?')}")
 
             # Determine logical type based on path for categorization/labeling
             if rel.startswith("references/"):
@@ -520,29 +569,35 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             )
 
             if result.get("ok"):
-                print(f"           [OK] Synced to Modal (brain_id: {brain_id})")
-                # Update local index
-                existing[rel] = {
-                    "local_path": rel,
-                    "brain_id": brain_id,
-                    "type": item_type,
-                    "status": "synced",
-                    "synced_at": utc_now(),
-                    "hash": entry["hash"],
-                    "title": analysis.get("title", fpath.name),
-                }
-                synced += 1
+                print(f"           [{rel}] [OK] Synced to Modal (brain_id: {brain_id})")
+                with existing_lock:
+                    existing[rel] = {
+                        "local_path": rel,
+                        "brain_id": brain_id,
+                        "type": item_type,
+                        "status": "synced",
+                        "synced_at": utc_now(),
+                        "hash": entry["hash"],
+                        "title": analysis.get("title", fpath.name),
+                    }
+                with counter_lock:
+                    synced += 1
             else:
-                print(f"           [ERROR] Upload failed: {result.get('error', 'unknown')}")
-                errors += 1
+                print(f"           [{rel}] [ERROR] Upload failed: {result.get('error', 'unknown')}")
+                with counter_lock:
+                    errors += 1
 
         except Exception as exc:
-            print(f"           [ERROR] Error: {exc}")
-            errors += 1
+            print(f"           [{rel}] [ERROR] Error: {exc}")
+            with counter_lock:
+                errors += 1
 
-        # Small delay to avoid rate limits
-        if i < len(to_process):
-            time.sleep(1)
+    # ThreadPoolExecutor to run tasks concurrently (max_workers=3)
+    max_workers = 3
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(process_entry, entry) for entry in to_process]
+        for future in as_completed(futures):
+            pass
 
     # Save updated index
     index["items"] = list(existing.values())

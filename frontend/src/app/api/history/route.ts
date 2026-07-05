@@ -21,6 +21,15 @@ export async function GET(request: Request) {
     );
   }
 
+  // Construct target URL forwarding searchParams (except bypass)
+  const urlObj = new URL(endpoint);
+  searchParams.forEach((value, key) => {
+    if (key !== "bypass") {
+      urlObj.searchParams.set(key, value);
+    }
+  });
+  const targetUrl = urlObj.toString();
+
   try {
     const fetchOptions: RequestInit = {
       headers: {
@@ -35,7 +44,7 @@ export async function GET(request: Request) {
       (fetchOptions as any).next = { revalidate: 86400, tags: ["history"] };
     }
 
-    const response = await fetch(endpoint, fetchOptions);
+    const response = await fetch(targetUrl, fetchOptions);
 
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;

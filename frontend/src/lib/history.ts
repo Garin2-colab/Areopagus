@@ -121,6 +121,9 @@ export type HistoryData = {
     nodes?: Array<Record<string, unknown>>;
     edges?: Array<Record<string, unknown>>;
   };
+  total_brain_items?: number;
+  limit?: number;
+  offset?: number;
 };
 
 export function sortTurnsNewestFirst(turns: HistoryTurn[]) {
@@ -159,24 +162,37 @@ function sanitizeImageUrls(url: string | undefined, format?: string): string {
   return url;
 }
 
-export async function fetchHistory(bypassCache = false): Promise<HistoryData> {
+export async function fetchHistory(
+  bypassCache = false,
+  limit?: number,
+  offset?: number,
+  type?: string,
+  search?: string
+): Promise<HistoryData> {
   const source = resolveHistorySource();
   const isClient = typeof window !== "undefined";
 
   let fetchUrl = source;
   const init: RequestInit = {};
 
-  if (isClient) {
-    if (bypassCache) {
-      fetchUrl = `${source}?bypass=true`;
-      init.cache = "no-store";
-    }
-  } else {
-    if (bypassCache) {
-      init.cache = "no-store";
-    } else {
-      (init as any).next = { revalidate: 86400, tags: ["history"] };
-    }
+  const queryParams = new URLSearchParams();
+  if (isClient && bypassCache) {
+    queryParams.append("bypass", "true");
+    init.cache = "no-store";
+  } else if (!isClient && bypassCache) {
+    init.cache = "no-store";
+  } else if (!isClient) {
+    (init as any).next = { revalidate: 86400, tags: ["history"] };
+  }
+
+  if (limit !== undefined) queryParams.append("limit", String(limit));
+  if (offset !== undefined) queryParams.append("offset", String(offset));
+  if (type !== undefined) queryParams.append("type", type);
+  if (search !== undefined) queryParams.append("search", search);
+
+  const queryString = queryParams.toString();
+  if (queryString) {
+    fetchUrl = `${source}?${queryString}`;
   }
 
   const response = await fetch(fetchUrl, init);
