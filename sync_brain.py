@@ -860,22 +860,25 @@ def load_seed_accounts(category: str | None = None) -> list[dict[str, Any]]:
         return []
 
 
-def get_ig_cache(cache_key: str) -> dict[str, Any] | None:
-    """Return cached API response if fresh enough, else None."""
+def get_ig_cache(cache_key: str, cache_days: int = IG_CACHE_MAX_AGE_DAYS, ignore_age: bool = False) -> dict[str, Any] | None:
+    """Return cached API response if fresh enough, or ignore age constraint if ignore_age is True."""
     IG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_file = IG_CACHE_DIR / f"{cache_key}.json"
     if not cache_file.exists():
         return None
     try:
         data = json.loads(cache_file.read_text(encoding="utf-8"))
+        if ignore_age:
+            return data
         cached_at = data.get("_cached_at", "")
         if cached_at:
             age = time.time() - float(cached_at)
-            if age < IG_CACHE_MAX_AGE_DAYS * 86400:
+            if age < cache_days * 86400:
                 return data
     except Exception:
         pass
     return None
+
 
 
 def set_ig_cache(cache_key: str, data: dict[str, Any]) -> None:
@@ -1098,10 +1101,11 @@ def download_instagram_posts(
     seed_batch: bool = False,
     seed_category: str | None = None,
     follower_count: int | None = None,
+    cache_days: int = IG_CACHE_MAX_AGE_DAYS,
 ) -> None:
     """
     Enhanced Instagram scraper with:
-    - Cache-first API calls (skip if data < 7 days old)
+    - Cache-first API calls (skip if data < cache_days old)
     - Breakout Score engagement analysis
     - Gemini aesthetic gate (optional)
     - Video/Reels thumbnail support
@@ -1132,6 +1136,7 @@ def download_instagram_posts(
                 max_images=max_images,
                 use_aesthetic_gate=use_aesthetic_gate,
                 follower_count=None,  # Will be fetched from API
+                cache_days=cache_days,
             )
             if i < len(accounts):
                 time.sleep(2)  # Rate limiting between accounts
@@ -1158,9 +1163,9 @@ def download_instagram_posts(
             
             # Cache-first: check if we already have fresh data
             cache_key = f"user_{username}"
-            cached = get_ig_cache(cache_key)
+            cached = get_ig_cache(cache_key, cache_days=cache_days)
             if cached:
-                print(f"  [CACHE HIT] Using cached data (< {IG_CACHE_MAX_AGE_DAYS} days old)")
+                print(f"  [CACHE HIT] Using cached data (< {cache_days} days old)")
                 res_json = cached
             else:
                 url = f"https://{api_host}/get_ig_user_posts.php"
@@ -1183,11 +1188,38 @@ def download_instagram_posts(
                     # Check for quota error
                     if isinstance(res_json, dict) and "message" in res_json and "quota" in res_json.get("message", "").lower():
                         print(f"  [ERROR] API quota exceeded: {res_json['message']}")
+                        expired = get_ig_cache(cache_key, cache_days=cache_days, ignore_age=True)
+                        if expired:
+                            print(f"  [WARNING] Falling back to expired cached data (older than {cache_days} days).")
+                            res_json = expired
+                        else:
+                            return
+                    else:
+                        set_ig_cache(cache_key, res_json)
+                except urllib.error.HTTPError as e:
+                    print(f"  [ERROR] Scraping failed with HTTP {e.code}: {e.reason}")
+                    print("  Headers:")
+                    for k, v in e.headers.items():
+                        print(f"    {k}: {v}")
+                    try:
+                        body = e.read().decode("utf-8")
+                        print(f"  Response Body: {body}")
+                    except Exception:
+                        pass
+                    expired = get_ig_cache(cache_key, cache_days=cache_days, ignore_age=True)
+                    if expired:
+                        print(f"  [WARNING] Falling back to expired cached data (older than {cache_days} days).")
+                        res_json = expired
+                    else:
                         return
-                    set_ig_cache(cache_key, res_json)
                 except Exception as e:
                     print(f"  [ERROR] Scraping failed: {e}")
-                    return
+                    expired = get_ig_cache(cache_key, cache_days=cache_days, ignore_age=True)
+                    if expired:
+                        print(f"  [WARNING] Falling back to expired cached data (older than {cache_days} days).")
+                        res_json = expired
+                    else:
+                        return
 
             # Extract follower count from user_data if available
             if isinstance(res_json, dict):
@@ -1200,9 +1232,9 @@ def download_instagram_posts(
             print(f"  SCRAPING INSTAGRAM HASHTAG: {source_label}")
             
             cache_key = f"hashtag_{hashtag}"
-            cached = get_ig_cache(cache_key)
+            cached = get_ig_cache(cache_key, cache_days=cache_days)
             if cached:
-                print(f"  [CACHE HIT] Using cached data")
+                print(f"  [CACHE HIT] Using cached data (< {cache_days} days old)")
                 res_json = cached
             else:
                 params = urllib.parse.urlencode({"hashtag": hashtag})
@@ -1219,13 +1251,41 @@ def download_instagram_posts(
                 try:
                     with urllib.request.urlopen(req, timeout=45) as resp:
                         res_json = json.loads(resp.read().decode("utf-8"))
+                    # Check for quota error
                     if isinstance(res_json, dict) and "message" in res_json and "quota" in res_json.get("message", "").lower():
                         print(f"  [ERROR] API quota exceeded: {res_json['message']}")
+                        expired = get_ig_cache(cache_key, cache_days=cache_days, ignore_age=True)
+                        if expired:
+                            print(f"  [WARNING] Falling back to expired cached data (older than {cache_days} days).")
+                            res_json = expired
+                        else:
+                            return
+                    else:
+                        set_ig_cache(cache_key, res_json)
+                except urllib.error.HTTPError as e:
+                    print(f"  [ERROR] Scraping failed with HTTP {e.code}: {e.reason}")
+                    print("  Headers:")
+                    for k, v in e.headers.items():
+                        print(f"    {k}: {v}")
+                    try:
+                        body = e.read().decode("utf-8")
+                        print(f"  Response Body: {body}")
+                    except Exception:
+                        pass
+                    expired = get_ig_cache(cache_key, cache_days=cache_days, ignore_age=True)
+                    if expired:
+                        print(f"  [WARNING] Falling back to expired cached data (older than {cache_days} days).")
+                        res_json = expired
+                    else:
                         return
-                    set_ig_cache(cache_key, res_json)
                 except Exception as e:
                     print(f"  [ERROR] Scraping failed: {e}")
-                    return
+                    expired = get_ig_cache(cache_key, cache_days=cache_days, ignore_age=True)
+                    if expired:
+                        print(f"  [WARNING] Falling back to expired cached data (older than {cache_days} days).")
+                        res_json = expired
+                    else:
+                        return
 
         # Extract nodes from API response
         raw_nodes: list[dict[str, Any]] = []
@@ -1429,6 +1489,7 @@ if __name__ == "__main__":
     parser.add_argument("--min-likes", type=int, default=100, help="Minimum likes threshold (default: 100)")
     parser.add_argument("--max-images", type=int, default=5, help="Maximum images to download per source (default: 5)")
     parser.add_argument("--no-aesthetic-gate", action="store_true", help="Disable Gemini aesthetic scoring")
+    parser.add_argument("--ig-cache-days", type=int, default=7, help="Instagram cache maximum age in days (default: 7)")
     
     args = parser.parse_args()
 
@@ -1442,6 +1503,7 @@ if __name__ == "__main__":
             use_aesthetic_gate=not args.no_aesthetic_gate,
             seed_batch=args.ig_seed_batch,
             seed_category=args.ig_seed_category,
+            cache_days=args.ig_cache_days,
         )
 
     if args.briefs_only:

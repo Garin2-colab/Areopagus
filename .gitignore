@@ -19,3 +19,5 @@ data/
 # Second Brain — track notes, ignore binary dumps
 brain/images/
 brain/references/
+brain/ig/.cache/
+
