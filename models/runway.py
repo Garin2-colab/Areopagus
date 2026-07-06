@@ -278,10 +278,18 @@ class RunwayModel(BaseModel):
                 add_reference(prompt_img, "ReferenceImage")
                 add_reference(prompt_img, "AgentPrompt")
 
-        inspiration_id = None
+        inspiration_ids = []
         if prompt_json and isinstance(prompt_json, dict):
-            inspiration_id = prompt_json.get("inspiration_image_id")
-        if inspiration_id:
+            inspiration_ids = prompt_json.get("inspiration_image_ids") or []
+            if not isinstance(inspiration_ids, list):
+                inspiration_ids = [inspiration_ids] if isinstance(inspiration_ids, str) else []
+            single_id = prompt_json.get("inspiration_image_id")
+            if single_id and single_id not in inspiration_ids:
+                inspiration_ids.append(single_id)
+
+        for idx, inspiration_id in enumerate(inspiration_ids, 1):
+            if not inspiration_id:
+                continue
             target_url = None
             if history and isinstance(history.get("turns"), list):
                 for turn in history["turns"]:
@@ -299,7 +307,8 @@ class RunwayModel(BaseModel):
                         target_url = insp.get("image_url")
                         break
             if target_url:
-                add_reference(target_url, "InspirationRef")
+                tag = f"InspirationRef{idx}" if len(inspiration_ids) > 1 else "InspirationRef"
+                add_reference(target_url, tag)
 
         if isinstance(agent_refs, list):
             for index, reference in enumerate(agent_refs, start=1):

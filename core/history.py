@@ -559,23 +559,23 @@ def retrieve_from_brain(
     exclude_thread_id: str | None = None
 ) -> dict[str, Any]:
     """
-    Search history['brain'] and history['inspiration'] to find:
-    1. The best matching image-based reference (type='image', 'reference', or 'inspiration')
+    Search history['brain'], history['inspiration'], and history['turns'] to find:
+    1. The best matching image-based references (type='image', 'reference', 'inspiration', or 'turn')
     2. The best matching note-based reference (type='note')
     
     Returns a dict:
     {
-        "image": image_item_or_none,
+        "image": best_image_or_none,
+        "images": list_of_matching_images_sorted_by_relevance,
         "note": note_item_or_none
     }
     """
     if not history:
-        return {"image": None, "note": None}
+        return {"image": None, "images": [], "note": None}
 
     current_keywords_set = {k.lower().lstrip('#') for k in current_keywords}
     
-    best_image = None
-    best_image_score = 0
+    image_candidates = []
     best_note = None
     best_note_score = 0
 
@@ -617,9 +617,11 @@ def retrieve_from_brain(
                 best_note = item
         else:
             # image or reference
-            if score > best_image_score:
-                best_image_score = score
-                best_image = item
+            brain_copy = dict(item)
+            brain_copy["image_id"] = item["id"]
+            brain_copy["turn"] = "Brain"
+            brain_copy["proposal"] = item.get("summary", "Second Brain Reference")
+            image_candidates.append((score, brain_copy))
 
     # 2. Search user-uploaded inspiration images (history.get("inspiration", []))
     for insp in history.get("inspiration", []):
@@ -634,38 +636,54 @@ def retrieve_from_brain(
         # simulated higher default priority for legacy inspiration overlap
         score += 5 
         
-        if score > best_image_score:
-            best_image_score = score
-            # Map id to image_id, and turn to simulated values so caller parses cleanly
-            insp_copy = dict(insp)
-            insp_copy["image_id"] = insp["id"]
-            insp_copy["turn"] = "Inspiration"
-            insp_copy["proposal"] = "User Uploaded Inspiration"
-            best_image = insp_copy
-
-    # 3. Search historical turns for image references if no brain image matches
-    if not best_image:
-        best_turn = None
-        best_turn_score = 0
-        for turn in history.get("turns", []):
-            if not isinstance(turn, dict) or "image_id" not in turn:
-                continue
-            if exclude_thread_id and turn.get("thread_id") == exclude_thread_id:
-                continue
-                
-            score = 0
-            turn_keywords = {k.lower().lstrip('#') for k in turn.get("keywords", [])}
-            overlap = turn_keywords.intersection(current_keywords_set)
-            score += len(overlap) * 10
+        if score <= 0:
+            continue
             
-            if score > best_turn_score:
-                best_turn_score = score
-                best_turn = turn
-                
-        if best_turn:
-            best_image = best_turn
+        # Map id to image_id, and turn to simulated values so caller parses cleanly
+        insp_copy = dict(insp)
+        insp_copy["image_id"] = insp["id"]
+        insp_copy["turn"] = "Inspiration"
+        insp_copy["proposal"] = insp.get("summary", "User Uploaded Inspiration")
+        image_candidates.append((score, insp_copy))
 
-    return {"image": best_image, "note": best_note}
+    # 3. Search historical turns for image references
+    for turn in history.get("turns", []):
+        if not isinstance(turn, dict) or "image_id" not in turn:
+            continue
+        if exclude_thread_id and turn.get("thread_id") == exclude_thread_id:
+            continue
+            
+        score = 0
+        turn_keywords = {k.lower().lstrip('#') for k in turn.get("keywords", [])}
+        overlap = turn_keywords.intersection(current_keywords_set)
+        score += len(overlap) * 10
+        
+        if score <= 0:
+            continue
+            
+        image_candidates.append((score, turn))
+
+    # Deduplicate candidates by image_url and select top-scoring
+    unique_candidates = []
+    seen_urls = set()
+    seen_ids = set()
+    
+    # Sort candidates by score descending
+    image_candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    for score, item in image_candidates:
+        url = item.get("image_url")
+        item_id = item.get("image_id") or item.get("id")
+        if not url or url in seen_urls or (item_id and item_id in seen_ids):
+            continue
+        seen_urls.add(url)
+        if item_id:
+            seen_ids.add(item_id)
+        unique_candidates.append(item)
+
+    best_image = unique_candidates[0] if unique_candidates else None
+    
+    return {"image": best_image, "images": unique_candidates, "note": best_note}
 
 
 def read_heartbeat_state() -> dict[str, Any]:

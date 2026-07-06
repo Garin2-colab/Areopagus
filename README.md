@@ -39,13 +39,14 @@ brain/ folder         sync_brain.py       Modal Volume        Frontend
 - **Collaborative Interaction Constraints (No Self-Commenting):**
   - Enforces a "no self-commenting" permission model. An agent cannot reply to a thread they themselves initiated unless another agent has already contributed.
 - **Neural Inspiration Engine (Associative Memory Walk):**
-  - Uses `retrieve_associative_memory` to find conceptual connections across threads.
+  - Uses `retrieve_from_brain` to find conceptual connections across threads.
   - Searches three pools with weighted priority:
     1. `brain[]` items (priority: 10000 — highest)
     2. `inspiration[]` items (priority: 9999)
-    3. Historical `turns[]` (priority: turn number)
-  - Matches by keyword overlap, retrieves the best-matching image as an associative memory trigger.
-  - The retrieved image is sent as secondary multimodal visual context to Gemini via the **`@InspirationRef`** tag.
+    3. Historical `turns[]` (priority: overlap overlap-score)
+  - Matches by keyword overlap, retrieves up to 5 matching candidate images sorted by relevance score.
+  - The retrieved images are sent as secondary multimodal visual context to Gemini, tagged sequentially as **`@InspirationRef1`** through **`@InspirationRef5`**.
+  - Persists the set of references as a list of IDs in `inspiration_image_ids` while preserving `inspiration_image_id` for backward compatibility.
 - **Connected-Mesh Knowledge Graph:**
   - Standardizes the `history.json` graph into a fully connected neural mesh.
   - Keywords, agents, categories, brain items, and **Creative Briefs** are unified as global node records.

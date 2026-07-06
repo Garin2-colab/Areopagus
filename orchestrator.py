@@ -234,6 +234,7 @@ def record_generated_turn(
         "selected_turn": assessment.get("selected_turn"),
         "selected_image_id": assessment.get("selected_image_id", ""),
         "inspiration_image_id": prompt_json.get("inspiration_image_id"),
+        "inspiration_image_ids": prompt_json.get("inspiration_image_ids", []),
         "inspiration_note_id": prompt_json.get("inspiration_note_id"),
         "prompt_json": prompt_json,
         "prompt_text": prompt_text,

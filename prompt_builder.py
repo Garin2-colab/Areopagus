@@ -134,8 +134,7 @@ def build_initiate_prompt_json(
 
     # Walk graph to fetch inspiration memory
     extra_images = []
-    inspiration_image_id = None
-    inspiration_meta = None
+    recalled_images = []
     inspiration_note_id = None
     inspiration_note_meta = None
     if history:
@@ -155,20 +154,27 @@ def build_initiate_prompt_json(
 
         if recent_keywords:
             brain_result = retrieve_from_brain(history, recent_keywords)
-            image_memory = brain_result.get("image")
+            image_memories = brain_result.get("images") or []
             note_memory = brain_result.get("note")
 
-            if image_memory and image_memory.get("thread_id") not in recent_thread_ids:
-                inspiration_url = image_memory.get("image_url")
+            for img in image_memories:
+                if img.get("thread_id") in recent_thread_ids:
+                    continue
+                inspiration_url = img.get("image_url")
                 if inspiration_url:
                     try:
                         mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
                         extra_images.append((mem_bytes, mem_mime))
-                        inspiration_image_id = image_memory.get("image_id") or image_memory.get("id")
-                        inspiration_meta = image_memory
-                        print(f"[inspiration] Initiator recalled Image/Turn {image_memory.get('turn', 'Brain')} ({inspiration_image_id}) via keywords {image_memory.get('keywords')}", flush=True)
+                        img_id = img.get("image_id") or img.get("id")
+                        recalled_images.append({
+                            "id": img_id,
+                            "meta": img
+                        })
+                        print(f"[inspiration] Initiator recalled Image/Turn {img.get('turn', 'Brain')} ({img_id}) via keywords {img.get('keywords')}", flush=True)
+                        if len(recalled_images) >= 5:
+                            break
                     except Exception as e:
-                        print(f"[warning] Failed to fetch inspiration image for initiation: {e}", flush=True)
+                        print(f"[warning] Failed to fetch inspiration image {inspiration_url}: {e}", flush=True)
 
             if note_memory:
                 inspiration_note_id = note_memory.get("id")
@@ -192,15 +198,20 @@ You are drafting a brand-new Areopagus thread.
     if guidance:
         prompt += guidance
 
-    if inspiration_image_id and inspiration_meta:
+    if recalled_images:
+        prompt += "\nNOTE: Associative memories from the Knowledge Web have been recalled:\n"
+        for idx, item in enumerate(recalled_images, 1):
+            img_id = item["id"]
+            meta = item["meta"]
+            prompt += f"""- Recalled Image {idx}:
+  * Image ID: {img_id}
+  * Origin: {meta.get('turn', 'Brain')}
+  * Keywords: {meta.get('keywords', [])}
+  * Proposal: "{meta.get('proposal', '')}"
+  * Visual Tag: '@InspirationRef{idx}'
+"""
         prompt += f"""
-NOTE: An associative memory from the Knowledge Web has been recalled:
-- Inspiration Turn: Turn {inspiration_meta.get('turn')}
-- Inspiration Image ID: {inspiration_image_id}
-- Inspiration Keywords: {inspiration_meta.get('keywords')}
-- Inspiration Proposal: "{inspiration_meta.get('proposal')}"
-
-This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+These images are attached to your visual context with the tags '@InspirationRef1', '@InspirationRef2', etc. If you choose to blend their concepts, styles, or compositions, you must reference the specific tags (e.g. '@InspirationRef1') in your style or description fields, and you must set `"inspiration_image_ids"` in the returned JSON to be a JSON array containing the string IDs of the images you referenced (e.g. `["{recalled_images[0]['id']}"]`). Otherwise, set `"inspiration_image_ids": []`.
 """
 
     if inspiration_note_id and inspiration_note_meta:
@@ -269,7 +280,8 @@ Rules:
         prompt += rules_text
 
     prompt += f"""
-- inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
+- inspiration_image_ids: A JSON array of string IDs of the inspiration images you referenced (e.g., `["{recalled_images[0]['id'] if recalled_images else ''}"]`), or an empty array `[]`.
+- inspiration_image_id: Set this to the string ID of the first inspiration image you referenced (e.g., the first item in inspiration_image_ids), or null.
 - inspiration_note_id: Set this to the string ID of the inspiration note (e.g., "{inspiration_note_id or ''}") if you referenced it, or null.
 - The output should feel cinematic, architectural, ceremonial, and specific to the active agent persona.
 """
@@ -298,8 +310,16 @@ Rules:
         prompt_json["keywords"] = ["#areopagus", "#civic", "#ritual", "#studio", "#architecture"]
     prompt_json["keywords"] = dedupe_keywords(prompt_json["keywords"])
     prompt_json["turn"] = turn_number
-    if "inspiration_image_id" not in prompt_json:
-        prompt_json["inspiration_image_id"] = inspiration_image_id
+    # Process multi and single inspiration image key mapping
+    ids = prompt_json.get("inspiration_image_ids")
+    if ids is None:
+        single_id = prompt_json.get("inspiration_image_id")
+        ids = [single_id] if single_id else []
+    elif isinstance(ids, str):
+        ids = [ids]
+    prompt_json["inspiration_image_ids"] = ids
+    prompt_json["inspiration_image_id"] = ids[0] if ids else None
+
     if "inspiration_note_id" not in prompt_json:
         prompt_json["inspiration_note_id"] = inspiration_note_id
     return prompt_json
@@ -343,8 +363,7 @@ def build_pivot_prompt_json(
 
     # Walk graph to fetch inspiration memory based on selected_turn's keywords
     extra_images = []
-    inspiration_image_id = None
-    inspiration_meta = None
+    recalled_images = []
     inspiration_note_id = None
     inspiration_note_meta = None
     if history and selected_turn:
@@ -352,20 +371,27 @@ def build_pivot_prompt_json(
         exclude_thread_id = selected_turn.get("thread_id")
         if selected_keywords:
             brain_result = retrieve_from_brain(history, selected_keywords)
-            image_memory = brain_result.get("image")
+            image_memories = brain_result.get("images") or []
             note_memory = brain_result.get("note")
 
-            if image_memory and image_memory.get("thread_id") not in [exclude_thread_id]:
-                inspiration_url = image_memory.get("image_url")
+            for img in image_memories:
+                if img.get("thread_id") == exclude_thread_id:
+                    continue
+                inspiration_url = img.get("image_url")
                 if inspiration_url:
                     try:
                         mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
                         extra_images.append((mem_bytes, mem_mime))
-                        inspiration_image_id = image_memory.get("image_id") or image_memory.get("id")
-                        inspiration_meta = image_memory
-                        print(f"[inspiration] Pivot recalled Image/Turn {image_memory.get('turn', 'Brain')} ({inspiration_image_id}) via keywords {image_memory.get('keywords')}", flush=True)
+                        img_id = img.get("image_id") or img.get("id")
+                        recalled_images.append({
+                            "id": img_id,
+                            "meta": img
+                        })
+                        print(f"[inspiration] Pivot recalled Image/Turn {img.get('turn', 'Brain')} ({img_id}) via keywords {img.get('keywords')}", flush=True)
+                        if len(recalled_images) >= 5:
+                            break
                     except Exception as e:
-                        print(f"[warning] Failed to fetch inspiration image for pivot: {e}", flush=True)
+                        print(f"[warning] Failed to fetch inspiration image {inspiration_url}: {e}", flush=True)
 
             if note_memory:
                 inspiration_note_id = note_memory.get("id")
@@ -387,15 +413,20 @@ You are refining the most recent Areopagus prompt into a reply image.
 You are shown the actual generated image of the parent post (selected turn) in the multimodal context.
 """
 
-    if inspiration_image_id and inspiration_meta:
+    if recalled_images:
+        prompt += "\nNOTE: Associative memories from the Knowledge Web have been recalled:\n"
+        for idx, item in enumerate(recalled_images, 1):
+            img_id = item["id"]
+            meta = item["meta"]
+            prompt += f"""- Recalled Image {idx}:
+  * Image ID: {img_id}
+  * Origin: {meta.get('turn', 'Brain')}
+  * Keywords: {meta.get('keywords', [])}
+  * Proposal: "{meta.get('proposal', '')}"
+  * Visual Tag: '@InspirationRef{idx}'
+"""
         prompt += f"""
-NOTE: An associative memory from the Knowledge Web has been recalled:
-- Inspiration Turn: Turn {inspiration_meta.get('turn')}
-- Inspiration Image ID: {inspiration_image_id}
-- Inspiration Keywords: {inspiration_meta.get('keywords')}
-- Inspiration Proposal: "{inspiration_meta.get('proposal')}"
-
-This image is attached to your visual context with the tag '@InspirationRef'. If you choose to blend its concepts, styles, or compositions, you must reference '@InspirationRef' in your style or description fields, and you must set `"inspiration_image_id": "{inspiration_image_id}"` in the returned JSON. If you do not choose to reference it, set `"inspiration_image_id": null`.
+These images are attached to your visual context with the tags '@InspirationRef1', '@InspirationRef2', etc. If you choose to blend their concepts, styles, or compositions, you must reference the specific tags (e.g. '@InspirationRef1') in your style or description fields, and you must set `"inspiration_image_ids"` in the returned JSON to be a JSON array containing the string IDs of the images you referenced (e.g. `["{recalled_images[0]['id']}"]`). Otherwise, set `"inspiration_image_ids": []`.
 """
 
     if inspiration_note_id and inspiration_note_meta:
@@ -468,7 +499,8 @@ Rules:
         prompt += rules_text
 
     prompt += f"""
-- inspiration_image_id: Set this to the string ID of the inspiration image (e.g., "{inspiration_image_id or ''}") if you referenced it, or null.
+- inspiration_image_ids: A JSON array of string IDs of the inspiration images you referenced (e.g., `["{recalled_images[0]['id'] if recalled_images else ''}"]`), or an empty array `[]`.
+- inspiration_image_id: Set this to the string ID of the first inspiration image you referenced (e.g., the first item in inspiration_image_ids), or null.
 - inspiration_note_id: Set this to the string ID of the inspiration note (e.g., "{inspiration_note_id or ''}") if you referenced it, or null.
 - Return JSON only.
 """
@@ -492,8 +524,16 @@ Rules:
         prompt_json["keywords"] = ["#areopagus", "#reply", "#pivot", "#architecture", "#revision"]
     prompt_json["keywords"] = dedupe_keywords(prompt_json["keywords"])
     prompt_json["turn"] = turn_number
-    if "inspiration_image_id" not in prompt_json:
-        prompt_json["inspiration_image_id"] = inspiration_image_id
+    # Process multi and single inspiration image key mapping
+    ids = prompt_json.get("inspiration_image_ids")
+    if ids is None:
+        single_id = prompt_json.get("inspiration_image_id")
+        ids = [single_id] if single_id else []
+    elif isinstance(ids, str):
+        ids = [ids]
+    prompt_json["inspiration_image_ids"] = ids
+    prompt_json["inspiration_image_id"] = ids[0] if ids else None
+
     if "inspiration_note_id" not in prompt_json:
         prompt_json["inspiration_note_id"] = inspiration_note_id
     return prompt_json
