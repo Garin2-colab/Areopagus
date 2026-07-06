@@ -99,12 +99,48 @@ function getGraphImageUrl(url: string, format?: string) {
 // Maximum brain items to render in the graph to prevent D3 performance degradation
 const MAX_GRAPH_BRAIN_NODES = 200;
 
-function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: InspirationItem[] = [], brain: BrainItem[] = []) {
+function buildGraph(
+  turns: HistoryTurn[],
+  threads: Thread[] = [],
+  inspiration: InspirationItem[] = [],
+  brain: BrainItem[] = [],
+  filterUniqueKeywords: boolean = false
+) {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
   const keywordNodes = new Map<string, GraphNode>();
   const imageKeywords = new Map<string, string[]>();
 
+  const cappedBrain = brain.length > MAX_GRAPH_BRAIN_NODES
+    ? brain.slice(0, MAX_GRAPH_BRAIN_NODES)
+    : brain;
+
+  // 1. If filtering is enabled, count frequencies of each keyword across all source types
+  const keywordCounts = new Map<string, number>();
+  if (filterUniqueKeywords) {
+    for (const turn of turns) {
+      for (const keyword of turn.keywords) {
+        keywordCounts.set(keyword, (keywordCounts.get(keyword) || 0) + 1);
+      }
+    }
+    for (const item of inspiration) {
+      for (const keyword of item.keywords || []) {
+        keywordCounts.set(keyword, (keywordCounts.get(keyword) || 0) + 1);
+      }
+    }
+    for (const item of cappedBrain) {
+      for (const keyword of item.keywords || []) {
+        keywordCounts.set(keyword, (keywordCounts.get(keyword) || 0) + 1);
+      }
+    }
+  }
+
+  const shouldIncludeKeyword = (keyword: string) => {
+    if (!filterUniqueKeywords) return true;
+    return (keywordCounts.get(keyword) || 0) >= 2;
+  };
+
+  // 2. Process history turns
   for (const turn of turns) {
     const imageNode: GraphNode = {
       id: turn.image_id,
@@ -116,6 +152,8 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     nodes.push(imageNode);
 
     for (const keyword of turn.keywords) {
+      if (!shouldIncludeKeyword(keyword)) continue;
+
       if (!keywordNodes.has(keyword)) {
         const keywordNode: GraphNode = {
           id: keyword,
@@ -136,6 +174,7 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     imageKeywords.set(turn.image_id, [...turn.keywords]);
   }
 
+  // 3. Process inspiration items
   for (const item of inspiration) {
     const inspNode: GraphNode = {
       id: item.id,
@@ -146,6 +185,8 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     nodes.push(inspNode);
 
     for (const keyword of item.keywords || []) {
+      if (!shouldIncludeKeyword(keyword)) continue;
+
       if (!keywordNodes.has(keyword)) {
         const keywordNode: GraphNode = {
           id: keyword,
@@ -162,11 +203,7 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
 
-  // Brain items — cap at MAX_GRAPH_BRAIN_NODES to keep D3 responsive
-  const cappedBrain = brain.length > MAX_GRAPH_BRAIN_NODES
-    ? brain.slice(0, MAX_GRAPH_BRAIN_NODES)
-    : brain;
-
+  // 4. Process brain items
   for (const item of cappedBrain) {
     const brainNode: GraphNode = {
       id: item.id,
@@ -178,6 +215,8 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     nodes.push(brainNode);
 
     for (const keyword of item.keywords || []) {
+      if (!shouldIncludeKeyword(keyword)) continue;
+
       if (!keywordNodes.has(keyword)) {
         const keywordNode: GraphNode = {
           id: keyword,
@@ -191,8 +230,6 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
     }
     imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
-
-
 
   // Filter out links that reference non-existent nodes (e.g. deleted posts)
   const nodeIds = new Set(nodes.map((n) => n.id));
@@ -263,9 +300,11 @@ export function KnowledgeWeb({
     }
   };
   
+  const [filterUniqueKeywords, setFilterUniqueKeywords] = useState(true);
+
   const { nodes, links, imageKeywords } = useMemo(
-    () => buildGraph(turns, threads, inspiration, brain),
-    [turns, threads, inspiration, brain]
+    () => buildGraph(turns, threads, inspiration, brain, filterUniqueKeywords),
+    [turns, threads, inspiration, brain, filterUniqueKeywords]
   );
   
   const router = useRouter();
@@ -350,56 +389,52 @@ export function KnowledgeWeb({
 
     const fg = graphRef.current;
 
-    // ── Obsidian-style spread layout ──
-    // Goal: airy, well-distributed graph where image/brain hubs sit far
-    // apart with keyword spokes orbiting at comfortable distances.
-    // Tuned to fill the viewport at a comfortable zoom level.
+    // ── Organic spread layout ──
+    // Goal: relax the formation of hub images so they don't form a rigid core,
+    // and let keywords mingle in-between the hubs they describe.
+    // By bringing the charges closer together and using more uniform link distances,
+    // the graph topology naturally arranges nodes based on connectivity.
 
-    // 1. Charge: strong, long-range repulsion
-    //    Hubs push hard (−250) with NO distanceMax — every hub feels
-    //    every other hub. Keywords get mild repulsion (−25) so they
-    //    spread into an even halo instead of stacking.
+    // 1. Charge: moderate, balanced repulsion
+    //    Hubs repel at −100 (down from −250) so they don't blow keywords to the periphery.
+    //    Keywords repel at −50 (up from −25) so they spread cleanly in-between hubs.
     fg.d3Force("charge")
       ?.strength((node: any) => {
-        if (node.kind === "keyword" || node.kind === "comment") return -25;
-        return -250; // image / inspiration / brain
+        if (node.kind === "keyword" || node.kind === "comment") return -50;
+        return -100; // image / inspiration / brain
       })
       ?.distanceMax(800);
 
-    // 2. Links: type-aware distance & strength
-    //    keyword↔hub: moderate distance (50) + strong pull → clean orbit
-    //    hub↔hub (parent-child images): long (150) + soft → well-separated
+    // 2. Links: more uniform distance & strength
+    //    Allows keywords to sit comfortably in-between the hubs they connect.
     fg.d3Force("link")
       ?.distance((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 50 : 150;
+        return hasKeyword ? 75 : 100;
       })
       ?.strength((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 0.5 : 0.05;
+        return hasKeyword ? 0.4 : 0.1;
       });
 
-    // 3. Center: light — just prevents drift off-screen
+    // 3. Center: light centering
     fg.d3Force("center")
       ?.strength(0.03);
 
-    // 4. Gravity: gentle pull toward origin — keeps graph compact
-    //    enough to fill viewport without over-compressing
+    // 4. Gravity: gentle pull to prevent drifting
     fg.d3Force("x", forceX(0).strength(0.01));
     fg.d3Force("y", forceY(0).strength(0.01));
 
-    // 5. Collision: generous padding so circles never overlap
-    //    Hubs: visual radius ~18 + 20px gap = 38
-    //    Keywords: visual radius ~6 + 5px gap = 11
+    // 5. Collision: padding to prevent overlapping
     fg.d3Force("collide", forceCollide((node: any) => {
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 38;
+        return 32;
       }
-      return 11;
+      return 10;
     }).iterations(3));
 
     fg.d3ReheatSimulation?.();
@@ -598,7 +633,20 @@ export function KnowledgeWeb({
   return (
     <div className="rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-[#FAF9F6] active:cursor-grabbing">
-
+        {/* Floating Controls */}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <button
+            onClick={() => setFilterUniqueKeywords((prev) => !prev)}
+            className={cn(
+              "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 shadow-sm backdrop-blur-sm",
+              filterUniqueKeywords
+                ? "bg-[#D45113] border-[#D45113] text-white hover:bg-[#b0400e]"
+                : "bg-white/90 border-[#D8D4CC] text-[#252422] hover:bg-white"
+            )}
+          >
+            {filterUniqueKeywords ? "Showing Shared Keywords" : "Showing All Keywords"}
+          </button>
+        </div>
 
         {graphSize.width > 1 && graphSize.height > 1 ? (
           <ForceGraph2D
