@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Sparkles, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { forceX, forceY, forceCollide } from "d3-force";
 
 
@@ -311,11 +310,9 @@ export function KnowledgeWeb({
     }
   };
   
-  const [filterUniqueKeywords, setFilterUniqueKeywords] = useState(true);
-
   const { nodes, links, imageKeywords } = useMemo(
-    () => buildGraph(turns, threads, inspiration, brain, filterUniqueKeywords),
-    [turns, threads, inspiration, brain, filterUniqueKeywords]
+    () => buildGraph(turns, threads, inspiration, brain, false),
+    [turns, threads, inspiration, brain]
   );
   
   const router = useRouter();
@@ -400,52 +397,51 @@ export function KnowledgeWeb({
 
     const fg = graphRef.current;
 
-    // ── Organic spread layout ──
-    // Goal: relax the formation of hub images so they don't form a rigid core,
-    // and let keywords mingle in-between the hubs they describe.
-    // By bringing the charges closer together and using more uniform link distances,
-    // the graph topology naturally arranges nodes based on connectivity.
+    // ── Relaxed hub-cluster layout ──
+    // Goal: spread nodes into visible hub-image + surrounding-keyword groups.
+    // Strong repulsion pushes hubs apart; moderate link strength holds each
+    // hub's keywords in an orbit around it. Very light gravity keeps the
+    // whole graph loosely centred without collapsing it.
 
-    // 1. Charge: moderate, balanced repulsion
-    //    Hubs repel at −80 (down from −100) and keywords at −35 (down from −50) to reduce resistance.
-    //    We restrict distanceMax to 300 (down from 800) so far-apart components don't repel each other off-screen.
+    // 1. Charge: strong repulsion so hubs separate into distinct clusters.
+    //    distanceMax is generous so the repulsion field reaches neighbours.
     fg.d3Force("charge")
       ?.strength((node: any) => {
-        if (node.kind === "keyword" || node.kind === "comment") return -35;
-        return -80; // image / inspiration / brain
+        if (node.kind === "keyword" || node.kind === "comment") return -60;
+        return -200; // image / inspiration / brain
       })
-      ?.distanceMax(300);
+      ?.distanceMax(600);
 
-    // 2. Links: more uniform, slightly tighter distance & strength
-    //    Allows keywords to sit comfortably in-between the hubs they connect.
+    // 2. Links: longer resting length keeps keywords visibly orbiting hubs.
+    //    Keyword↔hub links are moderate-strength; hub↔hub links are weak.
     fg.d3Force("link")
       ?.distance((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 60 : 80;
+        return hasKeyword ? 100 : 160;
       })
       ?.strength((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 0.4 : 0.1;
+        return hasKeyword ? 0.25 : 0.05;
       });
 
-    // 3. Center: light centering
+    // 3. Center: very light — just prevent drift
     fg.d3Force("center")
-      ?.strength(0.03);
+      ?.strength(0.01);
 
-    // 4. Gravity: moderate pull (0.04) to prevent isolated nodes/components from drifting away
-    fg.d3Force("x", forceX(0).strength(0.04));
-    fg.d3Force("y", forceY(0).strength(0.04));
+    // 4. Gravity: very gentle pull keeps isolated components in view
+    fg.d3Force("x", forceX(0).strength(0.012));
+    fg.d3Force("y", forceY(0).strength(0.012));
 
-    // 5. Collision: slightly tighter padding to keep layout compact
+    // 5. Collision: generous padding so hubs and keywords don't overlap
     fg.d3Force("collide", forceCollide((node: any) => {
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 28;
+        return 36;
       }
-      return 8;
+      return 14;
     }).iterations(3));
 
     fg.d3ReheatSimulation?.();
@@ -644,20 +640,7 @@ export function KnowledgeWeb({
   return (
     <div className="rounded-2xl border border-[#D8D4CC]/60 bg-[#FAF9F6] shadow-sm shadow-[#252422]/5">
       <div ref={graphFrameRef} className="relative h-[72vh] min-h-[640px] cursor-grab bg-[#FAF9F6] active:cursor-grabbing">
-        {/* Floating Controls */}
-        <div className="absolute top-4 right-4 z-10 flex gap-2">
-          <button
-            onClick={() => setFilterUniqueKeywords((prev) => !prev)}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 shadow-sm backdrop-blur-sm",
-              filterUniqueKeywords
-                ? "bg-[#D45113] border-[#D45113] text-white hover:bg-[#b0400e]"
-                : "bg-white/90 border-[#D8D4CC] text-[#252422] hover:bg-white"
-            )}
-          >
-            {filterUniqueKeywords ? "Showing Shared Keywords" : "Showing All Keywords"}
-          </button>
-        </div>
+
 
         {graphSize.width > 1 && graphSize.height > 1 ? (
           <ForceGraph2D
@@ -897,10 +880,11 @@ export function KnowledgeWeb({
                             }
                           }}
                         >
-                          <div className={cn(
-                            "w-16 h-16 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] shadow-sm transition-all duration-300 hover:scale-110 hover:shadow-md hover:border-[#252422] flex items-center justify-center",
-                            img.kind === "inspiration" && "border-[#D45113]/55 hover:border-[#D45113]"
-                          )}>
+                          <div className={`w-16 h-16 rounded-full overflow-hidden border bg-[#FAF9F6] shadow-sm transition-all duration-300 hover:scale-110 hover:shadow-md flex items-center justify-center ${
+                            img.kind === "inspiration"
+                              ? "border-[#D45113]/55 hover:border-[#D45113]"
+                              : "border-[#D8D4CC] hover:border-[#252422]"
+                          }`}>
                             {!img.url ? (
                               <FileText className="h-6 w-6 text-[#858076]/50 stroke-[1.5]" />
                             ) : isTurnVideoUrl(img.url) ? (
