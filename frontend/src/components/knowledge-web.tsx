@@ -7,50 +7,30 @@ import { useRouter } from "next/navigation";
 import { forceX, forceY, forceCollide } from "d3-force";
 
 
-type GraphNode =
+type GraphNode = (
   | {
       id: string;
       kind: "image";
       turn: number;
       imageUrl: string;
       label: string;
-      x?: number;
-      y?: number;
-      fx?: number;
-      fy?: number;
-      val?: number;
     }
   | {
       id: string;
       kind: "keyword";
       label: string;
-      x?: number;
-      y?: number;
-      fx?: number;
-      fy?: number;
-      val?: number;
     }
   | {
       id: string;
       kind: "comment";
       label: string;
       text: string;
-      x?: number;
-      y?: number;
-      fx?: number;
-      fy?: number;
-      val?: number;
     }
   | {
       id: string;
       kind: "inspiration";
       imageUrl: string;
       label: string;
-      x?: number;
-      y?: number;
-      fx?: number;
-      fy?: number;
-      val?: number;
     }
   | {
       id: string;
@@ -58,12 +38,17 @@ type GraphNode =
       brainType: string;
       imageUrl: string;
       label: string;
-      x?: number;
-      y?: number;
-      fx?: number;
-      fy?: number;
-      val?: number;
-    };
+    }
+) & {
+  x?: number;
+  y?: number;
+  fx?: number;
+  fy?: number;
+  val?: number;
+  cluster?: string;
+  clusterX?: number;
+  clusterY?: number;
+};
 
 type GraphLink = {
   source: string;
@@ -93,6 +78,51 @@ function getGraphImageUrl(url: string, format?: string) {
     }
   }
   return url;
+}
+
+// ── Clustering setup ──
+// High-level thematic clusters mapped to distinct angular coordinates on a circle.
+// Nodes within these categories are pulled toward these target coordinate anchors.
+const CLUSTERS = [
+  { name: "fashion", keywords: ["fashion", "clothing", "apparel", "model", "style", "streetwear", "dress", "editorial", "ootd", "garment", "outfit", "runway", "wear", "fabric", "textile", "fashion design"], x: 300, y: 0 },
+  { name: "typography", keywords: ["typography", "type", "font", "layout", "lettering", "text", "word", "poster", "graphic design", "book", "editorial design", "logo", "title", "grunge type"], x: 150, y: 260 },
+  { name: "architecture", keywords: ["architecture", "building", "interior", "spatial", "facade", "house", "room", "architectural", "space", "render", "brutalist", "brutalis", "concrete", "wall", "ceiling", "floor", "structure"], x: -150, y: 260 },
+  { name: "product", keywords: ["product", "furniture", "industrial", "object", "chair", "table", "device", "design", "gadget", "lighting", "fixture", "lamp", "appliance", "product design"], x: -300, y: 0 },
+  { name: "cinematic", keywords: ["cinematic", "photography", "portrait", "lighting", "shot", "film", "scene", "mood", "dramatic", "cyberpunk", "distopian", "apocalyptic", "atmosphere", "gaze", "face", "look", "eyes"], x: -150, y: -260 },
+  { name: "graphic", keywords: ["graphic", "art", "illustration", "painting", "collage", "print", "vector", "drawing", "abstract", "colorist", "visual", "pattern", "artwork", "dada", "manifesto"], x: 150, y: -260 },
+];
+
+const DEFAULT_CLUSTER = { name: "general", x: 0, y: 0 };
+
+function getClusterForKeywords(keywords: string[]) {
+  const normKeywords = keywords.map(k => k.toLowerCase().replace(/#/g, "").trim());
+  let bestCluster = DEFAULT_CLUSTER;
+  let maxMatches = 0;
+
+  for (const cluster of CLUSTERS) {
+    let matches = 0;
+    for (const kw of normKeywords) {
+      if (cluster.keywords.some(ckw => kw.includes(ckw) || ckw.includes(kw))) {
+        matches++;
+      }
+    }
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      bestCluster = cluster;
+    }
+  }
+
+  return bestCluster;
+}
+
+function getClusterForKeywordNode(keyword: string) {
+  const normKeyword = keyword.toLowerCase().replace(/#/g, "").trim();
+  for (const cluster of CLUSTERS) {
+    if (cluster.keywords.some(ckw => normKeyword.includes(ckw) || ckw.includes(normKeyword))) {
+      return cluster;
+    }
+  }
+  return DEFAULT_CLUSTER;
 }
 
 // Maximum brain items to render in the graph to prevent D3 performance degradation
@@ -157,12 +187,16 @@ function buildGraph(
 
   // 1. Process history turns
   for (const turn of turns) {
+    const clusterInfo = getClusterForKeywords(turn.keywords);
     const imageNode: GraphNode = {
       id: turn.image_id,
       kind: "image",
       turn: turn.turn,
       imageUrl: getGraphImageUrl(turn.image_url, turn.image_webp?.format),
-      label: `Turn ${turn.turn}`
+      label: `Turn ${turn.turn}`,
+      cluster: clusterInfo.name,
+      clusterX: clusterInfo.x,
+      clusterY: clusterInfo.y
     };
     nodes.push(imageNode);
 
@@ -170,10 +204,14 @@ function buildGraph(
       if (!shouldIncludeKeyword(keyword)) continue;
 
       if (!keywordNodes.has(keyword)) {
+        const keywordCluster = getClusterForKeywordNode(keyword);
         const keywordNode: GraphNode = {
           id: keyword,
           kind: "keyword",
-          label: keyword
+          label: keyword,
+          cluster: keywordCluster.name,
+          clusterX: keywordCluster.x,
+          clusterY: keywordCluster.y
         };
         keywordNodes.set(keyword, keywordNode);
         nodes.push(keywordNode);
@@ -189,11 +227,15 @@ function buildGraph(
 
   // 2. Process inspiration items
   for (const item of inspiration) {
+    const clusterInfo = getClusterForKeywords(item.keywords || []);
     const inspNode: GraphNode = {
       id: item.id,
       kind: "inspiration",
       imageUrl: getGraphImageUrl(item.image_url),
-      label: `Inspiration`
+      label: `Inspiration`,
+      cluster: clusterInfo.name,
+      clusterX: clusterInfo.x,
+      clusterY: clusterInfo.y
     };
     nodes.push(inspNode);
 
@@ -201,10 +243,14 @@ function buildGraph(
       if (!shouldIncludeKeyword(keyword)) continue;
 
       if (!keywordNodes.has(keyword)) {
+        const keywordCluster = getClusterForKeywordNode(keyword);
         const keywordNode: GraphNode = {
           id: keyword,
           kind: "keyword",
-          label: keyword
+          label: keyword,
+          cluster: keywordCluster.name,
+          clusterX: keywordCluster.x,
+          clusterY: keywordCluster.y
         };
         keywordNodes.set(keyword, keywordNode);
         nodes.push(keywordNode);
@@ -216,12 +262,16 @@ function buildGraph(
 
   // 3. Process brain items
   for (const item of cappedBrain) {
+    const clusterInfo = getClusterForKeywords(item.keywords || []);
     const brainNode: GraphNode = {
       id: item.id,
       kind: "brain",
       brainType: item.type,
       imageUrl: item.image_url ? getGraphImageUrl(item.image_url) : "",
       label: item.title || "Brain",
+      cluster: clusterInfo.name,
+      clusterX: clusterInfo.x,
+      clusterY: clusterInfo.y
     };
     nodes.push(brainNode);
 
@@ -229,10 +279,14 @@ function buildGraph(
       if (!shouldIncludeKeyword(keyword)) continue;
 
       if (!keywordNodes.has(keyword)) {
+        const keywordCluster = getClusterForKeywordNode(keyword);
         const keywordNode: GraphNode = {
           id: keyword,
           kind: "keyword",
           label: keyword,
+          cluster: keywordCluster.name,
+          clusterX: keywordCluster.x,
+          clusterY: keywordCluster.y
         };
         keywordNodes.set(keyword, keywordNode);
         nodes.push(keywordNode);
@@ -432,9 +486,17 @@ export function KnowledgeWeb({
     fg.d3Force("center")
       ?.strength(0.01);
 
-    // 4. Gravity: very gentle pull keeps isolated components in view
-    fg.d3Force("x", forceX(0).strength(0.012));
-    fg.d3Force("y", forceY(0).strength(0.012));
+    // 4. Clustering / Gravity: pull nodes to their matching cluster coordinates.
+    //    Hubs get pulled firmly (0.08) to set up cluster regions, while keywords
+    //    get pulled very gently (0.015) so they float freely near their hub images.
+    fg.d3Force("x", forceX((node: any) => node.clusterX ?? 0).strength((node: any) => {
+      if (node.kind === "keyword" || node.kind === "comment") return 0.015;
+      return 0.08;
+    }));
+    fg.d3Force("y", forceY((node: any) => node.clusterY ?? 0).strength((node: any) => {
+      if (node.kind === "keyword" || node.kind === "comment") return 0.015;
+      return 0.08;
+    }));
 
     // 5. Collision: generous padding so hubs and keywords don't overlap
     fg.d3Force("collide", forceCollide((node: any) => {
