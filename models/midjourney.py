@@ -438,7 +438,7 @@ Return JSON only:
                         target_w = int(1080 * (cw / ch))
 
                     converted = cropped.convert("RGB").resize((target_w, target_h), Image.Resampling.LANCZOS)
-                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=4)
                     width, height = converted.size
 
                 try:

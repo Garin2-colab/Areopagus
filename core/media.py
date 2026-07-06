@@ -115,7 +115,7 @@ def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
             target_h = 1080
             target_w = int(1080 * (w / h))
         converted = source.convert("RGB").resize((target_w, target_h), Image.Resampling.LANCZOS)
-        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=4)
         width, height = converted.size
 
     # Try to resolve get_image URL dynamically to make the app portable

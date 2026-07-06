@@ -1,3 +1,5 @@
+import { modalAuthHeaders } from "./modal-auth";
+
 export type DebateContextEntry = {
   turn?: number;
   critique?: string;
@@ -179,7 +181,12 @@ export async function fetchHistory(
   const isClient = typeof window !== "undefined";
 
   let fetchUrl = source;
-  const init: RequestInit = {};
+  const init: RequestInit = {
+    headers: {
+      Accept: "application/json",
+      ...(fetchUrl.startsWith("http") ? modalAuthHeaders() : {})
+    }
+  };
 
   const queryParams = new URLSearchParams();
   if (isClient && bypassCache) {

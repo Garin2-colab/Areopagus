@@ -566,6 +566,12 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
         except Exception:
             pass
         raise exc
+    finally:
+        try:
+            from core.database import close_db
+            close_db()
+        except Exception:
+            pass
 
 
 @app.function(
@@ -580,89 +586,96 @@ def history_endpoint(request: Request) -> dict[str, Any]:
     auth_error = verify_api_key(request)
     if auth_error:
         return auth_error
-    reload_volume()
-    history = load_history()
-    
-    limit = int(request.query_params.get("limit", 0))
-    offset = int(request.query_params.get("offset", 0))
-    item_type = request.query_params.get("type", "")
-    search = request.query_params.get("search", "")
-    skip_brain = request.query_params.get("skip_brain", "").lower() == "true"
-    
-    if skip_brain:
-        # Lightweight mode: return total count but skip loading brain item data
-        try:
-            from core.database import get_db
-            db = get_db()
-            history["total_brain_items"] = db.brain_count()
-            history["brain_type_counts"] = db.get_brain_type_counts()
-        except Exception:
-            history["total_brain_items"] = len(history.get("brain", []))
-        history["brain"] = []
-        history["limit"] = 0
-        history["offset"] = 0
-    else:
-        # Use SQLite pagination if available (avoids loading all brain items into memory)
-        try:
-            from core.database import get_db
-            db = get_db()
-            brain_list, total_count = db.list_brain_items(
-                limit=limit, offset=offset, item_type=item_type, search=search
-            )
-            history["brain"] = brain_list
-            history["total_brain_items"] = total_count
-            history["brain_type_counts"] = db.get_brain_type_counts()
-            history["limit"] = limit
-            history["offset"] = offset
-        except Exception:
-            # Fallback to in-memory filtering
-            if "brain" in history and isinstance(history["brain"], list):
-                brain_list = history["brain"]
-                if item_type:
-                    req_type = "document" if item_type == "note" else item_type
-                    if req_type == "reference":
-                        brain_list = [
-                            item for item in brain_list
-                            if item.get("type") == "reference" or 
-                               (item.get("type") == "image" and (item.get("source_file") or "").startswith("references/"))
-                        ]
-                    elif req_type == "image":
-                        brain_list = [
-                            item for item in brain_list
-                            if item.get("type") == "image" and not (item.get("source_file") or "").startswith("references/")
-                        ]
-                    elif req_type == "document":
-                        brain_list = [
-                            item for item in brain_list
-                            if item.get("type") in ("document", "note") or (item.get("source_file") or "").startswith("documents/")
-                        ]
-                    else:
-                        brain_list = [item for item in brain_list if item.get("type") == req_type]
-                if search:
-                    q = search.lower()
-                    brain_list = [
-                        item for item in brain_list
-                        if q in item.get("title", "").lower() or
-                           q in item.get("summary", "").lower() or
-                           any(q in kw.lower() for kw in item.get("keywords", []))
-                    ]
-                total_count = len(brain_list)
-                if limit > 0:
-                    brain_list = brain_list[offset:offset+limit]
+    try:
+        reload_volume()
+        history = load_history()
+        
+        limit = int(request.query_params.get("limit", 0))
+        offset = int(request.query_params.get("offset", 0))
+        item_type = request.query_params.get("type", "")
+        search = request.query_params.get("search", "")
+        skip_brain = request.query_params.get("skip_brain", "").lower() == "true"
+        
+        if skip_brain:
+            # Lightweight mode: return total count but skip loading brain item data
+            try:
+                from core.database import get_db
+                db = get_db()
+                history["total_brain_items"] = db.brain_count()
+                history["brain_type_counts"] = db.get_brain_type_counts()
+            except Exception:
+                history["total_brain_items"] = len(history.get("brain", []))
+            history["brain"] = []
+            history["limit"] = 0
+            history["offset"] = 0
+        else:
+            # Use SQLite pagination if available (avoids loading all brain items into memory)
+            try:
+                from core.database import get_db
+                db = get_db()
+                brain_list, total_count = db.list_brain_items(
+                    limit=limit, offset=offset, item_type=item_type, search=search
+                )
                 history["brain"] = brain_list
                 history["total_brain_items"] = total_count
+                history["brain_type_counts"] = db.get_brain_type_counts()
                 history["limit"] = limit
                 history["offset"] = offset
-    
-    # Exclude massive arrays to keep pagination response light and fast
-    if limit > 0 or offset > 0 or item_type or search:
-        history["turns"] = []
-        history["threads"] = []
-        history["inspiration"] = []
-        history["briefs"] = []
-        history["graph"] = {"nodes": [], "edges": []}
+            except Exception:
+                # Fallback to in-memory filtering
+                if "brain" in history and isinstance(history["brain"], list):
+                    brain_list = history["brain"]
+                    if item_type:
+                        req_type = "document" if item_type == "note" else item_type
+                        if req_type == "reference":
+                            brain_list = [
+                                item for item in brain_list
+                                if item.get("type") == "reference" or 
+                                   (item.get("type") == "image" and (item.get("source_file") or "").startswith("references/"))
+                            ]
+                        elif req_type == "image":
+                            brain_list = [
+                                item for item in brain_list
+                                if item.get("type") == "image" and not (item.get("source_file") or "").startswith("references/")
+                            ]
+                        elif req_type == "document":
+                            brain_list = [
+                                item for item in brain_list
+                                if item.get("type") in ("document", "note") or (item.get("source_file") or "").startswith("documents/")
+                            ]
+                        else:
+                            brain_list = [item for item in brain_list if item.get("type") == req_type]
+                    if search:
+                        q = search.lower()
+                        brain_list = [
+                            item for item in brain_list
+                            if q in item.get("title", "").lower() or
+                               q in item.get("summary", "").lower() or
+                               any(q in kw.lower() for kw in item.get("keywords", []))
+                        ]
+                    total_count = len(brain_list)
+                    if limit > 0:
+                        brain_list = brain_list[offset:offset+limit]
+                    history["brain"] = brain_list
+                    history["total_brain_items"] = total_count
+                    history["limit"] = limit
+                    history["offset"] = offset
         
-    return history
+        # Exclude massive arrays to keep pagination response light and fast
+        if limit > 0 or offset > 0 or item_type or search:
+            history["turns"] = []
+            history["threads"] = []
+            history["inspiration"] = []
+            history["briefs"] = []
+            history["graph"] = {"nodes": [], "edges": []}
+            
+        return history
+    finally:
+        try:
+            from core.database import close_db
+            close_db()
+        except Exception:
+            pass
 
 
 @app.function(
@@ -677,11 +690,18 @@ def status_endpoint(request: Request) -> dict[str, Any]:
     auth_error = verify_api_key(request)
     if auth_error:
         return auth_error
-    reload_volume()
-    if not STUDIO_STATUS_PATH.exists():
-        return update_studio_status("Studio Reset. Ready for a new era.", active=False)
-    with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+    try:
+        reload_volume()
+        if not STUDIO_STATUS_PATH.exists():
+            return update_studio_status("Studio Reset. Ready for a new era.", active=False)
+        with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    finally:
+        try:
+            from core.database import close_db
+            close_db()
+        except Exception:
+            pass
 
 
 @app.function(
@@ -704,6 +724,17 @@ def get_image():
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @get_image_api.middleware("http")
+    async def db_cleanup_middleware(request, call_next):
+        try:
+            return await call_next(request)
+        finally:
+            try:
+                from core.database import close_db
+                close_db()
+            except Exception:
+                pass
 
     def handle_get_image(image_id: str, ext: str = None, format: str = None) -> Any:
         reload_volume()
@@ -813,6 +844,17 @@ def mutate_history_endpoint():
             return StarletteJSONResponse(content=auth_error, status_code=401)
         return await call_next(request)
 
+    @mutate_api.middleware("http")
+    async def db_cleanup_middleware(request, call_next):
+        try:
+            return await call_next(request)
+        finally:
+            try:
+                from core.database import close_db
+                close_db()
+            except Exception:
+                pass
+
     @mutate_api.post("/")
     def handle_mutate(payload: dict[str, Any]) -> dict[str, Any]:
         import base64
@@ -907,7 +949,7 @@ def mutate_history_endpoint():
                             converted = background.convert("RGB")
                         else:
                             converted = img.convert("RGB")
-                        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=4)
                         width, height = converted.size
                     file_size = webp_path.stat().st_size
 
@@ -1050,7 +1092,7 @@ def mutate_history_endpoint():
                         converted = background.convert("RGB")
                     else:
                         converted = img.convert("RGB")
-                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                    converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=4)
 
                 try:
                     web_url = get_image.get_web_url()
@@ -1165,7 +1207,7 @@ def mutate_history_endpoint():
                             converted = background.convert("RGB")
                         else:
                             converted = img.convert("RGB")
-                        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=6)
+                        converted.save(webp_path, "WEBP", quality=WEBP_QUALITY, method=4)
 
                     try:
                         web_url = get_image.get_web_url()

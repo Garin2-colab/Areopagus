@@ -111,6 +111,14 @@ def get_areopagus_api_key() -> str:
                 if line.startswith("AREOPAGUS_API_KEY="):
                     key = line.split("=", 1)[1].strip().strip('"').strip("'")
                     break
+    if not key:
+        env_path = Path(__file__).resolve().parent / "frontend" / ".env.local"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("AREOPAGUS_API_KEY="):
+                    key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
     return key
 
 
@@ -670,8 +678,8 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             with counter_lock:
                 errors += 1
 
-    # ThreadPoolExecutor to run tasks concurrently (max_workers=3)
-    max_workers = 3
+    # ThreadPoolExecutor to run tasks sequentially to avoid sqlite locking and volume commit contentions
+    max_workers = 1
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_entry, entry) for entry in to_process]
         for future in as_completed(futures):
@@ -711,9 +719,14 @@ def fetch_history_for_synthesis() -> dict[str, Any]:
         print("  [briefs] WARNING: MODAL_API_URL not found, skipping synthesis.")
         return {}
 
+    headers = {"Accept": "application/json"}
+    key = get_areopagus_api_key()
+    if key:
+        headers["X-API-Key"] = key
+
     req = urllib.request.Request(
         url=api_url,
-        headers={"Accept": "application/json"},
+        headers=headers,
         method="GET",
     )
     try:
@@ -860,10 +873,15 @@ def upload_brief_to_modal(brief_id: str, synthesis: dict[str, Any], source_ids: 
         "keywords": synthesis.get("keywords", []),
     }
 
+    headers = {"Content-Type": "application/json"}
+    key = get_areopagus_api_key()
+    if key:
+        headers["X-API-Key"] = key
+
     req = urllib.request.Request(
         url=mutate_url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 

@@ -184,7 +184,7 @@ class AreopagusDB:
         self.db_path = str(db_path)
         self.conn = sqlite3.connect(self.db_path, timeout=30)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA journal_mode=TRUNCATE")
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(_SCHEMA_SQL)
@@ -578,62 +578,63 @@ class AreopagusDB:
 # ── Migration: history.json → SQLite ─────────────────────────────────────────
 
 
-def migrate_json_to_sqlite(json_path: str | Path, db_path: str | Path = DB_PATH) -> AreopagusDB:
+def migrate_json_to_sqlite(json_path: str | Path, db_path: str | Path = DB_PATH) -> None:
     """One-time migration: read history.json and insert all data into SQLite."""
     json_path = Path(json_path)
-    if not json_path.exists():
-        print(f"[migrate] No history.json found at {json_path}. Creating empty DB.")
-        return AreopagusDB(db_path)
-
-    with json_path.open("r", encoding="utf-8") as f:
-        history = json.load(f)
-
     db = AreopagusDB(db_path)
+    try:
+        if not json_path.exists():
+            print(f"[migrate] No history.json found at {json_path}. Creating empty DB.")
+            return
 
-    # Meta
-    db.set_meta("project", history.get("project", "Areopagus"))
-    db.set_meta("created_at", history.get("created_at", ""))
-    db.set_meta("updated_at", history.get("updated_at", ""))
+        with json_path.open("r", encoding="utf-8") as f:
+            history = json.load(f)
 
-    # Turns
-    for turn in history.get("turns", []):
-        if isinstance(turn, dict):
-            db.insert_turn(turn)
-    print(f"[migrate] Imported {db.turn_count()} turns.")
+        # Meta
+        db.set_meta("project", history.get("project", "Areopagus"))
+        db.set_meta("created_at", history.get("created_at", ""))
+        db.set_meta("updated_at", history.get("updated_at", ""))
 
-    # Threads
-    for thread in history.get("threads", []):
-        if isinstance(thread, dict) and "thread_id" in thread:
-            db.upsert_thread(thread)
-    print(f"[migrate] Imported {len(history.get('threads', []))} threads.")
+        # Turns
+        for turn in history.get("turns", []):
+            if isinstance(turn, dict):
+                db.insert_turn(turn)
+        print(f"[migrate] Imported {db.turn_count()} turns.")
 
-    # Brain items
-    for item in history.get("brain", []):
-        if isinstance(item, dict) and "id" in item:
-            db.upsert_brain_item(item)
-    print(f"[migrate] Imported {db.brain_count()} brain items.")
+        # Threads
+        for thread in history.get("threads", []):
+            if isinstance(thread, dict) and "thread_id" in thread:
+                db.upsert_thread(thread)
+        print(f"[migrate] Imported {len(history.get('threads', []))} threads.")
 
-    # Briefs
-    for brief in history.get("briefs", []):
-        if isinstance(brief, dict) and "brief_id" in brief:
-            db.upsert_brief(brief)
-    print(f"[migrate] Imported {len(history.get('briefs', []))} briefs.")
+        # Brain items
+        for item in history.get("brain", []):
+            if isinstance(item, dict) and "id" in item:
+                db.upsert_brain_item(item)
+        print(f"[migrate] Imported {db.brain_count()} brain items.")
 
-    # Inspiration
-    for item in history.get("inspiration", []):
-        if isinstance(item, dict) and "id" in item:
-            db.upsert_inspiration(item)
-    print(f"[migrate] Imported {len(history.get('inspiration', []))} inspiration items.")
+        # Briefs
+        for brief in history.get("briefs", []):
+            if isinstance(brief, dict) and "brief_id" in brief:
+                db.upsert_brief(brief)
+        print(f"[migrate] Imported {len(history.get('briefs', []))} briefs.")
 
-    # Graph
-    graph = history.get("graph", {})
-    nodes = graph.get("nodes", [])
-    edges = graph.get("edges", [])
-    db.batch_insert_graph(nodes, edges)
-    print(f"[migrate] Imported {len(nodes)} graph nodes, {len(edges)} graph edges.")
+        # Inspiration
+        for item in history.get("inspiration", []):
+            if isinstance(item, dict) and "id" in item:
+                db.upsert_inspiration(item)
+        print(f"[migrate] Imported {len(history.get('inspiration', []))} inspiration items.")
 
-    print(f"[migrate] Migration complete -> {db_path}")
-    return db
+        # Graph
+        graph = history.get("graph", {})
+        nodes = graph.get("nodes", [])
+        edges = graph.get("edges", [])
+        db.batch_insert_graph(nodes, edges)
+        print(f"[migrate] Imported {len(nodes)} graph nodes, {len(edges)} graph edges.")
+
+        print(f"[migrate] Migration complete -> {db_path}")
+    finally:
+        db.close()
 
 
 # ── Singleton accessor ────────────────────────────────────────────────────────
@@ -658,4 +659,6 @@ def close_db() -> None:
         except Exception:
             pass
         _db_instance = None
+    import gc
+    gc.collect()
 

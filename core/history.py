@@ -24,16 +24,19 @@ from core.utils import (
 from core.gemini import gemini_generate
 from core.graph import rebuild_history_graph
 from core.types import HistoryData
-from core.database import AreopagusDB, get_db, migrate_json_to_sqlite
+from core.database import AreopagusDB, get_db, migrate_json_to_sqlite, close_db
 
 
 def _commit_volume() -> None:
-    """Best-effort Modal volume commit."""
-    try:
-        from orchestrator import data_volume
-        data_volume.commit()
-    except Exception:
-        pass
+    """Best-effort Modal volume commit in a background thread to avoid blocking requests."""
+    import threading
+    def worker():
+        try:
+            from orchestrator import data_volume
+            data_volume.commit()
+        except Exception:
+            pass
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def _deduplicate_history_brain_items(history: dict[str, Any]) -> None:
@@ -82,7 +85,15 @@ def load_history() -> HistoryData:
             _deduplicate_history_brain_items(history)
             return history
         except Exception as exc:
-            print(f"[load_history] WARNING: SQLite read failed ({exc}), falling back to JSON.", flush=True)
+            print(f"[load_history] WARNING: SQLite read failed ({exc}). Deleting malformed database to trigger automatic rebuild.", flush=True)
+            try:
+                close_db()
+                for suffix in ("", "-wal", "-shm"):
+                    p = DB_PATH.parent / (DB_PATH.name + suffix)
+                    if p.exists():
+                        p.unlink()
+            except Exception as e:
+                print(f"[load_history] Failed to delete malformed database: {e}", flush=True)
 
     # ── JSON path (legacy / first-run migration) ────────────────────────
     history = None
