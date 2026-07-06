@@ -254,8 +254,15 @@ class AreopagusDB:
 
         if item_type:
             req_type = "document" if item_type == "note" else item_type
-            where_clauses.append("type=?")
-            params.append(req_type)
+            if req_type == "reference":
+                where_clauses.append("(type = 'reference' OR (type = 'image' AND source_file LIKE 'references/%'))")
+            elif req_type == "image":
+                where_clauses.append("(type = 'image' AND (source_file IS NULL OR source_file NOT LIKE 'references/%'))")
+            elif req_type == "document":
+                where_clauses.append("(type IN ('document', 'note') OR source_file LIKE 'documents/%')")
+            else:
+                where_clauses.append("type = ?")
+                params.append(req_type)
 
         if search:
             # Use FTS5 for fast keyword/title/summary search
@@ -280,6 +287,24 @@ class AreopagusDB:
 
         rows = self.conn.execute(query, params).fetchall()
         return [self._brain_row_to_dict(r) for r in rows], total
+
+    def get_brain_type_counts(self) -> dict[str, int]:
+        """Return the total counts of brain items grouped by resolved category."""
+        cur = self.conn.execute("""
+            SELECT 
+                SUM(CASE WHEN type = 'reference' OR (type = 'image' AND source_file LIKE 'references/%') THEN 1 ELSE 0 END) as reference_count,
+                SUM(CASE WHEN type = 'image' AND (source_file IS NULL OR source_file NOT LIKE 'references/%') THEN 1 ELSE 0 END) as image_count,
+                SUM(CASE WHEN type IN ('document', 'note') OR source_file LIKE 'documents/%' THEN 1 ELSE 0 END) as document_count
+            FROM brain_items
+        """)
+        row = cur.fetchone()
+        if not row:
+            return {"image": 0, "document": 0, "reference": 0}
+        return {
+            "reference": row[0] or 0,
+            "image": row[1] or 0,
+            "document": row[2] or 0
+        }
 
     def search_brain_keywords(self, keywords: list[str], limit: int = 5) -> list[dict[str, Any]]:
         """FTS5 keyword search for associative memory retrieval."""

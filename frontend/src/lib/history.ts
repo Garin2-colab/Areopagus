@@ -122,6 +122,11 @@ export type HistoryData = {
     edges?: Array<Record<string, unknown>>;
   };
   total_brain_items?: number;
+  brain_type_counts?: {
+    image: number;
+    document: number;
+    reference: number;
+  };
   limit?: number;
   offset?: number;
 };

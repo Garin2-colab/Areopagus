@@ -73,6 +73,7 @@ def load_history() -> HistoryData:
             # Brain items are loaded separately (full list for in-memory callers)
             brain_items, _ = db.list_brain_items()
             history["brain"] = brain_items
+            history["brain_type_counts"] = db.get_brain_type_counts()
             history.setdefault("turns", [])
             history.setdefault("threads", [])
             history.setdefault("graph", {"nodes": [], "edges": []})
@@ -164,6 +165,20 @@ def load_history() -> HistoryData:
         _commit_volume()
 
     _deduplicate_history_brain_items(history)
+
+    # Calculate brain type counts for fallback
+    counts = {"image": 0, "document": 0, "reference": 0}
+    for item in history.get("brain", []):
+        itype = item.get("type", "")
+        src = item.get("source_file", "") or ""
+        if itype == "reference" or (itype == "image" and src.startswith("references/")):
+            counts["reference"] += 1
+        elif itype == "image" and not src.startswith("references/"):
+            counts["image"] += 1
+        elif itype in ("document", "note") or src.startswith("documents/"):
+            counts["document"] += 1
+    history["brain_type_counts"] = counts
+
     return history
 
 

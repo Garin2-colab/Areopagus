@@ -594,6 +594,7 @@ def history_endpoint(request: Request) -> dict[str, Any]:
             from core.database import get_db
             db = get_db()
             history["total_brain_items"] = db.brain_count()
+            history["brain_type_counts"] = db.get_brain_type_counts()
         except Exception:
             history["total_brain_items"] = len(history.get("brain", []))
         history["brain"] = []
@@ -609,6 +610,7 @@ def history_endpoint(request: Request) -> dict[str, Any]:
             )
             history["brain"] = brain_list
             history["total_brain_items"] = total_count
+            history["brain_type_counts"] = db.get_brain_type_counts()
             history["limit"] = limit
             history["offset"] = offset
         except Exception:
@@ -617,7 +619,24 @@ def history_endpoint(request: Request) -> dict[str, Any]:
                 brain_list = history["brain"]
                 if item_type:
                     req_type = "document" if item_type == "note" else item_type
-                    brain_list = [item for item in brain_list if item.get("type") == req_type]
+                    if req_type == "reference":
+                        brain_list = [
+                            item for item in brain_list
+                            if item.get("type") == "reference" or 
+                               (item.get("type") == "image" and (item.get("source_file") or "").startswith("references/"))
+                        ]
+                    elif req_type == "image":
+                        brain_list = [
+                            item for item in brain_list
+                            if item.get("type") == "image" and not (item.get("source_file") or "").startswith("references/")
+                        ]
+                    elif req_type == "document":
+                        brain_list = [
+                            item for item in brain_list
+                            if item.get("type") in ("document", "note") or (item.get("source_file") or "").startswith("documents/")
+                        ]
+                    else:
+                        brain_list = [item for item in brain_list if item.get("type") == req_type]
                 if search:
                     q = search.lower()
                     brain_list = [
