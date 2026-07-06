@@ -41,18 +41,18 @@ export async function POST() {
     const history = await historyRes.json();
 
     // Collect all items with images (inspiration + brain)
-    type SyncItem = { id: string; image_url: string; keywords?: string[] };
+    type SyncItem = { id: string; image_url: string; source_file?: string; keywords?: string[] };
     const items: SyncItem[] = [];
 
     for (const insp of history.inspiration || []) {
       if (insp.image_url) {
-        items.push({ id: insp.id, image_url: insp.image_url, keywords: insp.keywords });
+        items.push({ id: insp.id, image_url: insp.image_url, source_file: insp.source_file, keywords: insp.keywords });
       }
     }
 
     for (const brain of history.brain || []) {
       if (brain.image_url) {
-        items.push({ id: brain.id, image_url: brain.image_url, keywords: brain.keywords });
+        items.push({ id: brain.id, image_url: brain.image_url, source_file: brain.source_file, keywords: brain.keywords });
       }
     }
 
@@ -62,10 +62,21 @@ export async function POST() {
     const errors: string[] = [];
 
     for (const item of items) {
-      // Determine file extension from URL or default to .webp
-      const ext = ".webp";
-      const filename = `${item.id}${ext}`;
-      const filepath = path.join(referencesDir, filename);
+      let filepath: string;
+      if (item.source_file) {
+        const relativePath = item.source_file.replace(/\\/g, "/");
+        filepath = path.join(projectRoot, "brain", ...relativePath.split("/"));
+      } else {
+        const ext = ".webp";
+        const filename = `${item.id}${ext}`;
+        filepath = path.join(referencesDir, filename);
+      }
+
+      // Ensure the parent directory exists
+      const parentDir = path.dirname(filepath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
 
       // Skip if already exists locally
       if (fs.existsSync(filepath)) {

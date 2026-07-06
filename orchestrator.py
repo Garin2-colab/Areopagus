@@ -76,6 +76,17 @@ from core import (
 app = modal.App(APP_NAME)
 data_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
+
+def reload_volume() -> None:
+    """Close active SQLite connection before reloading the Modal volume to prevent locking."""
+    try:
+        from core.database import close_db
+        close_db()
+    except Exception:
+        pass
+    data_volume.reload()
+
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
@@ -568,7 +579,7 @@ def history_endpoint(request: Request) -> dict[str, Any]:
     auth_error = verify_api_key(request)
     if auth_error:
         return auth_error
-    data_volume.reload()
+    reload_volume()
     history = load_history()
     
     limit = int(request.query_params.get("limit", 0))
@@ -646,7 +657,7 @@ def status_endpoint(request: Request) -> dict[str, Any]:
     auth_error = verify_api_key(request)
     if auth_error:
         return auth_error
-    data_volume.reload()
+    reload_volume()
     if not STUDIO_STATUS_PATH.exists():
         return update_studio_status("Studio Reset. Ready for a new era.", active=False)
     with STUDIO_STATUS_PATH.open("r", encoding="utf-8") as fh:
@@ -675,7 +686,7 @@ def get_image():
     )
 
     def handle_get_image(image_id: str, ext: str = None, format: str = None) -> Any:
-        data_volume.reload()
+        reload_volume()
         
         if not image_id:
             return JSONResponse(content={"error": "Missing id parameter"}, status_code=400)
@@ -792,7 +803,7 @@ def mutate_history_endpoint():
         if not action:
             return {"ok": False, "error": "Missing action parameter."}
 
-        data_volume.reload()
+        reload_volume()
 
         try:
             if action == "save":
@@ -1479,7 +1490,7 @@ def pulse_endpoint(request: Request, payload: dict[str, Any]) -> dict[str, Any]:
 )
 def heartbeat_cron() -> None:
     """Automatic pulse triggered by cron. Respects the heartbeat frequency setting."""
-    data_volume.reload()
+    reload_volume()
 
     agents_config = load_agents_config(commit_callback=data_volume.commit)
     freq = max_heartbeat_frequency(agents_config)

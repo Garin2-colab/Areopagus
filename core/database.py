@@ -622,3 +622,15 @@ def get_db(db_path: str | Path = DB_PATH) -> AreopagusDB:
     if _db_instance is None:
         _db_instance = AreopagusDB(db_path)
     return _db_instance
+
+
+def close_db() -> None:
+    """Close the global DB connection and reset singleton instance."""
+    global _db_instance
+    if _db_instance is not None:
+        try:
+            _db_instance.close()
+        except Exception:
+            pass
+        _db_instance = None
+
