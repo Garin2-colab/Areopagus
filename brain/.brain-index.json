@@ -6,160 +6,160 @@
       "brain_id": "brain_1781861346_7eaed9",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:05:40.954887+00:00",
+      "synced_at": "2026-07-06T01:06:47.564939+00:00",
       "hash": "sha256:8c1a6528997544f91ceb747770141a3a06d40fd427551d4012e6237fcb898234",
-      "title": "Deconstructed Type Layers"
+      "title": "Deconstructed Type, Layered Message"
     },
     {
       "local_path": "references/carson_reference_02.jpg",
       "brain_id": "brain_1781861357_a68b91",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:05:50.935105+00:00",
+      "synced_at": "2026-07-06T01:06:52.173649+00:00",
       "hash": "sha256:e08e01af5c308b5d9af4c08c75469f52c0bd231aae35a0eb1d17d6b59dcffcce",
-      "title": "Blur-Shaped Blah Gaze"
+      "title": "Grunge Type, Piercing Gaze"
     },
     {
       "local_path": "references/cho_reference_01.webp",
       "brain_id": "brain_1781861367_3e8b1a",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:06:06.815228+00:00",
+      "synced_at": "2026-07-06T01:06:54.396077+00:00",
       "hash": "sha256:034db206e87623d720105d94cc8414fd422699dbe98db9422b0f713628bdd90c",
-      "title": "Crimson Flush, Purple Tongue"
+      "title": "Crimson Blush, Purple Sweet"
     },
     {
       "local_path": "references/cho_reference_02.webp",
       "brain_id": "brain_1781861378_ad408b",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:06:17.167604+00:00",
+      "synced_at": "2026-07-06T01:06:55.501545+00:00",
       "hash": "sha256:9e7632f18b46895f6d0059557a72bb8fe029cd28b45a1e5ac0cb8dcc7bf5910b",
-      "title": "Marine Crown, Youthful Gaze"
+      "title": "Marine Circle, Youthful Gaze"
     },
     {
       "local_path": "references/cho_reference_03.webp",
       "brain_id": "brain_1781861388_deff3e",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:06:32.331680+00:00",
+      "synced_at": "2026-07-06T01:07:00.175030+00:00",
       "hash": "sha256:41c649a0cbdff7982dd450016f8e666cf77c8a27920087377660058c0b40dc96",
-      "title": "Botanical Mask, Ethereal Bloom"
+      "title": "Floral Mask's Delicate Embrace"
     },
     {
       "local_path": "references/cooper_reference_01.jpg",
       "brain_id": "brain_1781861398_3166bd",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:06:40.204297+00:00",
+      "synced_at": "2026-07-06T01:07:02.404175+00:00",
       "hash": "sha256:2eb0757c656b3b59d3d3c46cef3bb74e0f7377f0460d7038daa2b7f05cd8030d",
-      "title": "Distorted Seven Echoes"
+      "title": "Fragmented Seven Echoes"
     },
     {
       "local_path": "references/cooper_reference_02.jpg",
       "brain_id": "brain_1781861409_51a2e5",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:06:48.168937+00:00",
+      "synced_at": "2026-07-06T01:07:04.360313+00:00",
       "hash": "sha256:9ce3b6568bb32bfd6d3d22e0e2c646ca116923ad7e5a5cdc3b78091f90b05d6f",
-      "title": "Scratched Truths, Faded Pages"
+      "title": "Scratched Truths, Dark Pages"
     },
     {
       "local_path": "references/insp_1779532969.webp",
       "brain_id": "brain_1781861419_8b875f",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:06:56.738068+00:00",
+      "synced_at": "2026-07-06T01:07:10.106309+00:00",
       "hash": "sha256:615a6b8f58782a5a494adb73e7e089b9aadb1ae7c9a6a501c63a433803ba78ea",
-      "title": "Crystalline Network Vision"
+      "title": "Luminescent Network Metropolis"
     },
     {
       "local_path": "references/insp_1779534458.webp",
       "brain_id": "brain_1781861430_f72e3d",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:07:04.945302+00:00",
+      "synced_at": "2026-07-06T01:07:09.932084+00:00",
       "hash": "sha256:2a615a3a91fce6f44782e80747cd85da657e6d728b74f74f991b9a0bbdd0ecd0",
-      "title": "Red Embrace, Blue Bow"
+      "title": "Warmth in Bold Hues"
     },
     {
       "local_path": "references/insp_1779534569.webp",
       "brain_id": "brain_1781861440_54be40",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:07:13.929274+00:00",
+      "synced_at": "2026-07-06T01:07:11.943994+00:00",
       "hash": "sha256:6d9b37cdfa09d68c3691097de9cf92922fb0c968aad9cdf42361580ac69536d5",
-      "title": "Chromatic Bloom Cascade"
+      "title": "Chromatic Bloom Reflection"
     },
     {
       "local_path": "references/insp_1779868149.webp",
       "brain_id": "brain_1781861449_5dbabc",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:07:23.024894+00:00",
+      "synced_at": "2026-07-06T01:07:19.643065+00:00",
       "hash": "sha256:a0abcdd424ac7b3a7a6bf50671e46b46c8e62bd9cd4e02eb41fbc550a391ca2a",
-      "title": "Iridescent Organic Couture"
+      "title": "Opalescent Biomorphic Embrace"
     },
     {
       "local_path": "references/insp_1779868190.webp",
       "brain_id": "brain_1781861461_f4fd9b",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:07:33.367173+00:00",
+      "synced_at": "2026-07-06T01:07:17.866005+00:00",
       "hash": "sha256:6582b11934b81563de60415e500f8f0a0277e074d2cff7332db824ed218c6fee",
-      "title": "Orchid Cybernetic Bloom"
+      "title": "Lavender Bloom, Liquid Silver"
     },
     {
       "local_path": "references/insp_1779868212.webp",
       "brain_id": "brain_1781861472_db0220",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:07:43.263759+00:00",
+      "synced_at": "2026-07-06T01:07:19.409099+00:00",
       "hash": "sha256:4f039b7abb6a70a315bcbf45f4d9e831bba464843399ec98dec85483b4a101a5",
-      "title": "Ethereal Cyber Bloom"
+      "title": "Crystal Tendril Gown"
     },
     {
       "local_path": "references/insp_1779868233.webp",
       "brain_id": "brain_1781861484_454dcb",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:07:52.864115+00:00",
+      "synced_at": "2026-07-06T01:07:28.102250+00:00",
       "hash": "sha256:977eb931415cf2fa4ec7e20b791c79282432986894511739ab9289003b64071f",
-      "title": "Brushstroke Bloom Abstraction"
+      "title": "Deep Sea Garden Bloom"
     },
     {
       "local_path": "references/insp_1779868260.webp",
       "brain_id": "brain_1781861496_de0748",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:08:05.500937+00:00",
+      "synced_at": "2026-07-06T01:07:30.964507+00:00",
       "hash": "sha256:1fd15b6b7e0b447853c70a2b6094abb757eca08280c267329a5242fc6b82bdc9",
-      "title": "Gilded Avant-Garde Bloom"
+      "title": "Sculpted Golden Radiance"
     },
     {
       "local_path": "references/knight_reference_01.jpg",
       "brain_id": "brain_1781861506_b85449",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:08:14.841133+00:00",
+      "synced_at": "2026-07-06T01:07:28.235676+00:00",
       "hash": "sha256:eb4df9521056e6db9c0893b83d948fbfae960fd77a6d55703d758cb59becad0c",
-      "title": "Future's Embroidered Gaze"
+      "title": "Cybernetic Blossom Gaze"
     },
     {
       "local_path": "references/knight_reference_02.webp",
       "brain_id": "brain_1781861515_7c4522",
       "type": "reference",
       "status": "synced",
-      "synced_at": "2026-06-19T10:08:29.829130+00:00",
+      "synced_at": "2026-07-06T01:07:36.418176+00:00",
       "hash": "sha256:95a0ed49a348c7c2d695d8fbcd3c75d4e1487af53994781f2d5e278ee5553cfc",
-      "title": "Translucent Future Knight"
+      "title": "Ethereal Cybernetic Armor"
     },
     {
       "local_path": "documents/david-carson.md",
       "brain_id": "brain_1781861242_3bf09f",
       "type": "document",
       "status": "synced",
-      "synced_at": "2026-06-19T09:27:32.267358+00:00",
+      "synced_at": "2026-07-06T01:03:37.020315+00:00",
       "hash": "sha256:3ec60da643f169e3c4236ccc818257b9c7fdb4ee3c4c6d4b71c6adffcfabbc68",
       "title": "Style Blueprint: David Carson"
     },
@@ -168,7 +168,7 @@
       "brain_id": "brain_1781861253_eac11a",
       "type": "document",
       "status": "synced",
-      "synced_at": "2026-06-19T09:27:41.178594+00:00",
+      "synced_at": "2026-07-06T01:03:37.291689+00:00",
       "hash": "sha256:99cb8b3d1d9fd3e485ab98c1378bb5402924545c4a8abb3d7da5c1c01186324a",
       "title": "Style Blueprint: Gi-seok Cho"
     },
@@ -177,16 +177,16 @@
       "brain_id": "brain_1781861262_355c58",
       "type": "document",
       "status": "synced",
-      "synced_at": "2026-06-19T09:27:49.851414+00:00",
+      "synced_at": "2026-07-06T01:03:37.975487+00:00",
       "hash": "sha256:764acb0160baf84c426c0353e91ad5ba6665505b5633a9c074cffe89b92b1bde",
-      "title": "Kyle Cooper: Filmic Grunge Style"
+      "title": "Style Blueprint: Kyle Cooper"
     },
     {
       "local_path": "documents/nick-knight.md",
       "brain_id": "brain_1781861270_017c28",
       "type": "document",
       "status": "synced",
-      "synced_at": "2026-06-19T09:27:57.551371+00:00",
+      "synced_at": "2026-07-06T01:03:42.431903+00:00",
       "hash": "sha256:daf4fc27cacc06bd1b65574f167cd28432032882848cb444f1272069f0e940b3",
       "title": "Style Blueprint: Nick Knight"
     },
@@ -195,61 +195,619 @@
       "brain_id": "brain_1781861278_a91c93",
       "type": "image",
       "status": "synced",
-      "synced_at": "2026-06-19T09:28:12.454652+00:00",
+      "synced_at": "2026-07-06T01:03:47.500700+00:00",
       "hash": "sha256:9123da0c47deaeb44b96b127ae7a9857b62cfc71e1848bb8b815c549b29e3232",
-      "title": "Ethereal Future Bloom"
+      "title": "Holographic Couture Vision"
     },
     {
       "local_path": "images/02 copy.jpg",
       "brain_id": "brain_1781861293_2f7a66",
       "type": "image",
       "status": "synced",
-      "synced_at": "2026-06-19T09:28:22.176311+00:00",
+      "synced_at": "2026-07-06T01:03:47.080613+00:00",
       "hash": "sha256:68f946ad9e80512df0bf8788af4603de572519c1812eb06db7a4eaa540a12da5",
-      "title": "Iridescent Veil, Digital Dream"
+      "title": "Chromatic Flow"
     },
     {
       "local_path": "images/04 copy.jpg",
       "brain_id": "brain_1781861303_fba733",
       "type": "image",
       "status": "synced",
-      "synced_at": "2026-06-19T09:28:34.213452+00:00",
+      "synced_at": "2026-07-06T01:03:50.706892+00:00",
       "hash": "sha256:4170f454b48fedfb90bf619e274253027337502688ee5aa2eafa1ec38633798e",
-      "title": "Moonlit Coral Dream"
+      "title": "Celestial Bloom, Ethereal Grace"
     },
     {
       "local_path": "images/05 copy.jpg",
       "brain_id": "brain_1781861315_dee7cc",
       "type": "image",
       "status": "synced",
-      "synced_at": "2026-06-19T09:28:45.459511+00:00",
+      "synced_at": "2026-07-06T01:03:54.202279+00:00",
       "hash": "sha256:a9330e0e46dc582ae0d5b03060a7ade211111ec3ab8368c33e6db9c68475de5a",
-      "title": "Chromatic Aura Veil"
+      "title": "Spectral Layers, Ethereal Form"
     },
     {
       "local_path": "images/10 copy.jpg",
       "brain_id": "brain_1781861326_a52474",
       "type": "image",
       "status": "synced",
-      "synced_at": "2026-06-19T09:28:54.843071+00:00",
+      "synced_at": "2026-07-06T01:03:54.778741+00:00",
       "hash": "sha256:86e3d6f6e7525c8eea87f4ae1c98051204e7a63244bbce384d338609215cb1cc",
-      "title": "Lavender Smoke, Black Ruffles"
+      "title": "Ephemeral Veil, Dark Bloom"
     },
     {
       "local_path": "images/20 copy.jpg",
       "brain_id": "brain_1781861335_215a8d",
       "type": "image",
       "status": "synced",
-      "synced_at": "2026-06-19T09:29:05.648078+00:00",
+      "synced_at": "2026-07-06T01:03:59.622117+00:00",
       "hash": "sha256:0bf112a5c54c73f11e3e401486f3d946619b32c49fd5391ffce30d0d294537f2",
-      "title": "Golden Glimmer, Regal Drape"
+      "title": "Gilded Form, Whispering Light"
+    },
+    {
+      "local_path": "references/%EB%AF%B8%EC%97%98_7%7E1.JPG.jpeg",
+      "brain_id": "brain_1783299834_f0e508",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:02.723810+00:00",
+      "hash": "sha256:e454dc16ddefe8fd747a3fbb79841c03cd81e234745fedd0e5cf459886fedac5",
+      "title": "Petal Profile"
+    },
+    {
+      "local_path": "references/%EA%B9%80%ED%99%8D%EB%8F%84-%EA%B5%B0%EC%84%A0%EB%8F%843.jpg.jpeg",
+      "brain_id": "brain_1783299834_c98a87",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:04.423984+00:00",
+      "hash": "sha256:7b0154dd68adca867f196e244ff40341963a7e97b3aad7810e31960c6dc31213",
+      "title": "Procession of Joyful Travelers"
+    },
+    {
+      "local_path": "references/00 Mercenary Garage Custom Motorcycle Workshop Cyber Hunter illustration by Daniel Isles DirtyRobot Works Samurai Bosozoku.jpg.jpeg",
+      "brain_id": "brain_1783299839_c394e8",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:08.058944+00:00",
+      "hash": "sha256:c97c0535630ffdff64ca038f85833510b3a481ab19d79e5329ccaa3716b18e18",
+      "title": "Cyber Hunter's Spark"
+    },
+    {
+      "local_path": "references/00c58a70017171.5b958da57137d.jpg.jpeg",
+      "brain_id": "brain_1783299844_91e75f",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:11.122911+00:00",
+      "hash": "sha256:18b2ab417e2193a68ae2a6f4ae23efa5adcfd9716149cde19d8d831296707d6e",
+      "title": "Digital Orbs of Insight"
+    },
+    {
+      "local_path": "references/002-500x322.jpg.jpeg",
+      "brain_id": "brain_1783299842_fd7140",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:11.363333+00:00",
+      "hash": "sha256:50894fd0d5e9a51c38edf29d62428bb36b58a23d0abe7bab127df13d3a035a62",
+      "title": "Branch Winged Enchantress"
+    },
+    {
+      "local_path": "references/00c9d1f18832c93b4898c3f6440ade02.jpg.jpeg",
+      "brain_id": "brain_1783299848_4d5d22",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:15.066174+00:00",
+      "hash": "sha256:c40ae16818d5177da120db2c1542ee84cd7fe517b6a27a5c1d9cb1a3a9446cac",
+      "title": "Layered Geometric Flow"
+    },
+    {
+      "local_path": "references/01 Muse magazine.jpg.jpeg",
+      "brain_id": "brain_1783299851_45bd5b",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:18.399036+00:00",
+      "hash": "sha256:6556003963c00ffdb38dc152b4a997ae70973986a913fbac2424636f8c7906ab",
+      "title": "Luminous Reeds, Ethereal Muse"
+    },
+    {
+      "local_path": "references/01 Big magazine.jpg.jpeg",
+      "brain_id": "brain_1783299851_dd5887",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:18.537061+00:00",
+      "hash": "sha256:3bfaaa51d8ec373f23ba74f530592eb0115b01222ec83645a9be2773c03d60ba",
+      "title": "Shard Crown Aura"
+    },
+    {
+      "local_path": "references/01-00000_960.jpg.jpeg",
+      "brain_id": "brain_1783299855_4ae1a7",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:24.144121+00:00",
+      "hash": "sha256:9b0317810f79eb59494f76d114db18fdaeb997102609ef4ce4dd7440e3a0ed11",
+      "title": "Layered Digital Abyss"
+    },
+    {
+      "local_path": "references/01.jpg.jpeg",
+      "brain_id": "brain_1783299858_299400",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:25.397807+00:00",
+      "hash": "sha256:7bb5cf176cd4cf24fa02da195b491edcd0898092f2040053e3a0d3d73f8ff00e",
+      "title": "Pastel Vortex of Forms"
+    },
+    {
+      "local_path": "references/01.jpg_2.jpeg",
+      "brain_id": "brain_1783299858_0d9ac4",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:26.882306+00:00",
+      "hash": "sha256:fde2f43b0442eb584ddcb8885e3c11ba73ebdbd4ce382b935b9840d0abbec067",
+      "title": "Enigmatic Tribal Reflection"
+    },
+    {
+      "local_path": "references/01_905.jpg.jpeg",
+      "brain_id": "brain_1783299865_4bb4af",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:34.216911+00:00",
+      "hash": "sha256:e7b5ff840d01eb00bdb3a46dec91888ba1ce1b6005db37d16d973549f81b764c",
+      "title": "Warped Elegance, Fluid Form"
+    },
+    {
+      "local_path": "references/01e38514636026bf1939.jpg.jpeg",
+      "brain_id": "brain_1783299864_2a64a5",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:34.335054+00:00",
+      "hash": "sha256:f24d4c4125d644449d202fce800a3bb914d15ba7e84c68858bca6bcc4428c4b4",
+      "title": "Fluid Art, Classic Facade"
+    },
+    {
+      "local_path": "references/01_o-1.jpg.jpeg",
+      "brain_id": "brain_1783299866_8c16e9",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:36.442344+00:00",
+      "hash": "sha256:ecdbb71514e1aca510db15d78f47ca4c7537c3d4deff948967908daffaa80677",
+      "title": "Luminous Urban Emergence"
+    },
+    {
+      "local_path": "references/01_o.jpg.jpeg",
+      "brain_id": "brain_1783299874_4755d3",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:41.065453+00:00",
+      "hash": "sha256:64bd8ea4d6ed177576f51c2649602bc789e01c6148535efed4589b1ccc8dc81b",
+      "title": "Ethereal Ink Dissolution"
+    },
+    {
+      "local_path": "references/0a1.jpg.jpeg",
+      "brain_id": "brain_1783299874_f0f0d0",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:42.913670+00:00",
+      "hash": "sha256:0e0fcb84d02c0147f9063359f9bcf7b8afe22251b5d31dde7c2ddd72339004fa",
+      "title": "Balanced Korean Silhouettes"
+    },
+    {
+      "local_path": "references/0b010e976fc44303e0a1abee5984e688.jpg.jpeg",
+      "brain_id": "brain_1783299876_ac6177",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:45.681467+00:00",
+      "hash": "sha256:6f977200fe98265d128863d619e7988df170df3a520c09d8562de79292390c4c",
+      "title": "Shattered Embrace"
+    },
+    {
+      "local_path": "references/0b22915fb8615667ae99f0928cac045f.JPG.jpeg",
+      "brain_id": "brain_1783299881_4af9cc",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:48.932150+00:00",
+      "hash": "sha256:36a2b3fbeaf9f5934ab85813ff2d65c0629287d5305aa5b43c7b2c0b1db29c07",
+      "title": "Luminous Parametric Flow"
+    },
+    {
+      "local_path": "references/0e8eb4b22a265ff0469e858cf1e8d379.jpg.jpeg",
+      "brain_id": "brain_1783299882_093534",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:50.008636+00:00",
+      "hash": "sha256:adc44b215a2a00559927d71c2c39e872a4a00dfe2c40909791dff270fdd07614",
+      "title": "Cultivated Earth, Cypress Sky"
+    },
+    {
+      "local_path": "references/0ee7dd27760419.5636a4cb3e40c.jpg.jpeg",
+      "brain_id": "brain_1783299885_c00a14",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:55.794648+00:00",
+      "hash": "sha256:540bc608a605655661aaced63bebe18748eb366bad790676ab6010c68ffc45de",
+      "title": "Shattered Crystal Reverie"
+    },
+    {
+      "local_path": "references/0EemAC5x7b2J4SpzJxm2_pzJxm2.jpeg",
+      "brain_id": "brain_1783299888_f9898b",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:56.996221+00:00",
+      "hash": "sha256:262d29820ae64cf89fd9ee36693cf3b61f1330766bef380319830c2783a72ae0",
+      "title": "Opalescent Bloom Portrait"
+    },
+    {
+      "local_path": "references/0fb1f10c9869e7bab6f96c5f80fa7002.jpg.jpeg",
+      "brain_id": "brain_1783299890_15e2d4",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:04:57.219498+00:00",
+      "hash": "sha256:addf5a330d8415f4154e77e7a0cee90cd37c8041c4e01fe11aa5632829c162ea",
+      "title": "Iridescent Cloud Stride"
+    },
+    {
+      "local_path": "references/0fbca9bc11.jpg.jpeg",
+      "brain_id": "brain_1783299895_f0dc91",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:02.583211+00:00",
+      "hash": "sha256:0118e60d6fb5e98e16035030f2f4f06a9c2dc4c95d5202055bcc2c1a53ba4043",
+      "title": "Sliced Reality Type"
+    },
+    {
+      "local_path": "references/1-1.jpg.jpeg",
+      "brain_id": "brain_1783299897_57f8c1",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:04.426849+00:00",
+      "hash": "sha256:35467a9ed29a3df37362ac464b3d8d6e7b8805c5061baab825b928c00f0b7b7a",
+      "title": "Teal Peaks, Urban Dreams"
+    },
+    {
+      "local_path": "references/0fd45732379541.567ef9c4647fb.jpg.jpeg",
+      "brain_id": "brain_1783299896_6e5670",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:05.980156+00:00",
+      "hash": "sha256:cc462f9223435ff5cf1962d1a3149b37fdf9cdf0384b6756e6137aacc3a30d9b",
+      "title": "Oracle of the Crescent"
+    },
+    {
+      "local_path": "references/1-2.jpg.jpeg",
+      "brain_id": "brain_1783299902_7003f7",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:10.653034+00:00",
+      "hash": "sha256:ace3ffc809a03270f5dab79aa71637a9c91b7b38d102fda97fe811bee9662eea",
+      "title": "Tangled Digital Cosmos"
+    },
+    {
+      "local_path": "references/1-500x341.jpg.jpeg",
+      "brain_id": "brain_1783299904_23bae3",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:11.873229+00:00",
+      "hash": "sha256:a233b167206843f816c6efe7c760e528eb47e1ed6c73d14de38a7084f1778a4a",
+      "title": "Crimson Cape Dance"
+    },
+    {
+      "local_path": "references/1-Greenpeace-Zara.jpg.jpeg",
+      "brain_id": "brain_1783299905_8e65f8",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:16.592675+00:00",
+      "hash": "sha256:43877a69002ed82deb21d4bb2f28aa59097c198b58fd8bc5ca9278d55b709b6c",
+      "title": "Fashion's Silent Secret"
+    },
+    {
+      "local_path": "references/1.jpg_1.jpeg",
+      "brain_id": "brain_1783299910_987edc",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:18.169454+00:00",
+      "hash": "sha256:3344f1f2ce88c6828991371e0bad50973ac8e23ad8f640a9d7fcbd7709fe4a32",
+      "title": "Veiled Floral Enigma"
+    },
+    {
+      "local_path": "references/1.jpg_3.jpeg",
+      "brain_id": "brain_1783299911_e5018d",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:18.413545+00:00",
+      "hash": "sha256:38c9ef5552f3e104160e948d3884563b88025ae8bc13a72dd29c286db2e3bc56",
+      "title": "Underground Forest of Stone"
+    },
+    {
+      "local_path": "references/1b71875ede79de49153fcb0f699a8301.jpg.jpeg",
+      "brain_id": "brain_1783299918_790210",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:25.001569+00:00",
+      "hash": "sha256:16f36636670e395543ee2c95997f156cff56a92aeda80ef54b82f49212cb3097",
+      "title": "Fuchsia Rose Abstraction"
+    },
+    {
+      "local_path": "references/1b0b684c5a08638c3c42.jpg.jpeg",
+      "brain_id": "brain_1783299916_80f7b9",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:25.094315+00:00",
+      "hash": "sha256:960208ff5f260b696a8561c83f3b246040c5d8bd6ba7863473696906ee0fe59f",
+      "title": "Shadow Rider, Sky Queen"
+    },
+    {
+      "local_path": "references/1CouA3HrCExFgQ0WayLc_0WayLc.jpeg",
+      "brain_id": "brain_1783299918_cc1985",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:26.677662+00:00",
+      "hash": "sha256:a8e09079df1a0629e11cd7cf22cd9ebdde23671bd3a992a6580f0d658067d950",
+      "title": "Future's Iridescent Bloom"
+    },
+    {
+      "local_path": "references/1d07857c754ea064ee3e563dfc5a6a57.jpg.jpeg",
+      "brain_id": "brain_1783299925_708f77",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:33.692980+00:00",
+      "hash": "sha256:bf00726887c56eeee8c0d3902f749c374af2b74683c2873a300d44b5a62347ba",
+      "title": "Fragmented South, Vibrant Type"
+    },
+    {
+      "local_path": "references/1kZp3iNUsMS7dV5384y3_5384y3.jpeg",
+      "brain_id": "brain_1783299926_30396d",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:34.861379+00:00",
+      "hash": "sha256:84328f02722fb18bb6969b8a33e65af380e1a97918c513721e26729221f4213c",
+      "title": "Robotic Reach, Equine Flight"
+    },
+    {
+      "local_path": "references/1dejavu-1.jpg.jpeg",
+      "brain_id": "brain_1783299925_1ecb2c",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:35.406048+00:00",
+      "hash": "sha256:18e32a53a2e1dbab6a33dc63dd36f263a1798c0470c5b91063ccdd6a80b2ea04",
+      "title": "Fragments of a Gilded Past"
+    },
+    {
+      "local_path": "references/1_tO-Yrr9Y2zSqZ89XbRM-7g.jpg.jpeg",
+      "brain_id": "brain_1783299933_7ee29b",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:41.514753+00:00",
+      "hash": "sha256:cb28b40b7c85be80d4ef8481cf335439f2e4f6abf29e07f49620d29ad8366cc5",
+      "title": "Deconstructed Typographic Canvas"
+    },
+    {
+      "local_path": "references/brain_1781861278_a91c93.webp",
+      "brain_id": "brain_1783299935_c66d68",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:44.633317+00:00",
+      "hash": "sha256:dce843befbb3f1d6f3335b5fd56aefa94612ad0ef1c7aa845aa2ce595f9c26e9",
+      "title": "Chromatic Fabric Fantasy"
+    },
+    {
+      "local_path": "references/1⁄41⁄4ÀÌÁö.jpg_ filename=1⁄41⁄4ÀÌÁö.jpg.jpeg",
+      "brain_id": "brain_1783299934_bf3b16",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:45.164376+00:00",
+      "hash": "sha256:a840068f6c4524ddaa6b0f03972f37b3af6d3ad1f1e4b391f5b27c959729ecb9",
+      "title": "Sequential Teal Expressions"
+    },
+    {
+      "local_path": "references/brain_1781861293_2f7a66.webp",
+      "brain_id": "brain_1783299941_8ed82a",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:49.848537+00:00",
+      "hash": "sha256:443c0d94661b5f6f4c37c85896f07a15f00b80dc816bd0fc1edcf62c34862c42",
+      "title": "Iridescent Veil of Light"
+    },
+    {
+      "local_path": "references/brain_1781861303_fba733.webp",
+      "brain_id": "brain_1783299944_94467b",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:53.041248+00:00",
+      "hash": "sha256:2818074bf4bb02ea3dddb51a21909773df76cd98fcca547ce8c57257186c925e",
+      "title": "Ethereal Blossom Spirit"
+    },
+    {
+      "local_path": "references/brain_1781861315_dee7cc.webp",
+      "brain_id": "brain_1783299945_93322f",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:53.984403+00:00",
+      "hash": "sha256:fafa4d1fb846e1991cbcdf2dc44f62d20b5a95f6bc51ade03fd02dd9961c079d",
+      "title": "Chromatic Veil Unfurled"
+    },
+    {
+      "local_path": "references/brain_1781861326_a52474.webp",
+      "brain_id": "brain_1783299949_a54a5f",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:05:56.882641+00:00",
+      "hash": "sha256:ca3550b56af495f78f20cdbd6a9e070e9c87ee43b0eb38a624e2b81d46698280",
+      "title": "Ephemeral Veil, Lavender Bloom"
+    },
+    {
+      "local_path": "references/brain_1781861335_215a8d.webp",
+      "brain_id": "brain_1783299953_a2dabc",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:01.007106+00:00",
+      "hash": "sha256:0bd315dbae92a97a8b117bd6aaf0319d7b9af215787982b00dbf3d60989fbba5",
+      "title": "Golden Seraph's Ethereal Bloom"
+    },
+    {
+      "local_path": "references/brain_1781861346_7eaed9.webp",
+      "brain_id": "brain_1783299953_5ab1e9",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:01.268163+00:00",
+      "hash": "sha256:b2d98d1649c2c86e86e9a6bbf2a8e5ddc237d56440c3ba27c74913d0ed2f91ba",
+      "title": "Fragmented Type, Visual Noise"
+    },
+    {
+      "local_path": "references/brain_1781861357_a68b91.webp",
+      "brain_id": "brain_1783299956_6a492d",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:08.331879+00:00",
+      "hash": "sha256:e023a4646be99c9b8e4bf03c697ee29b81fa11a53e7f6374f766576797bdd550",
+      "title": "Blur-Shaped Grunge Echoes"
+    },
+    {
+      "local_path": "references/brain_1781861378_ad408b.webp",
+      "brain_id": "brain_1783299961_42eb6b",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:08.368360+00:00",
+      "hash": "sha256:efb112a4389bb33f30ef254437186e96967c5a35a0f2bb3790513cab64a06d6c",
+      "title": "Circlet of Plastic Seas"
+    },
+    {
+      "local_path": "references/brain_1781861367_3e8b1a.webp",
+      "brain_id": "brain_1783299961_8ba58d",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:09.531237+00:00",
+      "hash": "sha256:5d83ae7b64a0827ca94e8aab96480fbfb828633612241e26101d464e1198859e",
+      "title": "Flushed Youth, Sweet Defiance"
+    },
+    {
+      "local_path": "references/brain_1781861388_deff3e.webp",
+      "brain_id": "brain_1783299968_453e0b",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:14.083622+00:00",
+      "hash": "sha256:09047b18e1ba6a8be52c61d726455a7ed6b0708fb565f0470f45d6ca5e809d48",
+      "title": "Floral Mask's Delicate Burden"
+    },
+    {
+      "local_path": "references/brain_1781861398_3166bd.webp",
+      "brain_id": "brain_1783299968_dcb510",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:14.881700+00:00",
+      "hash": "sha256:475652d8b167ebd48ebdf6182663ad257fbef0d1160c1dd0f4098ea24458d570",
+      "title": "Seven Glitched Echoes"
+    },
+    {
+      "local_path": "references/brain_1781861409_51a2e5.webp",
+      "brain_id": "brain_1783299969_451e8e",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:18.133128+00:00",
+      "hash": "sha256:bc54f0164027ffff23d77946fb4fc2b66d4001b2129bf0c29d04d2a75e200497",
+      "title": "Etched Wisdom, Timeless Scratches"
+    },
+    {
+      "local_path": "references/brain_1781861430_f72e3d.webp",
+      "brain_id": "brain_1783299974_aca4cc",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:22.006577+00:00",
+      "hash": "sha256:5cad4f7cbd19f198900850b12d72c0bd74487a4d7d518e7009ea234035cb332b",
+      "title": "Tender Hues, Quiet Bond"
+    },
+    {
+      "local_path": "references/brain_1781861419_8b875f.webp",
+      "brain_id": "brain_1783299974_ee5efd",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:22.516527+00:00",
+      "hash": "sha256:8b47979b3903cff1c63edd9a0dc67e9bd97679f4578b02d35b6cfb3a2d367744",
+      "title": "Iridescent Urban Mandala"
+    },
+    {
+      "local_path": "references/brain_1781861440_54be40.webp",
+      "brain_id": "brain_1783299978_2f16dd",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:26.311924+00:00",
+      "hash": "sha256:ac9e295fd25c1b1f87012cc1ff512fa33421855b5094121f2fc11a6fdb423bf6",
+      "title": "Iridescent Bloom Gradient"
+    },
+    {
+      "local_path": "references/brain_1781861461_f4fd9b.webp",
+      "brain_id": "brain_1783299982_688c79",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:30.544834+00:00",
+      "hash": "sha256:78fdde7c6b5731e69775cc56d45d7245623ce422a16ffb6208dd39c94d594193",
+      "title": "Orchid Silver Dream"
+    },
+    {
+      "local_path": "references/brain_1781861449_5dbabc.webp",
+      "brain_id": "brain_1783299982_552593",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:32.023812+00:00",
+      "hash": "sha256:d2e9dd50b0177cb2f74d96b0ea8f789396b12b94cf5a74a99210ae18d38069bf",
+      "title": "Ethereal Strands, Bio-Couture"
+    },
+    {
+      "local_path": "references/brain_1781861472_db0220.webp",
+      "brain_id": "brain_1783299986_d1a22c",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:34.988226+00:00",
+      "hash": "sha256:421fb7ca6c472e50cdb796e45de285abb0a455fa7074f05ded20df4afb4ac4ed",
+      "title": "Ethereal Biomorphic Adornment"
+    },
+    {
+      "local_path": "references/brain_1781861484_454dcb.webp",
+      "brain_id": "brain_1783299990_033fe1",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:37.275878+00:00",
+      "hash": "sha256:0143d247418aecdcef02dbaaf6c246fa84ed4daba308607e82a13044c64eeedb",
+      "title": "Vibrant Impasto Dreamscape"
+    },
+    {
+      "local_path": "references/brain_1781861496_de0748.webp",
+      "brain_id": "brain_1783299992_d9bc7a",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:40.442713+00:00",
+      "hash": "sha256:26a5d69af086d5493bcafb09997d9c5cfc8e0a3102eade7e56293bb9cb3ec08f",
+      "title": "Gilded Organic Form"
+    },
+    {
+      "local_path": "references/brain_1781861506_b85449.webp",
+      "brain_id": "brain_1783299994_489d49",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:43.644344+00:00",
+      "hash": "sha256:af02cdf6a4c5d5fd5d8643dd632004b621b4c164e0ee32e98c0613af6ff557f6",
+      "title": "Cybernetic Blossom Gaze"
+    },
+    {
+      "local_path": "references/brain_1781861515_7c4522.webp",
+      "brain_id": "brain_1783299997_0ed69a",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:06:47.004686+00:00",
+      "hash": "sha256:7332cb9ea05472b633f43bb9a98d9a4ce0affcee1fd192a77d2ca4627febc5ea",
+      "title": "Translucent Gold Sentinel"
+    },
+    {
+      "local_path": "references/_MG_5302.jpg.jpeg",
+      "brain_id": "brain_1783300048_ebcc6e",
+      "type": "reference",
+      "status": "synced",
+      "synced_at": "2026-07-06T01:07:37.238216+00:00",
+      "hash": "sha256:ea3cccb60e5acca9fd75425a8695d18ced0e3126fedcb96973399f3896acb60a",
+      "title": "Urban Pattern Pause"
     }
   ],
-  "last_pull": "2026-06-19T03:42:39.881Z",
+  "last_pull": "2026-07-06T00:49:05.026Z",
   "pull_stats": {
-    "downloaded": 8,
+    "downloaded": 23,
     "skipped": 0,
     "failed": 0,
-    "total": 8
+    "total": 23
   }
 }

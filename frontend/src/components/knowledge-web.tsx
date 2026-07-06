@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { forceX, forceY, forceCollide } from "d3-force";
@@ -172,7 +172,7 @@ function buildGraph(turns: HistoryTurn[], threads: Thread[] = [], inspiration: I
       id: item.id,
       kind: "brain",
       brainType: item.type,
-      imageUrl: item.type === "image" ? getGraphImageUrl(item.image_url) : "",
+      imageUrl: item.image_url ? getGraphImageUrl(item.image_url) : "",
       label: item.title || "Brain",
     };
     nodes.push(brainNode);
@@ -312,7 +312,7 @@ export function KnowledgeWeb({
       if (item.keywords && item.keywords.includes(keyword)) {
         list.push({
           id: item.id,
-          url: item.type === "image" ? item.image_url : "",
+          url: item.image_url || "",
           label: item.title || "Brain",
           kind: "brain"
         });
@@ -829,15 +829,17 @@ export function KnowledgeWeb({
                             if (img.kind === "image") {
                               router.push(`/post/${img.id}`);
                             } else {
-                              onImageSelect(img.id, "inspiration");
+                              onImageSelect(img.id, img.kind === "brain" ? "brain" : "inspiration");
                             }
                           }}
                         >
                           <div className={cn(
-                            "w-16 h-16 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] shadow-sm transition-all duration-300 hover:scale-110 hover:shadow-md hover:border-[#252422]",
+                            "w-16 h-16 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] shadow-sm transition-all duration-300 hover:scale-110 hover:shadow-md hover:border-[#252422] flex items-center justify-center",
                             img.kind === "inspiration" && "border-[#D45113]/55 hover:border-[#D45113]"
                           )}>
-                            {isTurnVideoUrl(img.url) ? (
+                            {!img.url ? (
+                              <FileText className="h-6 w-6 text-[#858076]/50 stroke-[1.5]" />
+                            ) : isTurnVideoUrl(img.url) ? (
                               <video
                                 src={img.url}
                                 autoPlay
@@ -895,6 +897,48 @@ export function KnowledgeWeb({
                   </p>
                 </div>
               </div>
+            ) : hoverNode?.kind === "brain" ? (
+              (() => {
+                const brainItem = brain.find((b) => b.id === hoverNode.id);
+                if (!brainItem) return <p className="mt-3 text-sm text-[#858076]">Brain item details not found.</p>;
+                return (
+                  <div className="mt-3 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border border-[#D8D4CC] bg-[#FAF9F6] flex-shrink-0 shadow-sm flex items-center justify-center">
+                      {brainItem.image_url ? (
+                        <img
+                          src={brainItem.image_url}
+                          alt={brainItem.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <FileText className="h-10 w-10 text-[#858076]/40 stroke-[1.5]" />
+                      )}
+                    </div>
+                    <div className="space-y-1 text-center sm:text-left flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <span className="text-base font-bold text-[#252422]">{brainItem.title || hoverNode.label}</span>
+                        <span className="px-2 py-0.5 text-[9px] uppercase font-semibold tracking-wider rounded-full bg-[#FAF9F6] border border-[#D8D4CC] text-[#858076]">
+                          {brainItem.type}
+                        </span>
+                      </div>
+                      {brainItem.summary && (
+                        <p className="text-xs text-[#858076] line-clamp-2 mt-1">
+                          {brainItem.summary}
+                        </p>
+                      )}
+                      {brainItem.keywords && brainItem.keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1 justify-center sm:justify-start">
+                          {brainItem.keywords.map((kw) => (
+                            <span key={kw} className="text-[9px] text-[#D45113] hover:underline font-mono">
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <p className="mt-3 text-sm leading-6 text-[#858076]">Select a node to inspect its connected meaning.</p>
             )}

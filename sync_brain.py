@@ -100,6 +100,20 @@ def get_api_key() -> str:
     return key
 
 
+def get_areopagus_api_key() -> str:
+    """Resolve the Areopagus API Key for mutate endpoint authentication."""
+    key = os.environ.get("AREOPAGUS_API_KEY", "").strip()
+    if not key:
+        env_path = Path(__file__).resolve().parent / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("AREOPAGUS_API_KEY="):
+                    key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    return key
+
+
 def get_mutate_url() -> str:
     """Resolve the Modal mutate-history endpoint URL."""
     env_path = Path(__file__).resolve().parent / "frontend" / ".env.local"
@@ -341,10 +355,15 @@ def upload_brain_item(
     if full_text:
         payload["full_text"] = full_text
 
+    key = get_areopagus_api_key()
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["X-API-Key"] = key
+
     req = urllib.request.Request(
         url=mutate_url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 
@@ -388,10 +407,15 @@ def delete_remote_brain_item(brain_id: str) -> None:
         "action": "delete_brain_item",
         "id": brain_id,
     }
+    key = get_areopagus_api_key()
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["X-API-Key"] = key
+
     req = urllib.request.Request(
         url=mutate_url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:
@@ -1587,6 +1611,14 @@ def download_instagram_posts(
 # ── CLI Entry Point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import sys
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+            
     parser = argparse.ArgumentParser(description="Sync local brain/ folder to Areopagus Second Brain")
     parser.add_argument("--force", action="store_true", help="Re-process all files, ignoring cache")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be synced without doing it")

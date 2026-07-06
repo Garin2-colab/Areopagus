@@ -683,7 +683,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, onRefres
               );
             } else {
               const isLegacy = item.id.startsWith("insp_");
-              const hasImage = (item.type === "image" || (item.type === "reference" && item.image_url)) && item.image_url;
+              const hasImage = !!((item.type === "image" || item.type === "reference") && item.image_url && item.image_url.trim() !== "");
 
               return (
                 <div
