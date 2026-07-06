@@ -115,32 +115,48 @@ function buildGraph(
     ? brain.slice(0, MAX_GRAPH_BRAIN_NODES)
     : brain;
 
-  // 1. If filtering is enabled, count frequencies of each keyword across all source types
-  const keywordCounts = new Map<string, number>();
-  if (filterUniqueKeywords) {
-    for (const turn of turns) {
-      for (const keyword of turn.keywords) {
-        keywordCounts.set(keyword, (keywordCounts.get(keyword) || 0) + 1);
+  // Track which unique item IDs each keyword connects to
+  const keywordToItems = new Map<string, Set<string>>();
+
+  // Populate keyword associations
+  for (const turn of turns) {
+    imageKeywords.set(turn.image_id, [...turn.keywords]);
+    for (const keyword of turn.keywords) {
+      if (!keywordToItems.has(keyword)) {
+        keywordToItems.set(keyword, new Set());
       }
-    }
-    for (const item of inspiration) {
-      for (const keyword of item.keywords || []) {
-        keywordCounts.set(keyword, (keywordCounts.get(keyword) || 0) + 1);
-      }
-    }
-    for (const item of cappedBrain) {
-      for (const keyword of item.keywords || []) {
-        keywordCounts.set(keyword, (keywordCounts.get(keyword) || 0) + 1);
-      }
+      keywordToItems.get(keyword)!.add(turn.image_id);
     }
   }
 
+  for (const item of inspiration) {
+    imageKeywords.set(item.id, [...(item.keywords || [])]);
+    for (const keyword of item.keywords || []) {
+      if (!keywordToItems.has(keyword)) {
+        keywordToItems.set(keyword, new Set());
+      }
+      keywordToItems.get(keyword)!.add(item.id);
+    }
+  }
+
+  for (const item of cappedBrain) {
+    imageKeywords.set(item.id, [...(item.keywords || [])]);
+    for (const keyword of item.keywords || []) {
+      if (!keywordToItems.has(keyword)) {
+        keywordToItems.set(keyword, new Set());
+      }
+      keywordToItems.get(keyword)!.add(item.id);
+    }
+  }
+
+  // Helper to determine if keyword is shared
   const shouldIncludeKeyword = (keyword: string) => {
     if (!filterUniqueKeywords) return true;
-    return (keywordCounts.get(keyword) || 0) >= 2;
+    const connectedItems = keywordToItems.get(keyword);
+    return connectedItems ? connectedItems.size >= 2 : false;
   };
 
-  // 2. Process history turns
+  // 1. Process history turns
   for (const turn of turns) {
     const imageNode: GraphNode = {
       id: turn.image_id,
@@ -170,11 +186,9 @@ function buildGraph(
     if (turn.parent_image_id) {
       links.push({ source: turn.image_id, target: turn.parent_image_id });
     }
-
-    imageKeywords.set(turn.image_id, [...turn.keywords]);
   }
 
-  // 3. Process inspiration items
+  // 2. Process inspiration items
   for (const item of inspiration) {
     const inspNode: GraphNode = {
       id: item.id,
@@ -199,11 +213,9 @@ function buildGraph(
 
       links.push({ source: keyword, target: item.id });
     }
-
-    imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
 
-  // 4. Process brain items
+  // 3. Process brain items
   for (const item of cappedBrain) {
     const brainNode: GraphNode = {
       id: item.id,
@@ -228,7 +240,6 @@ function buildGraph(
       }
       links.push({ source: keyword, target: item.id });
     }
-    imageKeywords.set(item.id, [...(item.keywords || [])]);
   }
 
   // Filter out links that reference non-existent nodes (e.g. deleted posts)
@@ -396,23 +407,23 @@ export function KnowledgeWeb({
     // the graph topology naturally arranges nodes based on connectivity.
 
     // 1. Charge: moderate, balanced repulsion
-    //    Hubs repel at −100 (down from −250) so they don't blow keywords to the periphery.
-    //    Keywords repel at −50 (up from −25) so they spread cleanly in-between hubs.
+    //    Hubs repel at −80 (down from −100) and keywords at −35 (down from −50) to reduce resistance.
+    //    We restrict distanceMax to 300 (down from 800) so far-apart components don't repel each other off-screen.
     fg.d3Force("charge")
       ?.strength((node: any) => {
-        if (node.kind === "keyword" || node.kind === "comment") return -50;
-        return -100; // image / inspiration / brain
+        if (node.kind === "keyword" || node.kind === "comment") return -35;
+        return -80; // image / inspiration / brain
       })
-      ?.distanceMax(800);
+      ?.distanceMax(300);
 
-    // 2. Links: more uniform distance & strength
+    // 2. Links: more uniform, slightly tighter distance & strength
     //    Allows keywords to sit comfortably in-between the hubs they connect.
     fg.d3Force("link")
       ?.distance((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 75 : 100;
+        return hasKeyword ? 60 : 80;
       })
       ?.strength((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
@@ -425,16 +436,16 @@ export function KnowledgeWeb({
     fg.d3Force("center")
       ?.strength(0.03);
 
-    // 4. Gravity: gentle pull to prevent drifting
-    fg.d3Force("x", forceX(0).strength(0.01));
-    fg.d3Force("y", forceY(0).strength(0.01));
+    // 4. Gravity: moderate pull (0.04) to prevent isolated nodes/components from drifting away
+    fg.d3Force("x", forceX(0).strength(0.04));
+    fg.d3Force("y", forceY(0).strength(0.04));
 
-    // 5. Collision: padding to prevent overlapping
+    // 5. Collision: slightly tighter padding to keep layout compact
     fg.d3Force("collide", forceCollide((node: any) => {
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 32;
+        return 28;
       }
-      return 10;
+      return 8;
     }).iterations(3));
 
     fg.d3ReheatSimulation?.();
