@@ -508,7 +508,7 @@ def retrieve_associative_memory(
         return None
 
     candidates = []
-    current_keywords_set = {k.lower() for k in current_keywords}
+    current_keywords_set = {k.lower() for k in current_keywords if isinstance(k, str)}
 
     # Search normal turns
     for turn in history.get("turns", []):
@@ -518,7 +518,7 @@ def retrieve_associative_memory(
         if exclude_thread_id and turn.get("thread_id") == exclude_thread_id:
             continue
 
-        turn_keywords = {k.lower() for k in turn.get("keywords", [])}
+        turn_keywords = {k.lower() for k in (turn.get("keywords") or []) if isinstance(k, str)}
         overlap = turn_keywords.intersection(current_keywords_set)
         if overlap:
             # We score it based on overlap length and turn number
@@ -529,7 +529,7 @@ def retrieve_associative_memory(
         if not isinstance(insp, dict) or "id" not in insp:
             continue
 
-        insp_keywords = {k.lower() for k in insp.get("keywords", [])}
+        insp_keywords = {k.lower() for k in (insp.get("keywords") or []) if isinstance(k, str)}
         overlap = insp_keywords.intersection(current_keywords_set)
         if overlap:
             # Map id to image_id, and turn to simulated values so caller parses cleanly
@@ -545,7 +545,7 @@ def retrieve_associative_memory(
         if not isinstance(brain_item, dict) or "id" not in brain_item:
             continue
 
-        brain_keywords = {k.lower() for k in brain_item.get("keywords", [])}
+        brain_keywords = {k.lower() for k in (brain_item.get("keywords") or []) if isinstance(k, str)}
         overlap = brain_keywords.intersection(current_keywords_set)
         if overlap:
             brain_copy = dict(brain_item)
@@ -587,7 +587,7 @@ def retrieve_from_brain(
 
     import random
 
-    current_keywords_set = {k.lower().lstrip('#') for k in current_keywords}
+    current_keywords_set = {k.lower().lstrip('#') for k in current_keywords if isinstance(k, str)}
     
     related_image_candidates = []
     unrelated_image_candidates = []
@@ -603,14 +603,14 @@ def retrieve_from_brain(
         if item_type == "note":
             # Notes are only evaluated for relevance
             score = 0
-            item_keywords = {k.lower().lstrip('#') for k in item.get("keywords", [])}
+            item_keywords = {k.lower().lstrip('#') for k in (item.get("keywords") or []) if isinstance(k, str)}
             overlap = item_keywords.intersection(current_keywords_set)
             score += len(overlap) * 10
             
-            title = item.get("title", "").lower()
-            summary = item.get("summary", "").lower()
-            full_text = item.get("full_text", "").lower()
-            mood = item.get("mood", "").lower()
+            title = (item.get("title") or "").lower()
+            summary = (item.get("summary") or "").lower()
+            full_text = (item.get("full_text") or "").lower()
+            mood = (item.get("mood") or "").lower()
             
             for kw in current_keywords_set:
                 if kw in title:
@@ -628,14 +628,14 @@ def retrieve_from_brain(
         else:
             # Image or reference
             score = 0
-            item_keywords = {k.lower().lstrip('#') for k in item.get("keywords", [])}
+            item_keywords = {k.lower().lstrip('#') for k in (item.get("keywords") or []) if isinstance(k, str)}
             overlap = item_keywords.intersection(current_keywords_set)
             score += len(overlap) * 10
             
-            title = item.get("title", "").lower()
-            summary = item.get("summary", "").lower()
-            full_text = item.get("full_text", "").lower()
-            mood = item.get("mood", "").lower()
+            title = (item.get("title") or "").lower()
+            summary = (item.get("summary") or "").lower()
+            full_text = (item.get("full_text") or "").lower()
+            mood = (item.get("mood") or "").lower()
             
             for kw in current_keywords_set:
                 if kw in title:
@@ -663,7 +663,7 @@ def retrieve_from_brain(
             continue
             
         score = 0
-        insp_keywords = {k.lower().lstrip('#') for k in insp.get("keywords", [])}
+        insp_keywords = {k.lower().lstrip('#') for k in (insp.get("keywords") or []) if isinstance(k, str)}
         overlap = insp_keywords.intersection(current_keywords_set)
         score += len(overlap) * 10
         
@@ -688,7 +688,7 @@ def retrieve_from_brain(
             continue
             
         score = 0
-        turn_keywords = {k.lower().lstrip('#') for k in turn.get("keywords", [])}
+        turn_keywords = {k.lower().lstrip('#') for k in (turn.get("keywords") or []) if isinstance(k, str)}
         overlap = turn_keywords.intersection(current_keywords_set)
         score += len(overlap) * 10
         

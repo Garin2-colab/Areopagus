@@ -19,13 +19,13 @@ def retrieve_matching_briefs(
     if not briefs:
         return []
 
-    current_set = {k.lower() for k in current_keywords}
+    current_set = {k.lower() for k in current_keywords if isinstance(k, str)}
     scored: list[tuple[int, dict[str, Any]]] = []
 
     for brief in briefs:
         if not brief.get("active", True):
             continue
-        brief_keywords = {k.lower() for k in brief.get("keywords", [])}
+        brief_keywords = {k.lower() for k in (brief.get("keywords") or []) if isinstance(k, str)}
         overlap = brief_keywords.intersection(current_set)
         if len(overlap) >= 2:
             scored.append((len(overlap), brief))

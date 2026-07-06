@@ -649,9 +649,9 @@ def history_endpoint(request: Request) -> dict[str, Any]:
                         q = search.lower()
                         brain_list = [
                             item for item in brain_list
-                            if q in item.get("title", "").lower() or
-                               q in item.get("summary", "").lower() or
-                               any(q in kw.lower() for kw in item.get("keywords", []))
+                            if q in (item.get("title") or "").lower() or
+                               q in (item.get("summary") or "").lower() or
+                               any(q in kw.lower() for kw in (item.get("keywords") or []) if isinstance(kw, str))
                         ]
                     total_count = len(brain_list)
                     if limit > 0:
