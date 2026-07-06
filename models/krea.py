@@ -336,7 +336,13 @@ MODEL SPECIFIC GUIDANCE FOR KREA 2:
                 return job_id, raw_image_url, prompt_text
                 
             if status in ("failed", "cancelled"):
-                error_msg = task.get("result", {}).get("error") or "Unknown error"
+                error_msg = (
+                    task.get("error") or 
+                    task.get("result", {}).get("error") or 
+                    task.get("message") or 
+                    task.get("result", {}).get("message") or 
+                    "Unknown error"
+                )
                 raise RuntimeError(f"Krea job {job_id} status is {status}: {error_msg}")
                 
             polling_delay = 5

@@ -177,6 +177,9 @@ class SeedanceModel(BaseModel):
             uri = ref.get("uri")
             if uri:
                 reference_urls.append(uri)
+        # Limit to at most 1 reference image for Seedance video model to prevent first/last frame confusion
+        if len(reference_urls) > 1:
+            reference_urls = reference_urls[:1]
                 
         payload = {
             "model": "bytedance/seedance-2-fast",

@@ -203,7 +203,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
   const handleSync = async () => {
     setIsSyncing(true);
     setUploadError(null);
-    setSyncMessage(null);
+    setSyncMessage("Initializing sync...");
 
     try {
       const response = await fetch("/api/sync-brain", {
@@ -215,9 +215,32 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
         throw new Error(errorData.error || `Sync failed with status ${response.status}`);
       }
 
-      const result = await response.json();
+      let result = await response.json();
       if (!result.ok) {
         throw new Error(result.error || "Sync was not successful.");
+      }
+
+      // If in progress, start polling
+      if (result.in_progress) {
+        let isPolling = true;
+        while (isPolling) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const statusRes = await fetch("/api/sync-brain");
+          if (!statusRes.ok) {
+            throw new Error(`Status check failed with status ${statusRes.status}`);
+          }
+          const statusData = await statusRes.json();
+          if (!statusData.ok) {
+            throw new Error(statusData.error || "Failed to fetch sync status.");
+          }
+          
+          if (statusData.in_progress) {
+            setSyncMessage(`Syncing... (${statusData.current}/${statusData.total} files processed, ${statusData.downloaded} new, ${statusData.failed} failed)`);
+          } else {
+            isPolling = false;
+            result = statusData;
+          }
+        }
       }
 
       const msg = `Synced: ${result.downloaded} downloaded, ${result.skipped} already local${result.failed ? `, ${result.failed} failed` : ""}`;
@@ -228,6 +251,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
     } catch (error) {
       console.error("Sync error:", error);
       setUploadError(error instanceof Error ? error.message : "Sync failed.");
+      setSyncMessage(null);
     } finally {
       setIsSyncing(false);
     }

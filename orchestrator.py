@@ -52,6 +52,8 @@ from core import (
     get_active_agents,
     summarize_turn_for_agent,
     recent_turns_for_agents,
+    is_video_model,
+    recent_turns_for_video_agent,
     next_turn_number,
     new_image_id,
     ensure_threads,
@@ -85,6 +87,16 @@ def reload_volume() -> None:
     except Exception:
         pass
     data_volume.reload()
+
+
+def commit_volume() -> None:
+    """Close active SQLite connection before committing the Modal volume to prevent locking/corruption."""
+    try:
+        from core.database import close_db
+        close_db()
+    except Exception:
+        pass
+    data_volume.commit()
 
 
 image = (
@@ -478,17 +490,23 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
             agent_name = str(agent.get("name", agent.get("id", "Agent")))
             logger.info(f"[orchestrate] >>> Starting agent {index + 1}/{len(active_agents)}: {agent_name} (model={agent.get('model')}, selected_model={agent.get('selected_model')})")
             try:
+                # Get the correct turns for this agent
+                if is_video_model(agent.get("model")) or is_video_model(agent.get("selected_model")):
+                    agent_recent_turns = recent_turns_for_video_agent(history, INTEREST_WINDOW)
+                else:
+                    agent_recent_turns = recent_turns
+
                 # Collect node IDs the agent is examining during scoring
-                scoring_nodes = [t.get("image_id") for t in recent_turns if t.get("image_id")]
-                for t in recent_turns:
+                scoring_nodes = [t.get("image_id") for t in agent_recent_turns if t.get("image_id")]
+                for t in agent_recent_turns:
                     scoring_nodes.extend(t.get("keywords", []))
                 update_studio_status(f"{agent_name} is scoring interest...", active=True, agent_name=agent_name, active_nodes=scoring_nodes)
-                assessment = assess_agent_interest(agent, recent_turns, history)
+                assessment = assess_agent_interest(agent, agent_recent_turns, history)
                 logger.info(f"[orchestrate] Assessment for '{agent_name}': {json.dumps(assessment, indent=2)}")
 
                 # Build focused active_nodes for the selected action
                 selected_id = assessment.get("selected_image_id", "")
-                selected_turn = next((t for t in recent_turns if t.get("image_id") == selected_id), None)
+                selected_turn = next((t for t in agent_recent_turns if t.get("image_id") == selected_id), None)
                 focus_nodes = [selected_id] if selected_id else []
                 if selected_turn:
                     focus_nodes.extend(selected_turn.get("keywords", []))
@@ -502,7 +520,7 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
                     history=history,
                     agent=agent,
                     assessment=assessment,
-                    recent_turns=recent_turns,
+                    recent_turns=agent_recent_turns,
                     schema_template=schema_template,
                 )
                 logger.info(f"[orchestrate] Completed action '{assessment.get('action')}' for agent '{agent_name}'. Result: {json.dumps(action_result, indent=2)}")
@@ -874,7 +892,7 @@ def mutate_history_endpoint():
                     config_data = {k: v for k, v in payload.items() if k != "action"}
                     json.dump(config_data, fh, indent=2, ensure_ascii=False)
                     fh.write("\n")
-                data_volume.commit()
+                commit_volume()
                 return {"ok": True, "message": "Config saved to Modal volume."}
 
             elif action == "load_agents":
@@ -900,6 +918,7 @@ def mutate_history_endpoint():
                     thread["category"] = category
                 rebuild_history_graph(history)
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "message": f"Category for turn {image_id} updated to {category}."}
 
             elif action == "replace_image":
@@ -991,9 +1010,11 @@ def mutate_history_endpoint():
                         updated_any = True
                 if updated_any:
                     save_history(history)
+                    commit_volume()
                     return {"ok": True, "message": f"Image {image_id} replaced successfully."}
 
                 if image_id.startswith("ref_style_") or image_id.startswith("ref_"):
+                    commit_volume()
                     return {"ok": True, "message": f"Reference image {image_id} uploaded successfully."}
 
                 return {"ok": False, "error": "No matching turn found."}
@@ -1067,6 +1088,7 @@ def mutate_history_endpoint():
                 history["threads"] = updated_threads
                 rebuild_history_graph(history)
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "message": f"Post {image_id} deleted successfully."}
 
             elif action == "upload_inspiration":
@@ -1144,6 +1166,7 @@ def mutate_history_endpoint():
                 history["inspiration"].append(inspiration_item)
                 rebuild_history_graph(history)
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "inspiration": inspiration_item}
 
             elif action == "delete_inspiration":
@@ -1169,6 +1192,7 @@ def mutate_history_endpoint():
                     print(f"[delete_inspiration] Warning: failed to delete file: {exc}", flush=True)
                 rebuild_history_graph(history)
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "message": f"Inspiration {insp_id} deleted successfully."}
 
             elif action == "upload_brain_item":
@@ -1282,13 +1306,16 @@ def mutate_history_endpoint():
                             "type": "keyword",
                             "label": keyword,
                         })
-                    graph["edges"].append({
+                    edge = {
                         "from": brain_node_id,
                         "to": keyword_node_id,
                         "relation": "tagged_with",
-                    })
+                    }
+                    if edge not in graph["edges"]:
+                        graph["edges"].append(edge)
 
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "brain_item": brain_item}
 
             elif action == "delete_brain_item":
@@ -1314,6 +1341,7 @@ def mutate_history_endpoint():
                     print(f"[delete_brain_item] Warning: failed to delete file: {exc}", flush=True)
                 rebuild_history_graph(history)
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "message": f"Brain item {brain_id} deleted successfully."}
 
             elif action == "upload_brief":
@@ -1404,6 +1432,7 @@ def mutate_history_endpoint():
                         })
 
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "brief": brief_item}
 
             elif action == "delete_brief":
@@ -1423,6 +1452,7 @@ def mutate_history_endpoint():
                 history["briefs"] = briefs
                 rebuild_history_graph(history)
                 save_history(history)
+                commit_volume()
                 return {"ok": True, "message": f"Brief {brief_id} deleted successfully."}
 
             elif action == "simplify_keywords":
@@ -1500,6 +1530,7 @@ def mutate_history_endpoint():
                 if updated_turns > 0 or updated_insp > 0:
                     rebuild_history_graph(history)
                     save_history(history)
+                    commit_volume()
                     return {"ok": True, "message": f"Successfully simplified keywords. Updated {updated_turns} turns and {updated_insp} inspiration items."}
 
                 return {"ok": True, "message": "All keywords are already simplified."}

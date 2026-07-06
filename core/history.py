@@ -251,11 +251,12 @@ def save_history(history: HistoryData) -> None:
                 if db_item["id"] not in current_insp_ids:
                     db.delete_inspiration(db_item["id"])
 
-        # Sync graph (incremental — insert new nodes, ignore existing)
+        # Sync graph (overwrite — nodes and edges are rebuilt from scratch in history['graph'])
         graph = history.get("graph", {})
         nodes = graph.get("nodes", [])
         edges = graph.get("edges", [])
         if nodes or edges:
+            db.clear_graph()
             db.batch_insert_graph(
                 [n for n in nodes if isinstance(n, dict) and "id" in n],
                 [e for e in edges if isinstance(e, dict)],
@@ -763,7 +764,13 @@ def retrieve_from_brain(
 
     best_image = final_candidates[0] if final_candidates else None
 
-    return {"image": best_image, "images": final_candidates, "note": best_note}
+    return {
+        "image": best_image,
+        "images": final_candidates,
+        "related_images": unique_related,
+        "unrelated_images": unique_unrelated,
+        "note": best_note
+    }
 
 
 def read_heartbeat_state() -> dict[str, Any]:

@@ -125,7 +125,8 @@ CREATE TABLE IF NOT EXISTS graph_edges (
     rowid_      INTEGER PRIMARY KEY AUTOINCREMENT,
     source      TEXT,
     target      TEXT,
-    relation    TEXT
+    relation    TEXT,
+    UNIQUE(source, target, relation) ON CONFLICT IGNORE
 );
 CREATE INDEX IF NOT EXISTS idx_edges_source ON graph_edges(source);
 CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target);
@@ -513,7 +514,7 @@ class AreopagusDB:
 
     def add_graph_edge(self, source: str, target: str, relation: str) -> None:
         self.conn.execute(
-            "INSERT INTO graph_edges (source, target, relation) VALUES (?,?,?)",
+            "INSERT OR IGNORE INTO graph_edges (source, target, relation) VALUES (?,?,?)",
             (source, target, relation),
         )
 
@@ -540,7 +541,7 @@ class AreopagusDB:
                 [(n["id"], n.get("type", ""), n.get("label", ""), n.get("url", "")) for n in nodes],
             )
             self.conn.executemany(
-                "INSERT INTO graph_edges (source, target, relation) VALUES (?,?,?)",
+                "INSERT OR IGNORE INTO graph_edges (source, target, relation) VALUES (?,?,?)",
                 [(e.get("from", e.get("source", "")), e.get("to", e.get("target", "")), e.get("relation", "")) for e in edges],
             )
 
@@ -578,15 +579,15 @@ class AreopagusDB:
 # ── Migration: history.json → SQLite ─────────────────────────────────────────
 
 
-def migrate_json_to_sqlite(json_path: str | Path, db_path: str | Path = DB_PATH) -> None:
+def migrate_json_to_sqlite(json_path: str | Path, db_path: str | Path = DB_PATH) -> AreopagusDB | None:
     """One-time migration: read history.json and insert all data into SQLite."""
     json_path = Path(json_path)
+    if not json_path.exists():
+        print(f"[migrate] No history.json found at {json_path}. Creating empty DB.")
+        return None
+
     db = AreopagusDB(db_path)
     try:
-        if not json_path.exists():
-            print(f"[migrate] No history.json found at {json_path}. Creating empty DB.")
-            return
-
         with json_path.open("r", encoding="utf-8") as f:
             history = json.load(f)
 
@@ -633,8 +634,10 @@ def migrate_json_to_sqlite(json_path: str | Path, db_path: str | Path = DB_PATH)
         print(f"[migrate] Imported {len(nodes)} graph nodes, {len(edges)} graph edges.")
 
         print(f"[migrate] Migration complete -> {db_path}")
-    finally:
+        return db
+    except Exception as e:
         db.close()
+        raise e
 
 
 # ── Singleton accessor ────────────────────────────────────────────────────────

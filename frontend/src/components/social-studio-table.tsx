@@ -145,16 +145,12 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
       }
 
       const mimeType = file.type || (isVideo ? "video/mp4" : "image/jpeg");
-      const settings = await getUploadSettingsAction();
-      const mutateUrl = settings.mutateUrl;
-
-      const response = await fetch(mutateUrl, {
+      const response = await fetch("/api/replace-image", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          action: "replace_image",
           image_id: imageId,
           image_base64: base64Data,
           mime_type: mimeType

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { modalAuthHeaders } from "@/lib/modal-auth";
 
 function getMutateUrl() {
   const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
@@ -67,9 +68,7 @@ export async function replaceImageAction(imageId: string, base64Data: string, mi
 
     const response = await fetch(mutateUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: modalAuthHeaders(),
       body: JSON.stringify(payload)
     });
 

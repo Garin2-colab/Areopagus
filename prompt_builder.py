@@ -99,6 +99,105 @@ Concept direction:
     return prompt_json
 
 
+def download_memories_ratio(brain_result: dict, max_total: int = 5, exclude_thread_ids: set | None = None) -> tuple[list[tuple[bytes, str]], list[dict]]:
+    from core import fetch_image_bytes
+    related_list = brain_result.get("related_images") or []
+    unrelated_list = brain_result.get("unrelated_images") or []
+    
+    if exclude_thread_ids is None:
+        exclude_thread_ids = set()
+        
+    target_related = 3
+    target_unrelated = 2
+    
+    downloaded_related = []
+    downloaded_unrelated = []
+    
+    # Try to download related images first
+    for img in related_list:
+        if len(downloaded_related) >= target_related:
+            break
+        thread_id = img.get("thread_id")
+        if thread_id and thread_id in exclude_thread_ids:
+            continue
+        url = img.get("image_url")
+        if not url:
+            continue
+        try:
+            mem_bytes, mem_mime = fetch_image_bytes(url)
+            downloaded_related.append((mem_bytes, mem_mime, img))
+        except Exception as e:
+            print(f"[warning] Failed to fetch related inspiration image {url}: {e}", flush=True)
+            
+    # Try to download unrelated images
+    for img in unrelated_list:
+        if len(downloaded_unrelated) >= target_unrelated:
+            break
+        thread_id = img.get("thread_id")
+        if thread_id and thread_id in exclude_thread_ids:
+            continue
+        url = img.get("image_url")
+        if not url:
+            continue
+        try:
+            mem_bytes, mem_mime = fetch_image_bytes(url)
+            downloaded_unrelated.append((mem_bytes, mem_mime, img))
+        except Exception as e:
+            print(f"[warning] Failed to fetch unrelated inspiration image {url}: {e}", flush=True)
+            
+    # Combine them
+    # If we have slots remaining, fill them up to max_total from the remaining pool
+    if len(downloaded_related) + len(downloaded_unrelated) < max_total:
+        downloaded_related_urls = {item[2].get("image_url") for item in downloaded_related}
+        # First fill with remaining related
+        for img in related_list:
+            if len(downloaded_related) + len(downloaded_unrelated) >= max_total:
+                break
+            thread_id = img.get("thread_id")
+            if thread_id and thread_id in exclude_thread_ids:
+                continue
+            url = img.get("image_url")
+            if not url or url in downloaded_related_urls:
+                continue
+            try:
+                mem_bytes, mem_mime = fetch_image_bytes(url)
+                downloaded_related.append((mem_bytes, mem_mime, img))
+                downloaded_related_urls.add(url)
+            except Exception as e:
+                print(f"[warning] Failed to fetch remaining related inspiration image {url}: {e}", flush=True)
+                
+        # Then fill with remaining unrelated
+        downloaded_unrelated_urls = {item[2].get("image_url") for item in downloaded_unrelated}
+        for img in unrelated_list:
+            if len(downloaded_related) + len(downloaded_unrelated) >= max_total:
+                break
+            thread_id = img.get("thread_id")
+            if thread_id and thread_id in exclude_thread_ids:
+                continue
+            url = img.get("image_url")
+            if not url or url in downloaded_unrelated_urls:
+                continue
+            try:
+                mem_bytes, mem_mime = fetch_image_bytes(url)
+                downloaded_unrelated.append((mem_bytes, mem_mime, img))
+                downloaded_unrelated_urls.add(url)
+            except Exception as e:
+                print(f"[warning] Failed to fetch remaining unrelated inspiration image {url}: {e}", flush=True)
+                
+    # Format results
+    extra_images = []
+    recalled_images = []
+    for mem_bytes, mem_mime, img in downloaded_related + downloaded_unrelated:
+        extra_images.append((mem_bytes, mem_mime))
+        img_id = img.get("image_id") or img.get("id")
+        recalled_images.append({
+            "id": img_id,
+            "meta": img
+        })
+        
+    return extra_images, recalled_images
+
+
 def build_initiate_prompt_json(
     agent: AgentConfig,
     recent_turns: list[HistoryTurn],
@@ -154,27 +253,15 @@ def build_initiate_prompt_json(
 
         if recent_keywords:
             brain_result = retrieve_from_brain(history, recent_keywords)
-            image_memories = brain_result.get("images") or []
             note_memory = brain_result.get("note")
 
-            for img in image_memories:
-                if img.get("thread_id") in recent_thread_ids:
-                    continue
-                inspiration_url = img.get("image_url")
-                if inspiration_url:
-                    try:
-                        mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
-                        extra_images.append((mem_bytes, mem_mime))
-                        img_id = img.get("image_id") or img.get("id")
-                        recalled_images.append({
-                            "id": img_id,
-                            "meta": img
-                        })
-                        print(f"[inspiration] Initiator recalled Image/Turn {img.get('turn', 'Brain')} ({img_id}) via keywords {img.get('keywords')}", flush=True)
-                        if len(recalled_images) >= 5:
-                            break
-                    except Exception as e:
-                        print(f"[warning] Failed to fetch inspiration image {inspiration_url}: {e}", flush=True)
+            downloaded_extra, downloaded_recalled = download_memories_ratio(
+                brain_result,
+                max_total=5,
+                exclude_thread_ids=recent_thread_ids
+            )
+            extra_images.extend(downloaded_extra)
+            recalled_images.extend(downloaded_recalled)
 
             if note_memory:
                 inspiration_note_id = note_memory.get("id")
@@ -371,27 +458,16 @@ def build_pivot_prompt_json(
         exclude_thread_id = selected_turn.get("thread_id")
         if selected_keywords:
             brain_result = retrieve_from_brain(history, selected_keywords)
-            image_memories = brain_result.get("images") or []
             note_memory = brain_result.get("note")
 
-            for img in image_memories:
-                if img.get("thread_id") == exclude_thread_id:
-                    continue
-                inspiration_url = img.get("image_url")
-                if inspiration_url:
-                    try:
-                        mem_bytes, mem_mime = fetch_image_bytes(inspiration_url)
-                        extra_images.append((mem_bytes, mem_mime))
-                        img_id = img.get("image_id") or img.get("id")
-                        recalled_images.append({
-                            "id": img_id,
-                            "meta": img
-                        })
-                        print(f"[inspiration] Pivot recalled Image/Turn {img.get('turn', 'Brain')} ({img_id}) via keywords {img.get('keywords')}", flush=True)
-                        if len(recalled_images) >= 5:
-                            break
-                    except Exception as e:
-                        print(f"[warning] Failed to fetch inspiration image {inspiration_url}: {e}", flush=True)
+            exclude_ids = {exclude_thread_id} if exclude_thread_id else set()
+            downloaded_extra, downloaded_recalled = download_memories_ratio(
+                brain_result,
+                max_total=5,
+                exclude_thread_ids=exclude_ids
+            )
+            extra_images.extend(downloaded_extra)
+            recalled_images.extend(downloaded_recalled)
 
             if note_memory:
                 inspiration_note_id = note_memory.get("id")

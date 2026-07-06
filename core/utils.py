@@ -210,9 +210,19 @@ def summarize_turn_for_agent(turn: dict[str, Any]) -> dict[str, Any]:
 
 def recent_turns_for_agents(history: dict[str, Any], limit: int = INTEREST_WINDOW) -> list[dict[str, Any]]:
     turns = history.get("turns", [])
-    if not isinstance(turns, list):
+    if not isinstance(turns, list) or not turns:
         return []
-    return turns[-limit:]
+    
+    latest_turns = turns[-limit:]
+    
+    older_turns = turns[:-limit]
+    valid_older = [t for t in older_turns if isinstance(t, dict) and t.get("image_id")]
+    
+    if valid_older:
+        random_turn = random.choice(valid_older)
+        return [random_turn] + latest_turns
+        
+    return latest_turns
 
 
 def next_turn_number(history: dict[str, Any]) -> int:
@@ -262,14 +272,91 @@ def extract_json_object(text: str) -> dict[str, Any]:
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned)
 
+    # 1. Try simple loads
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return json.loads(cleaned[start : end + 1])
-        raise
+    except Exception:
+        pass
+
+    # 2. Try non-strict loads (allows unescaped control chars like newlines)
+    try:
+        return json.loads(cleaned, strict=False)
+    except Exception:
+        pass
+
+    # 3. Try to repair unescaped double quotes inside strings
+    try:
+        repaired = repair_json_quotes(cleaned)
+        return json.loads(repaired, strict=False)
+    except Exception:
+        pass
+
+    # 4. Fallback to extracting between first { and last }
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        sub = cleaned[start : end + 1]
+        try:
+            return json.loads(sub, strict=False)
+        except Exception:
+            pass
+        try:
+            repaired_sub = repair_json_quotes(sub)
+            return json.loads(repaired_sub, strict=False)
+        except Exception:
+            pass
+
+    # If all failed, raise the original/re-raised JSONDecodeError from strict loading
+    return json.loads(cleaned)
+
+
+def repair_json_quotes(s: str) -> str:
+    """Attempt to escape unescaped double quotes inside JSON string literals."""
+    result = []
+    n = len(s)
+    i = 0
+    while i < n:
+        char = s[i]
+        if char == '"':
+            # Check if this quote is already escaped
+            is_escaped = False
+            backslashes = 0
+            k = i - 1
+            while k >= 0 and s[k] == '\\':
+                backslashes += 1
+                k -= 1
+            if backslashes % 2 == 1:
+                is_escaped = True
+
+            if not is_escaped:
+                # Find last non-whitespace character before i
+                prev_char = ""
+                k = i - 1
+                while k >= 0:
+                    if not s[k].isspace():
+                        prev_char = s[k]
+                        break
+                    k -= 1
+
+                # Find next non-whitespace character after i
+                next_char = ""
+                k = i + 1
+                while k < n:
+                    if not s[k].isspace():
+                        next_char = s[k]
+                        break
+                    k += 1
+
+                is_preceded_by_structural = prev_char in ('{', '[', ':', ',') or prev_char == ""
+                is_followed_by_structural = next_char in ('}', ']', ':', ',') or next_char == ""
+
+                if not (is_preceded_by_structural or is_followed_by_structural):
+                    # This is an internal/nested quote! Escape it.
+                    result.append('\\')
+
+        result.append(char)
+        i += 1
+    return "".join(result)
 
 
 def gemini_api_key() -> str:
@@ -404,3 +491,50 @@ def clamp_interest_score(value: Any) -> int:
     except (TypeError, ValueError):
         score = 0
     return max(0, min(100, score))
+
+
+def is_video_model(model_name: str | None) -> bool:
+    if not model_name:
+        return False
+    model_lower = str(model_name).lower().strip()
+    return "seedance" in model_lower or "video" in model_lower or "runway" in model_lower
+
+
+def recent_turns_for_video_agent(history: dict[str, Any], limit: int = INTEREST_WINDOW) -> list[dict[str, Any]]:
+    turns = history.get("turns", [])
+    if not isinstance(turns, list) or not turns:
+        return []
+        
+    unanimated_turns = []
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        image_id = turn.get("image_id")
+        if not image_id:
+            continue
+        
+        # Check if the turn itself is a video
+        if turn.get("image_webp", {}).get("format") == "mp4":
+            continue
+            
+        # Check if already animated in the history
+        is_animated = False
+        for other in turns:
+            if isinstance(other, dict) and other.get("parent_image_id") == image_id:
+                if other.get("image_webp", {}).get("format") == "mp4":
+                    is_animated = True
+                    break
+        if not is_animated:
+            unanimated_turns.append(turn)
+            
+    if not unanimated_turns:
+        return []
+        
+    latest_unanimated = unanimated_turns[-limit:]
+    
+    older_unanimated = unanimated_turns[:-limit]
+    if older_unanimated:
+        random_turn = random.choice(older_unanimated)
+        return [random_turn] + latest_unanimated
+        
+    return latest_unanimated

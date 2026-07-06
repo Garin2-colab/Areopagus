@@ -83,6 +83,26 @@ def save_index(index: dict[str, Any]) -> None:
         f.write("\n")
 
 
+STATUS_PATH = BRAIN_DIR / ".sync-status.json"
+
+
+def write_sync_status(status: str, current: int, total: int, synced: int, errors: int, skipped: int):
+    status_data = {
+        "status": status,
+        "current": current,
+        "total": total,
+        "synced": synced,
+        "errors": errors,
+        "skipped": skipped,
+        "updated_at": utc_now()
+    }
+    try:
+        with STATUS_PATH.open("w", encoding="utf-8") as f:
+            json.dump(status_data, f, indent=2)
+    except Exception as e:
+        print(f"Failed to write sync status: {e}")
+
+
 def get_api_key() -> str:
     key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if not key:
@@ -550,6 +570,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     if not to_process and not to_delete_local:
         print("  Nothing to sync. Brain is up to date.")
         print()
+        write_sync_status("completed", 0, 0, 0, 0, unchanged)
         synthesize_briefs(api_key)
         return
 
@@ -564,6 +585,8 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     completed_count = 0
     counter_lock = threading.Lock()
     existing_lock = threading.Lock()
+
+    write_sync_status("running", 0, len(to_process), 0, 0, unchanged)
 
     def process_entry(entry: dict[str, Any]) -> None:
         nonlocal synced, errors, completed_count
@@ -677,6 +700,8 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             print(f"           [{rel}] [ERROR] Error: {exc}")
             with counter_lock:
                 errors += 1
+        finally:
+            write_sync_status("running", completed_count, len(to_process), synced, errors, unchanged)
 
     # ThreadPoolExecutor to run tasks sequentially to avoid sqlite locking and volume commit contentions
     max_workers = 1
@@ -688,6 +713,8 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
     # Save updated index
     index["items"] = list(existing.values())
     save_index(index)
+
+    write_sync_status("completed", len(to_process), len(to_process), synced, errors, unchanged)
 
     print()
     print(f"  Done. Synced: {synced}, Errors: {errors}")

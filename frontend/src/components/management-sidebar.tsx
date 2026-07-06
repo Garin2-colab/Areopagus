@@ -444,7 +444,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
         body: JSON.stringify({
           agents: agents.map((agent) => ({
             ...agent,
-            active: true,
+            active: agent.active !== false,
             selected_model: agent.model
           }))
         })
