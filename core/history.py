@@ -572,6 +572,7 @@ def retrieve_from_brain(
     """
     Search history['brain'], history['inspiration'], and history['turns'] to find:
     1. The best matching image-based references (type='image', 'reference', 'inspiration', or 'turn')
+       Composed of 60% related (overlap score > 0) and 40% non-related (overlap score == 0) images.
     2. The best matching note-based reference (type='note')
     
     Returns a dict:
@@ -584,9 +585,12 @@ def retrieve_from_brain(
     if not history:
         return {"image": None, "images": [], "note": None}
 
+    import random
+
     current_keywords_set = {k.lower().lstrip('#') for k in current_keywords}
     
-    image_candidates = []
+    related_image_candidates = []
+    unrelated_image_candidates = []
     best_note = None
     best_note_score = 0
 
@@ -595,44 +599,63 @@ def retrieve_from_brain(
         if not isinstance(item, dict) or "id" not in item:
             continue
             
-        score = 0
-        item_keywords = {k.lower().lstrip('#') for k in item.get("keywords", [])}
-        
-        # Check overlaps
-        overlap = item_keywords.intersection(current_keywords_set)
-        score += len(overlap) * 10
-        
-        # Add substring search for text content
-        title = item.get("title", "").lower()
-        summary = item.get("summary", "").lower()
-        full_text = item.get("full_text", "").lower()
-        mood = item.get("mood", "").lower()
-        
-        for kw in current_keywords_set:
-            if kw in title:
-                score += 3
-            if kw in summary:
-                score += 3
-            if kw in full_text:
-                score += 2
-            if kw in mood:
-                score += 2
-                
-        if score <= 0:
-            continue
-            
         item_type = item.get("type", "image")
         if item_type == "note":
+            # Notes are only evaluated for relevance
+            score = 0
+            item_keywords = {k.lower().lstrip('#') for k in item.get("keywords", [])}
+            overlap = item_keywords.intersection(current_keywords_set)
+            score += len(overlap) * 10
+            
+            title = item.get("title", "").lower()
+            summary = item.get("summary", "").lower()
+            full_text = item.get("full_text", "").lower()
+            mood = item.get("mood", "").lower()
+            
+            for kw in current_keywords_set:
+                if kw in title:
+                    score += 3
+                if kw in summary:
+                    score += 3
+                if kw in full_text:
+                    score += 2
+                if kw in mood:
+                    score += 2
+            
             if score > best_note_score:
                 best_note_score = score
                 best_note = item
         else:
-            # image or reference
+            # Image or reference
+            score = 0
+            item_keywords = {k.lower().lstrip('#') for k in item.get("keywords", [])}
+            overlap = item_keywords.intersection(current_keywords_set)
+            score += len(overlap) * 10
+            
+            title = item.get("title", "").lower()
+            summary = item.get("summary", "").lower()
+            full_text = item.get("full_text", "").lower()
+            mood = item.get("mood", "").lower()
+            
+            for kw in current_keywords_set:
+                if kw in title:
+                    score += 3
+                if kw in summary:
+                    score += 3
+                if kw in full_text:
+                    score += 2
+                if kw in mood:
+                    score += 2
+                    
             brain_copy = dict(item)
             brain_copy["image_id"] = item["id"]
             brain_copy["turn"] = "Brain"
             brain_copy["proposal"] = item.get("summary", "Second Brain Reference")
-            image_candidates.append((score, brain_copy))
+
+            if score > 0:
+                related_image_candidates.append((score, brain_copy))
+            else:
+                unrelated_image_candidates.append(brain_copy)
 
     # 2. Search user-uploaded inspiration images (history.get("inspiration", []))
     for insp in history.get("inspiration", []):
@@ -647,15 +670,15 @@ def retrieve_from_brain(
         # simulated higher default priority for legacy inspiration overlap
         score += 5 
         
-        if score <= 0:
-            continue
-            
-        # Map id to image_id, and turn to simulated values so caller parses cleanly
         insp_copy = dict(insp)
         insp_copy["image_id"] = insp["id"]
         insp_copy["turn"] = "Inspiration"
         insp_copy["proposal"] = insp.get("summary", "User Uploaded Inspiration")
-        image_candidates.append((score, insp_copy))
+
+        if score > 5:  # Overlap existed (since score without overlap is 5)
+            related_image_candidates.append((score, insp_copy))
+        else:
+            unrelated_image_candidates.append(insp_copy)
 
     # 3. Search historical turns for image references
     for turn in history.get("turns", []):
@@ -669,32 +692,78 @@ def retrieve_from_brain(
         overlap = turn_keywords.intersection(current_keywords_set)
         score += len(overlap) * 10
         
-        if score <= 0:
-            continue
-            
-        image_candidates.append((score, turn))
+        turn_copy = dict(turn)
+        if score > 0:
+            related_image_candidates.append((score, turn_copy))
+        else:
+            unrelated_image_candidates.append(turn_copy)
 
-    # Deduplicate candidates by image_url and select top-scoring
-    unique_candidates = []
-    seen_urls = set()
-    seen_ids = set()
+    # Deduplicate related candidates by image_url
+    unique_related = []
+    seen_related_urls = set()
+    seen_related_ids = set()
     
-    # Sort candidates by score descending
-    image_candidates.sort(key=lambda x: x[0], reverse=True)
+    # Sort related candidates by score descending
+    related_image_candidates.sort(key=lambda x: x[0], reverse=True)
     
-    for score, item in image_candidates:
+    for score, item in related_image_candidates:
         url = item.get("image_url")
         item_id = item.get("image_id") or item.get("id")
-        if not url or url in seen_urls or (item_id and item_id in seen_ids):
+        if not url or url in seen_related_urls or (item_id and item_id in seen_related_ids):
             continue
-        seen_urls.add(url)
+        seen_related_urls.add(url)
         if item_id:
-            seen_ids.add(item_id)
-        unique_candidates.append(item)
+            seen_related_ids.add(item_id)
+        unique_related.append(item)
 
-    best_image = unique_candidates[0] if unique_candidates else None
+    # Deduplicate unrelated candidates by image_url
+    unique_unrelated = []
+    seen_unrelated_urls = set()
+    seen_unrelated_ids = set()
     
-    return {"image": best_image, "images": unique_candidates, "note": best_note}
+    for item in unrelated_image_candidates:
+        url = item.get("image_url")
+        item_id = item.get("image_id") or item.get("id")
+        if not url or url in seen_unrelated_urls or (item_id and item_id in seen_unrelated_ids):
+            continue
+        if url in seen_related_urls or (item_id and item_id in seen_related_ids):
+            continue
+        seen_unrelated_urls.add(url)
+        if item_id:
+            seen_unrelated_ids.add(item_id)
+        unique_unrelated.append(item)
+
+    # Shuffle unrelated candidates to get "more interesting results"
+    random.shuffle(unique_unrelated)
+
+    # Select up to 5 candidates total: 60% related (up to 3) and 40% unrelated (up to 2)
+    max_total = 5
+    target_related = 3
+    target_unrelated = 2
+
+    taken_related = unique_related[:target_related]
+    taken_unrelated = unique_unrelated[:target_unrelated]
+
+    final_candidates = taken_related + taken_unrelated
+
+    # If we have slots remaining, fill them up to max_total from the remaining pool
+    remaining_slots = max_total - len(final_candidates)
+    if remaining_slots > 0:
+        taken_urls = {c.get("image_url") for c in final_candidates}
+        # First fill with remaining related
+        for item in unique_related[target_related:]:
+            if len(final_candidates) < max_total and item.get("image_url") not in taken_urls:
+                final_candidates.append(item)
+                taken_urls.add(item.get("image_url"))
+        # Then fill with remaining unrelated
+        for item in unique_unrelated[target_unrelated:]:
+            if len(final_candidates) < max_total and item.get("image_url") not in taken_urls:
+                final_candidates.append(item)
+                taken_urls.add(item.get("image_url"))
+
+    best_image = final_candidates[0] if final_candidates else None
+
+    return {"image": best_image, "images": final_candidates, "note": best_note}
 
 
 def read_heartbeat_state() -> dict[str, Any]:
