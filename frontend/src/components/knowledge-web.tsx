@@ -350,54 +350,57 @@ export function KnowledgeWeb({
 
     const fg = graphRef.current;
 
-    // ── Hub-spoke force layout ──
-    // Main nodes (images, references, brain) act as "hubs" — they repel
-    // each other strongly and sit far apart. Keyword nodes act as "spokes"
-    // — pulled close to their hub with tight links and only gentle mutual
-    // repulsion, so they spread evenly in a circular halo.
+    // ── Obsidian-style spread layout ──
+    // Goal: airy, well-distributed graph where image/brain hubs sit far
+    // apart with keyword spokes orbiting at comfortable distances.
+    // Tuned to fill the viewport at a comfortable zoom level.
 
-    // 1. Charge: type-aware repulsion
-    //    Hubs push each other apart strongly; keywords barely repel,
-    //    letting the link force arrange them around their hub.
+    // 1. Charge: strong, long-range repulsion
+    //    Hubs push hard (−250) with NO distanceMax — every hub feels
+    //    every other hub. Keywords get mild repulsion (−25) so they
+    //    spread into an even halo instead of stacking.
     fg.d3Force("charge")
       ?.strength((node: any) => {
-        if (node.kind === "keyword" || node.kind === "comment") return -15;
-        return -150; // image / inspiration / brain
+        if (node.kind === "keyword" || node.kind === "comment") return -25;
+        return -250; // image / inspiration / brain
       })
-      ?.distanceMax(300);
+      ?.distanceMax(800);
 
     // 2. Links: type-aware distance & strength
-    //    keyword↔hub: short + strong → tight spoke ring
-    //    hub↔hub (parent-child images): long + soft → spread apart
+    //    keyword↔hub: moderate distance (50) + strong pull → clean orbit
+    //    hub↔hub (parent-child images): long (150) + soft → well-separated
     fg.d3Force("link")
       ?.distance((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 32 : 120;
+        return hasKeyword ? 50 : 150;
       })
       ?.strength((link: any) => {
         const s = typeof link.source === "object" ? link.source : null;
         const t = typeof link.target === "object" ? link.target : null;
         const hasKeyword = s?.kind === "keyword" || t?.kind === "keyword";
-        return hasKeyword ? 0.7 : 0.08;
+        return hasKeyword ? 0.5 : 0.05;
       });
 
-    // 3. Center: keeps graph center-of-mass aligned
+    // 3. Center: light — just prevents drift off-screen
     fg.d3Force("center")
-      ?.strength(0.05);
+      ?.strength(0.03);
 
-    // 4. Gravity: gentle pull toward origin → circular boundary
-    fg.d3Force("x", forceX(0).strength(0.02));
-    fg.d3Force("y", forceY(0).strength(0.02));
+    // 4. Gravity: gentle pull toward origin — keeps graph compact
+    //    enough to fill viewport without over-compressing
+    fg.d3Force("x", forceX(0).strength(0.01));
+    fg.d3Force("y", forceY(0).strength(0.01));
 
-    // 5. Collision: hubs get wide padding; keywords get enough to prevent overlap
+    // 5. Collision: generous padding so circles never overlap
+    //    Hubs: visual radius ~18 + 20px gap = 38
+    //    Keywords: visual radius ~6 + 5px gap = 11
     fg.d3Force("collide", forceCollide((node: any) => {
       if (node.kind === "image" || node.kind === "inspiration" || node.kind === "brain") {
-        return 30;
+        return 38;
       }
-      return 8;
-    }).iterations(2));
+      return 11;
+    }).iterations(3));
 
     fg.d3ReheatSimulation?.();
 
@@ -405,7 +408,7 @@ export function KnowledgeWeb({
     // (onEngineStop won't fire with cooldownTicks=Infinity,
     // so we schedule a gentle zoom here instead.)
     setTimeout(() => {
-      fg.zoomToFit?.(800, 60);
+      fg.zoomToFit?.(800, 40);
     }, 200);
   });
 
@@ -614,10 +617,12 @@ export function KnowledgeWeb({
             //   naturally cools it to near-zero cost. This is critical: if the
             //   simulation is stopped, drag reheat is immediately re-killed and
             //   only the pinned node moves (everything else is frozen).
+            // d3AlphaDecay=0.018: slow decay lets the stronger forces reach
+            //   equilibrium before the simulation cools — cleaner final layout.
             // velocityDecay=0.4: moderate damping — nodes respond but settle.
-            warmupTicks={200}
+            warmupTicks={300}
             cooldownTicks={Infinity}
-            d3AlphaDecay={0.025}
+            d3AlphaDecay={0.018}
             d3VelocityDecay={0.4}
 
             // Links
