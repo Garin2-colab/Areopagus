@@ -415,7 +415,7 @@ export function KnowledgeWeb({
       new Set([
         ...turns.map((turn) => getGraphImageUrl(turn.image_url, turn.image_webp?.format)),
         ...inspiration.map((item) => getGraphImageUrl(item.image_url)),
-        ...brain.filter((item) => item.type === "image" && item.image_url).map((item) => getGraphImageUrl(item.image_url))
+        ...brain.filter((item) => item.image_url && item.image_url.trim() !== "").map((item) => getGraphImageUrl(item.image_url))
       ])
     );
     let cancelled = false;
