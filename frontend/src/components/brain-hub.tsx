@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useMemo, useEffect } from "react";
+import React, { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import {
   Upload,
   Trash2,
@@ -452,15 +452,31 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
-  console.log("DEBUG BrainHub rendering:", {
-    brainPropsLength: brain.length,
-    loadedBrainLength: loadedBrain.length,
-    loadedInspirationLength: loadedInspiration.length,
-    allItemsLength: allItems.length,
-    filteredItemsLength: filteredItems.length,
-    gridItemsLength: gridItems.length,
-    gridItems
-  });
+  // Infinite scroll: IntersectionObserver sentinel
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      sentinelRef.current = node;
+    },
+    []
+  );
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoading) {
+          fetchPage(false, activeFilter, debouncedSearch);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, activeFilter, debouncedSearch, offset]);
 
   return (
     <div className="space-y-5">
@@ -885,24 +901,15 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
         </div>
       )}
 
-      {/* Load More Button */}
+      {/* Infinite scroll sentinel */}
       {hasMore && (
-        <div className="flex justify-center pt-4">
-          <Button
-            type="button"
-            onClick={() => fetchPage(false, activeFilter, debouncedSearch)}
-            disabled={isLoading}
-            className="flex items-center gap-2 rounded-full border border-[#D8D4CC] bg-[#FAF9F6] hover:bg-[#F5F2EB] text-[#44423E] font-semibold text-xs h-9 px-6 shadow-sm transition-all"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D45113]" />
-                <span>Loading...</span>
-              </>
-            ) : (
-              <span>Load More</span>
-            )}
-          </Button>
+        <div ref={loadMoreRef} className="flex justify-center pt-4 pb-2">
+          {isLoading && (
+            <div className="flex items-center gap-2 text-xs text-[#858076]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D45113]" />
+              <span>Loading more…</span>
+            </div>
+          )}
         </div>
       )}
 

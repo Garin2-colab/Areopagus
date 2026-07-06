@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ManagementSidebar } from "@/components/management-sidebar";
@@ -63,6 +63,20 @@ export default function Home() {
   const inspiration = useMemo(() => history?.inspiration ?? [], [history]);
   const brain = useMemo(() => history?.brain ?? [], [history]);
   const briefs = useMemo(() => history?.briefs ?? [], [history]);
+
+  // When switching to Knowledge Web or Brain tab, ensure brain items are loaded.
+  // The initial fetch uses skip_brain=true for performance; this lazy-loads them.
+  const brainDataLoadedRef = useRef(false);
+  useEffect(() => {
+    if ((view === "macro" || view === "inspiration") && !brainDataLoadedRef.current && brain.length === 0) {
+      brainDataLoadedRef.current = true;
+      fetchHistory(true)
+        .then((data) => {
+          setHistory(data);
+        })
+        .catch(() => {});
+    }
+  }, [view, brain.length]);
 
   return (
     <main className="min-h-screen bg-[#F5F2EB] pb-14 text-[#252422]">

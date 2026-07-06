@@ -61,12 +61,42 @@ export async function POST() {
     let failed = 0;
     const errors: string[] = [];
 
+    // Load existing index to build a set of known brain_ids that already have local files
+    let index: Record<string, unknown> = {};
+    try {
+      if (fs.existsSync(indexPath)) {
+        index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+      }
+    } catch {
+      index = {};
+    }
+
+    const indexItems = (index.items as Array<{ local_path?: string; brain_id?: string }>) || [];
+    const knownBrainIds = new Set(indexItems.map((it) => it.brain_id).filter(Boolean));
+
+    // Also build a set of all existing filenames in references/ to avoid duplicating content
+    const existingRefFiles = new Set<string>();
+    try {
+      const refFiles = fs.readdirSync(referencesDir);
+      for (const f of refFiles) {
+        existingRefFiles.add(f);
+      }
+    } catch {
+      // Directory might not exist yet
+    }
+
     for (const item of items) {
       let filepath: string;
       if (item.source_file) {
         const relativePath = item.source_file.replace(/\\/g, "/");
         filepath = path.join(projectRoot, "brain", ...relativePath.split("/"));
       } else {
+        // Skip items that already exist in the local index under a different filename
+        // This prevents the "brain_XXXXX.webp" duplicate problem
+        if (knownBrainIds.has(item.id)) {
+          skipped++;
+          continue;
+        }
         const ext = ".webp";
         const filename = `${item.id}${ext}`;
         filepath = path.join(referencesDir, filename);
@@ -119,16 +149,7 @@ export async function POST() {
       }
     }
 
-    // Update .brain-index.json with sync timestamp
-    let index: Record<string, unknown> = {};
-    try {
-      if (fs.existsSync(indexPath)) {
-        index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
-      }
-    } catch {
-      index = {};
-    }
-
+    // Update .brain-index.json with sync timestamp (reuse the index loaded earlier)
     index.last_pull = new Date().toISOString();
     index.pull_stats = { downloaded, skipped, failed, total: items.length };
     fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
