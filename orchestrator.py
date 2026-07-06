@@ -1160,8 +1160,9 @@ def mutate_history_endpoint():
 
                 existing_item = None
                 for item in history["brain"]:
-                    if item.get("id") == brain_id:
+                    if item.get("id") == brain_id or (source_file and item.get("source_file") == source_file):
                         existing_item = item
+                        brain_id = item.get("id")
                         break
 
                 brain_item = {

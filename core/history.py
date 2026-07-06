@@ -36,6 +36,32 @@ def _commit_volume() -> None:
         pass
 
 
+def _deduplicate_history_brain_items(history: dict[str, Any]) -> None:
+    """Helper to find and remove duplicates of brain items sharing the same source_file path."""
+    brain_items = history.get("brain", [])
+    if not brain_items:
+        return
+    seen_sources = {}
+    unique_brain_items = []
+    duplicates_found = False
+    for item in brain_items:
+        if not isinstance(item, dict):
+            continue
+        src = item.get("source_file")
+        if src:
+            if src in seen_sources:
+                duplicates_found = True
+                continue
+            else:
+                seen_sources[src] = item
+        unique_brain_items.append(item)
+    if duplicates_found:
+        print(f"[load_history] Found and resolved duplicate brain items: cleaned {len(brain_items)} -> {len(unique_brain_items)}", flush=True)
+        history["brain"] = unique_brain_items
+        rebuild_history_graph(history)
+        save_history(history)
+
+
 def load_history() -> HistoryData:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -52,6 +78,7 @@ def load_history() -> HistoryData:
             history.setdefault("graph", {"nodes": [], "edges": []})
             history["graph"].setdefault("nodes", [])
             history["graph"].setdefault("edges", [])
+            _deduplicate_history_brain_items(history)
             return history
         except Exception as exc:
             print(f"[load_history] WARNING: SQLite read failed ({exc}), falling back to JSON.", flush=True)
@@ -136,6 +163,7 @@ def load_history() -> HistoryData:
             fh.write("\n")
         _commit_volume()
 
+    _deduplicate_history_brain_items(history)
     return history
 
 
@@ -162,19 +190,40 @@ def save_history(history: HistoryData) -> None:
                 db.upsert_thread(thread)
 
         # Sync brain items
+        current_brain_ids = set()
         for item in history.get("brain", []):
             if isinstance(item, dict) and "id" in item:
                 db.upsert_brain_item(item)
+                current_brain_ids.add(item["id"])
+        if "brain" in history:
+            db_brain_items, _ = db.list_brain_items()
+            for db_item in db_brain_items:
+                if db_item["id"] not in current_brain_ids:
+                    db.delete_brain_item(db_item["id"])
 
         # Sync briefs
+        current_brief_ids = set()
         for brief in history.get("briefs", []):
             if isinstance(brief, dict) and "brief_id" in brief:
                 db.upsert_brief(brief)
+                current_brief_ids.add(brief["brief_id"])
+        if "briefs" in history:
+            db_briefs = db.list_briefs()
+            for db_brief in db_briefs:
+                if db_brief["brief_id"] not in current_brief_ids:
+                    db.delete_brief(db_brief["brief_id"])
 
         # Sync inspiration
+        current_insp_ids = set()
         for item in history.get("inspiration", []):
             if isinstance(item, dict) and "id" in item:
                 db.upsert_inspiration(item)
+                current_insp_ids.add(item["id"])
+        if "inspiration" in history:
+            db_insp_items = db.list_inspiration()
+            for db_item in db_insp_items:
+                if db_item["id"] not in current_insp_ids:
+                    db.delete_inspiration(db_item["id"])
 
         # Sync graph (incremental — insert new nodes, ignore existing)
         graph = history.get("graph", {})

@@ -568,7 +568,7 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             if prev and prev.get("brain_id"):
                 brain_id = prev["brain_id"]
             else:
-                brain_id = f"brain_{int(time.time())}_{hashlib.md5(rel.encode()).hexdigest()[:6]}"
+                brain_id = f"brain_{hashlib.md5(rel.encode()).hexdigest()[:12]}"
 
         with counter_lock:
             completed_count += 1
@@ -646,11 +646,12 @@ def sync(*, force: bool = False, dry_run: bool = False) -> None:
             )
 
             if result.get("ok"):
-                print(f"           [{rel}] [OK] Synced to Modal (brain_id: {brain_id})")
+                server_brain_id = result.get("brain_item", {}).get("id") or brain_id
+                print(f"           [{rel}] [OK] Synced to Modal (brain_id: {server_brain_id})")
                 with existing_lock:
                     existing[rel] = {
                         "local_path": rel,
-                        "brain_id": brain_id,
+                        "brain_id": server_brain_id,
                         "type": item_type,
                         "status": "synced",
                         "synced_at": utc_now(),
