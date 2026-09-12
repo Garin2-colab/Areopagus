@@ -597,7 +597,6 @@ def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str
     volumes={"/data": data_volume},
     secrets=[modal.Secret.from_dotenv()],
     timeout=60,
-    min_containers=1,
 )
 @modal.fastapi_endpoint(method="GET")
 def history_endpoint(request: Request) -> dict[str, Any]:
@@ -701,7 +700,6 @@ def history_endpoint(request: Request) -> dict[str, Any]:
     volumes={"/data": data_volume},
     secrets=[modal.Secret.from_dotenv()],
     timeout=60,
-    min_containers=1,
 )
 @modal.fastapi_endpoint(method="GET")
 def status_endpoint(request: Request) -> dict[str, Any]:

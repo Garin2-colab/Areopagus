@@ -20,4 +20,4 @@ data/
 brain/images/
 brain/references/
 brain/ig/.cache/
-
+brain/.sync-status.json
