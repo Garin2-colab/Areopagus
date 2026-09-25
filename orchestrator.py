@@ -66,6 +66,7 @@ from core import (
     extract_aspect_ratio,
     gemini_generate,
     sanitize_for_runway,
+    sanitize_media_id,
     
     # Heartbeat functions
     read_heartbeat_state,
@@ -113,17 +114,18 @@ image = (
 
 def verify_api_key(request) -> dict[str, Any] | None:
     """Check X-API-Key header or api_key query param. Returns error dict or None if OK."""
+    import hmac
     expected = os.environ.get("AREOPAGUS_API_KEY", "").strip()
     if not expected:
-        # No key configured — allow all (backwards compatibility during rollout)
-        return None
+        # Fail closed: without a configured key every endpoint would be public.
+        return {"ok": False, "error": "Server misconfiguration: AREOPAGUS_API_KEY is not set."}
     # Check header first, then query param
     provided = ""
     if hasattr(request, "headers"):
         provided = (request.headers.get("x-api-key") or "").strip()
     if not provided and hasattr(request, "query_params"):
         provided = (request.query_params.get("api_key") or "").strip()
-    if provided == expected:
+    if provided and hmac.compare_digest(provided, expected):
         return None
     return {"ok": False, "error": "Unauthorized. Invalid or missing API key."}
 
@@ -456,6 +458,7 @@ def dispatch_agent_action(
         modal.Secret.from_dotenv(),
     ],
     timeout=60 * 30,
+    max_containers=1,  # serialize history writes across containers
 )
 def orchestrate(agents_config_payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
@@ -736,8 +739,8 @@ def get_image():
     get_image_api.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -775,7 +778,12 @@ def get_image():
                     requested_ext = r_ext
                 clean_id = clean_id[:-len(r_ext)]
                 break
-                
+
+        try:
+            clean_id = sanitize_media_id(clean_id)
+        except ValueError:
+            return JSONResponse(content={"error": "Invalid id parameter"}, status_code=400)
+
         # Serve MP4 if explicitly requested, or if no format was specified and mp4 exists
         serve_mp4 = False
         mp4_path = IMAGE_DIR / f"{clean_id}.mp4"
@@ -834,6 +842,7 @@ def get_image():
         modal.Secret.from_dotenv(),
     ],
     timeout=120,
+    max_containers=1,  # serialize history writes across containers
 )
 @modal.asgi_app()
 def mutate_history_endpoint():
@@ -847,8 +856,8 @@ def mutate_history_endpoint():
     mutate_api.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -925,6 +934,10 @@ def mutate_history_endpoint():
                 mime_type = payload.get("mime_type", "image/png")
                 if not image_id or not image_base64:
                     return {"ok": False, "error": "Missing image_id or image_base64."}
+                try:
+                    image_id = sanitize_media_id(image_id)
+                except ValueError:
+                    return {"ok": False, "error": "Invalid image_id."}
                 if "," in image_base64:
                     header, base64_data = image_base64.split(",", 1)
                     if "data:" in header and ";base64" in header:
@@ -1021,6 +1034,10 @@ def mutate_history_endpoint():
                 image_id = payload.get("image_id")
                 if not image_id:
                     return {"ok": False, "error": "Missing image_id."}
+                try:
+                    image_id = sanitize_media_id(image_id)
+                except ValueError:
+                    return {"ok": False, "error": "Invalid image_id."}
                 history = load_history()
                 turns = history.get("turns", [])
                 target_turn = None
@@ -1171,6 +1188,10 @@ def mutate_history_endpoint():
                 insp_id = payload.get("id")
                 if not insp_id:
                     return {"ok": False, "error": "Missing id."}
+                try:
+                    insp_id = sanitize_media_id(insp_id)
+                except ValueError:
+                    return {"ok": False, "error": "Invalid id."}
                 history = load_history()
                 inspiration = history.get("inspiration", [])
                 target = None
@@ -1199,6 +1220,10 @@ def mutate_history_endpoint():
                 source_file = payload.get("source_file", "")
                 keywords = payload.get("keywords", [])
                 summary = payload.get("summary", "")
+                try:
+                    brain_id = sanitize_media_id(brain_id)
+                except ValueError:
+                    return {"ok": False, "error": "Invalid brain_id."}
                 mood = payload.get("mood", "")
                 title = payload.get("title", source_file)
                 color_palette = payload.get("color_palette", [])
@@ -1320,6 +1345,10 @@ def mutate_history_endpoint():
                 brain_id = payload.get("id")
                 if not brain_id:
                     return {"ok": False, "error": "Missing id."}
+                try:
+                    brain_id = sanitize_media_id(brain_id)
+                except ValueError:
+                    return {"ok": False, "error": "Invalid id."}
                 history = load_history()
                 brain_items = history.get("brain", [])
                 target = None
@@ -1554,15 +1583,33 @@ def pulse_endpoint(request: Request, payload: dict[str, Any]) -> dict[str, Any]:
     auth_error = verify_api_key(request)
     if auth_error:
         return auth_error
+
+    # Validate before persisting or spawning a 30-minute orchestration:
+    # this payload becomes agents_config.json on the volume and drives
+    # every later pulse, so garbage here poisons the pipeline and burns
+    # provider budget.
+    if not isinstance(payload, dict):
+        return {"ok": False, "error": "Payload must be a JSON object."}
+    if len(json.dumps(payload, default=str)) > 1_000_000:
+        return {"ok": False, "error": "Payload too large (limit 1MB)."}
+    agents = payload.get("agents")
+    if not isinstance(agents, list) or not agents:
+        return {"ok": False, "error": "Payload must include a non-empty 'agents' list."}
+    if len(agents) > 50:
+        return {"ok": False, "error": "Too many agents (limit 50)."}
+    for agent in agents:
+        if not isinstance(agent, dict) or not str(agent.get("id", "")).strip() or not str(agent.get("name", "")).strip():
+            return {"ok": False, "error": "Every agent needs a non-empty 'id' and 'name'."}
+
     AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with AGENTS_CONFIG_PATH.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     data_volume.commit()
-    
+
     # Run orchestrate asynchronously so the request doesn't block
     orchestrate.spawn(payload)
-    
+
     return {"ok": True, "message": "Pulse started remotely on Modal."}
 
 
@@ -1577,6 +1624,7 @@ def pulse_endpoint(request: Request, payload: dict[str, Any]) -> dict[str, Any]:
         modal.Secret.from_dotenv(),
     ],
     timeout=60 * 15,  # 15 min — enough for multi-agent orchestration
+    max_containers=1,  # never overlap heartbeat runs
     schedule=modal.Cron("*/30 * * * *"),  # Every 30 minutes to support high-frequency heartbeat targets
 )
 def heartbeat_cron() -> None:

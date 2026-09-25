@@ -83,7 +83,7 @@ def get_model(name: str) -> BaseModel:
     model_key = str(name).strip().lower().replace("-", "_").replace(" ", "_")
     if model_key in MODELS_REGISTRY:
         return MODELS_REGISTRY[model_key]
-    # Fallback to the default registered model (Runway 'gpt_image_2')
-    if "gpt_image_2" in MODELS_REGISTRY:
-        return MODELS_REGISTRY["gpt_image_2"]
-    raise ValueError(f"Model '{name}' is not registered and no default 'gpt_image_2' fallback was found.")
+    # Fail loudly: silently routing an unknown name to gpt_image_2 would bill
+    # the wrong provider for the generation.
+    canonical = sorted({handler.model_name for handler in MODELS_REGISTRY.values()})
+    raise ValueError(f"Unknown model '{name}'. Registered models: {', '.join(canonical)}")

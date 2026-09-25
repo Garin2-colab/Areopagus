@@ -8,6 +8,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { compressImage } from "@/lib/utils";
+import { adminFetch } from "@/lib/admin-client";
 import { replaceImageAction, getUploadSettingsAction, revalidateHistoryAction } from "@/app/actions";
 
 type SocialStudioTableProps = {
@@ -52,7 +53,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
     setFeedback(null);
 
     try {
-      const response = await fetch("/api/delete-post", {
+      const response = await adminFetch("/api/delete-post", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -81,7 +82,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
     setFeedback(null);
 
     try {
-      const response = await fetch("/api/update-category", {
+      const response = await adminFetch("/api/update-category", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -145,7 +146,7 @@ export function SocialStudioTable({ turns, onRefresh, onImageClick }: SocialStud
       }
 
       const mimeType = file.type || (isVideo ? "video/mp4" : "image/jpeg");
-      const response = await fetch("/api/replace-image", {
+      const response = await adminFetch("/api/replace-image", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

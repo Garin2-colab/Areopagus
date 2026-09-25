@@ -78,6 +78,19 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def sanitize_media_id(raw: Any) -> str:
+    """Reduce a media id to a bare filename component.
+
+    Ids arrive from HTTP payloads and URLs; without this, ids like
+    "../../foo" let IMAGE_DIR path joins escape the media directory.
+    """
+    text = str(raw or "").replace("\\", "/").strip()
+    name = text.rsplit("/", 1)[-1].split("?")[0]
+    if not name or name in (".", ".."):
+        raise ValueError(f"Invalid media id: {raw!r}")
+    return name
+
+
 def load_schema_template() -> dict[str, Any]:
     raw = SCHEMA_PATH.read_text(encoding="utf-8")
     raw = raw.replace("\ufeff", "").replace("\u00a0", " ")

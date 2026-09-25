@@ -178,6 +178,17 @@ def _json_loads(text: str | None) -> Any:
         return []
 
 
+# Columns of the turns table that get dedicated storage. Any other key on a
+# turn dict (e.g. runway_model, inspiration_image_ids, selected_turn) is
+# preserved round-trip via the `extra` JSON column instead of being dropped.
+_TURN_FIXED_COLUMNS = frozenset({
+    "turn", "image_id", "image_url", "prompt_text", "keywords", "agent_id",
+    "agent_name", "action", "thread_id", "category", "parent_turn",
+    "parent_image_id", "root_image_id", "interest_score", "proposal",
+    "critique", "prompt_json", "image_webp", "created_at", "extra",
+})
+
+
 class AreopagusDB:
     """Thin wrapper around SQLite for the Areopagus data layer."""
 
@@ -341,6 +352,10 @@ class AreopagusDB:
     # ── Turns ─────────────────────────────────────────────────────────────
 
     def insert_turn(self, turn: dict[str, Any]) -> None:
+        extra = {
+            key: value for key, value in turn.items()
+            if key not in _TURN_FIXED_COLUMNS and value is not None
+        }
         self.conn.execute(
             """INSERT OR REPLACE INTO turns
                (turn, image_id, image_url, prompt_text, keywords, agent_id, agent_name,
@@ -366,7 +381,7 @@ class AreopagusDB:
                 turn.get("critique"),
                 _json_dumps(turn.get("prompt_json")) if turn.get("prompt_json") else None,
                 _json_dumps(turn.get("image_webp")) if turn.get("image_webp") else None,
-                None,  # extra
+                json.dumps(extra, ensure_ascii=False, separators=(",", ":")) if extra else None,
                 turn.get("created_at", ""),
             ),
         )
@@ -382,10 +397,17 @@ class AreopagusDB:
     @staticmethod
     def _turn_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         d = dict(row)
+        extra = d.pop("extra", None)
+        if extra:
+            try:
+                parsed = json.loads(extra)
+                if isinstance(parsed, dict):
+                    d.update(parsed)
+            except (json.JSONDecodeError, TypeError):
+                pass
         d["keywords"] = _json_loads(d.get("keywords"))
         d["prompt_json"] = _json_loads(d.get("prompt_json")) if d.get("prompt_json") else None
         d["image_webp"] = _json_loads(d.get("image_webp")) if d.get("image_webp") else None
-        d.pop("extra", None)
         return d
 
     # ── Threads ───────────────────────────────────────────────────────────

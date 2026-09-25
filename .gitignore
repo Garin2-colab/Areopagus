@@ -21,3 +21,10 @@ brain/images/
 brain/references/
 brain/ig/.cache/
 brain/.sync-status.json
+
+# Data & build artifacts (untracked 2026-09-25)
+history.json
+*.tsbuildinfo
+manual*.webp
+mock_history.json
+*.tmp

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { adminFetch } from "@/lib/admin-client";
 import dynamic from "next/dynamic";
 import { Sparkles, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -339,7 +340,7 @@ export function KnowledgeWeb({
     setSimplifying(true);
     setFeedback(null);
     try {
-      const res = await fetch("/api/simplify-keywords", {
+      const res = await adminFetch("/api/simplify-keywords", {
         method: "POST"
       });
       const data = await res.json();

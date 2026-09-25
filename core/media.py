@@ -9,6 +9,7 @@ from core.config import (
     IMAGE_DIR,
     WEBP_QUALITY,
 )
+from core.utils import sanitize_media_id
 
 def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
     if "id=" in image_url:
@@ -19,6 +20,7 @@ def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
             if image_id:
                 if image_id.endswith(".webp") or image_id.endswith(".mp4"):
                     image_id = image_id.rsplit(".", 1)[0]
+                image_id = sanitize_media_id(image_id)
                 mp4_path = IMAGE_DIR / f"{image_id}.mp4"
                 if mp4_path.exists():
                     return mp4_path.read_bytes(), "video/mp4"
@@ -49,6 +51,7 @@ def fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
 def save_mp4_video(video_url: str, image_id: str, aspect_ratio: str = "16:9") -> dict[str, Any]:
     video_bytes, source_mime_type = fetch_image_bytes(video_url)
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    image_id = sanitize_media_id(image_id)
     mp4_path = IMAGE_DIR / f"{image_id}.mp4"
 
     with open(mp4_path, "wb") as f:
@@ -103,6 +106,7 @@ def save_mp4_video(video_url: str, image_id: str, aspect_ratio: str = "16:9") ->
 def save_webp_image(image_url: str, image_id: str) -> dict[str, Any]:
     image_bytes, source_mime_type = fetch_image_bytes(image_url)
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    image_id = sanitize_media_id(image_id)
     webp_path = IMAGE_DIR / f"{image_id}.webp"
 
     with Image.open(BytesIO(image_bytes)) as source:

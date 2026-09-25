@@ -400,8 +400,8 @@ class RunwayModel(BaseModel):
         history = None
         try:
             history = load_history()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[{runway}] WARNING: load_history failed, generating without history context: {exc}", flush=True)
 
         selected_id = assessment.get("selected_image_id", "")
         selected_turn = next((t for t in recent_turns if t.get("image_id") == selected_id), None) if recent_turns else None

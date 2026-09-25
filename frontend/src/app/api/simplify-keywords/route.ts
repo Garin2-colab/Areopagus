@@ -1,33 +1,10 @@
 import { NextResponse } from "next/server";
 import { modalAuthHeaders } from "@/lib/modal-auth";
+import { getMutateUrl } from "@/lib/modal";
 import { revalidateTag } from "next/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function getMutateUrl() {
-  const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
-  const apiUrl = (process.env.MODAL_API_URL || "").trim();
-  const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
-  const historyUrl = (process.env.MODAL_HISTORY_URL || "").trim();
-
-  const referenceUrl = saveUrl || apiUrl || statusUrl || historyUrl;
-  if (!referenceUrl) {
-    return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
-  }
-
-  if (referenceUrl.includes("mutate-history-endpoint")) {
-    return referenceUrl;
-  }
-
-  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--/);
-  if (match) {
-    const username = match[1];
-    return `https://${username}--areopagus-mutate-history-endpoint.modal.run`;
-  }
-
-  return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
-}
 
 export async function POST() {
   try {

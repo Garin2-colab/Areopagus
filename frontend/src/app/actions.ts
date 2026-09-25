@@ -1,33 +1,8 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { getMutateUrl } from "@/lib/modal";
 import { modalAuthHeaders } from "@/lib/modal-auth";
-
-function getMutateUrl() {
-  const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();
-  const apiUrl = (process.env.MODAL_API_URL || "").trim();
-  const statusUrl = (process.env.MODAL_STATUS_URL || "").trim();
-  const historyUrl = (process.env.MODAL_HISTORY_URL || "").trim();
-
-  const referenceUrl = saveUrl || apiUrl || statusUrl || historyUrl;
-  if (!referenceUrl) {
-    return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
-  }
-
-  if (referenceUrl.includes("mutate-history-endpoint")) {
-    return referenceUrl;
-  }
-
-  const match = referenceUrl.match(/https:\/\/([a-zA-Z0-9-]+)--/);
-  if (match) {
-    const username = match[1];
-    const devMatch = referenceUrl.match(/areopagus-(?:history-endpoint|status-endpoint|pulse-endpoint|save-endpoint|get-image)(-[a-zA-Z0-9]+)?\.modal\.run/);
-    const suffix = devMatch && devMatch[1] ? devMatch[1] : "";
-    return `https://${username}--areopagus-mutate-history-endpoint${suffix}.modal.run`;
-  }
-
-  return "https://heebok-lee--areopagus-mutate-history-endpoint.modal.run";
-}
 
 function getModalImageUrl() {
   const saveUrl = (process.env.MODAL_SAVE_URL || "").trim();

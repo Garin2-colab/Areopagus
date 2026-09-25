@@ -1,7 +1,11 @@
 import json
+import os
+import threading
+import time
 import uuid
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import random
@@ -28,15 +32,35 @@ from core.database import AreopagusDB, get_db, migrate_json_to_sqlite, close_db
 
 
 def _commit_volume() -> None:
-    """Best-effort Modal volume commit in a background thread to avoid blocking requests."""
-    import threading
-    def worker():
-        try:
-            from orchestrator import data_volume
-            data_volume.commit()
-        except Exception:
-            pass
-    threading.Thread(target=worker, daemon=True).start()
+    """Commit the Modal volume so writes survive and are visible to other containers.
+
+    This runs synchronously on purpose: a daemon-thread commit can be killed at
+    container teardown before it finishes, silently losing the most recent writes
+    (and with scale-to-zero, teardown right after a request is the common case).
+    """
+    try:
+        from orchestrator import data_volume
+        data_volume.commit()
+    except Exception as exc:
+        print(f"[history] WARNING: Modal volume commit failed: {exc}", flush=True)
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    """Write JSON via temp file + os.replace so a crash can never truncate the file."""
+    path = Path(path)
+    tmp_path = path.with_name(path.name + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_path, path)
+
+
+# Serializes save_history within a container (FastAPI handlers run in a thread
+# pool against one shared SQLite connection). Cross-container ordering is
+# bounded by max_containers=1 on the orchestrator/mutate Modal functions.
+_SAVE_LOCK = threading.Lock()
 
 
 def _deduplicate_history_brain_items(history: dict[str, Any]) -> None:
@@ -85,15 +109,23 @@ def load_history() -> HistoryData:
             _deduplicate_history_brain_items(history)
             return history
         except Exception as exc:
-            print(f"[load_history] WARNING: SQLite read failed ({exc}). Deleting malformed database to trigger automatic rebuild.", flush=True)
+            # Never delete the database here: a transient lock or volume error
+            # must not destroy the primary datastore. Quarantine it so the
+            # JSON rebuild path can run and the data stays recoverable.
+            print(f"[load_history] WARNING: SQLite read failed ({exc}). Quarantining database for rebuild (no data deleted).", flush=True)
             try:
                 close_db()
-                for suffix in ("", "-wal", "-shm"):
-                    p = DB_PATH.parent / (DB_PATH.name + suffix)
-                    if p.exists():
-                        p.unlink()
+                stamp = int(time.time())
+                quarantine_target = DB_PATH.parent / f"{DB_PATH.name}.corrupt-{stamp}"
+                DB_PATH.rename(quarantine_target)
+                print(f"[load_history] Database moved to {quarantine_target.name}", flush=True)
+                for suffix in ("-wal", "-shm"):
+                    sidecar = DB_PATH.parent / (DB_PATH.name + suffix)
+                    if sidecar.exists():
+                        sidecar.rename(DB_PATH.parent / f"{sidecar.name}.corrupt-{stamp}")
             except Exception as e:
-                print(f"[load_history] Failed to delete malformed database: {e}", flush=True)
+                print(f"[load_history] ERROR: Could not quarantine database ({e}). Refusing to delete it; failing this load.", flush=True)
+                raise
 
     # ── JSON path (legacy / first-run migration) ────────────────────────
     history = None
@@ -170,9 +202,7 @@ def load_history() -> HistoryData:
     if not has_connected_mesh and len(history.get("turns", [])) > 0:
         print("[load_history] Upgrading graph nodes to connected-mesh schema...", flush=True)
         rebuild_history_graph(history)
-        with HISTORY_PATH.open("w", encoding="utf-8") as fh:
-            json.dump(history, fh, indent=2, ensure_ascii=False)
-            fh.write("\n")
+        _atomic_write_json(HISTORY_PATH, history)
         _commit_volume()
 
     _deduplicate_history_brain_items(history)
@@ -197,101 +227,99 @@ def save_history(history: HistoryData) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history["updated_at"] = utc_now()
 
-    # ── Write to SQLite ─────────────────────────────────────────────────
-    try:
-        db = get_db()
-        db.set_meta("updated_at", history["updated_at"])
-        db.set_meta("project", history.get("project", "Areopagus"))
-        if history.get("created_at"):
-            db.set_meta("created_at", history["created_at"])
-
-        # Sync turns
-        for turn in history.get("turns", []):
-            if isinstance(turn, dict) and turn.get("turn") is not None:
-                db.insert_turn(turn)
-
-        # Sync threads
-        for thread in history.get("threads", []):
-            if isinstance(thread, dict) and "thread_id" in thread:
-                db.upsert_thread(thread)
-
-        # Sync brain items
-        current_brain_ids = set()
-        for item in history.get("brain", []):
-            if isinstance(item, dict) and "id" in item:
-                db.upsert_brain_item(item)
-                current_brain_ids.add(item["id"])
-        if "brain" in history:
-            db_brain_items, _ = db.list_brain_items()
-            for db_item in db_brain_items:
-                if db_item["id"] not in current_brain_ids:
-                    db.delete_brain_item(db_item["id"])
-
-        # Sync briefs
-        current_brief_ids = set()
-        for brief in history.get("briefs", []):
-            if isinstance(brief, dict) and "brief_id" in brief:
-                db.upsert_brief(brief)
-                current_brief_ids.add(brief["brief_id"])
-        if "briefs" in history:
-            db_briefs = db.list_briefs()
-            for db_brief in db_briefs:
-                if db_brief["brief_id"] not in current_brief_ids:
-                    db.delete_brief(db_brief["brief_id"])
-
-        # Sync inspiration
-        current_insp_ids = set()
-        for item in history.get("inspiration", []):
-            if isinstance(item, dict) and "id" in item:
-                db.upsert_inspiration(item)
-                current_insp_ids.add(item["id"])
-        if "inspiration" in history:
-            db_insp_items = db.list_inspiration()
-            for db_item in db_insp_items:
-                if db_item["id"] not in current_insp_ids:
-                    db.delete_inspiration(db_item["id"])
-
-        # Sync graph (overwrite — nodes and edges are rebuilt from scratch in history['graph'])
-        graph = history.get("graph", {})
-        nodes = graph.get("nodes", [])
-        edges = graph.get("edges", [])
-        if nodes or edges:
-            db.clear_graph()
-            db.batch_insert_graph(
-                [n for n in nodes if isinstance(n, dict) and "id" in n],
-                [e for e in edges if isinstance(e, dict)],
-            )
-    except Exception as exc:
-        print(f"[save_history] WARNING: SQLite write failed ({exc}). Falling back to JSON only.", flush=True)
-
-    # ── Also write JSON for backwards compatibility during transition ───
-    if HISTORY_PATH.exists():
+    with _SAVE_LOCK:
+        # ── Write to SQLite ─────────────────────────────────────────────────
         try:
-            with HISTORY_PATH.open("r", encoding="utf-8") as fh:
-                json.load(fh)
-            # Valid JSON, proceed with backup
-            backup_dir = DATA_DIR / "backups"
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            import shutil
-            import time
-            timestamp = int(time.time())
-            backup_path = backup_dir / f"history_{timestamp}.json"
-            shutil.copy2(HISTORY_PATH, backup_path)
-            
-            # Keep only the last 10 backups
-            backups = sorted(backup_dir.glob("history_*.json"))
-            if len(backups) > 10:
-                for old_backup in backups[:-10]:
-                    try:
-                        old_backup.unlink()
-                    except Exception:
-                        pass
-        except Exception as e:
-            print(f"[save_history] Backup creation warning: {e}", flush=True)
+            db = get_db()
+            db.set_meta("updated_at", history["updated_at"])
+            db.set_meta("project", history.get("project", "Areopagus"))
+            if history.get("created_at"):
+                db.set_meta("created_at", history["created_at"])
 
-    with HISTORY_PATH.open("w", encoding="utf-8") as fh:
-        json.dump(history, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
+            # Sync turns
+            for turn in history.get("turns", []):
+                if isinstance(turn, dict) and turn.get("turn") is not None:
+                    db.insert_turn(turn)
+
+            # Sync threads
+            for thread in history.get("threads", []):
+                if isinstance(thread, dict) and "thread_id" in thread:
+                    db.upsert_thread(thread)
+
+            # Sync brain items
+            current_brain_ids = set()
+            for item in history.get("brain", []):
+                if isinstance(item, dict) and "id" in item:
+                    db.upsert_brain_item(item)
+                    current_brain_ids.add(item["id"])
+            if "brain" in history:
+                db_brain_items, _ = db.list_brain_items()
+                for db_item in db_brain_items:
+                    if db_item["id"] not in current_brain_ids:
+                        db.delete_brain_item(db_item["id"])
+
+            # Sync briefs
+            current_brief_ids = set()
+            for brief in history.get("briefs", []):
+                if isinstance(brief, dict) and "brief_id" in brief:
+                    db.upsert_brief(brief)
+                    current_brief_ids.add(brief["brief_id"])
+            if "briefs" in history:
+                db_briefs = db.list_briefs()
+                for db_brief in db_briefs:
+                    if db_brief["brief_id"] not in current_brief_ids:
+                        db.delete_brief(db_brief["brief_id"])
+
+            # Sync inspiration
+            current_insp_ids = set()
+            for item in history.get("inspiration", []):
+                if isinstance(item, dict) and "id" in item:
+                    db.upsert_inspiration(item)
+                    current_insp_ids.add(item["id"])
+            if "inspiration" in history:
+                db_insp_items = db.list_inspiration()
+                for db_item in db_insp_items:
+                    if db_item["id"] not in current_insp_ids:
+                        db.delete_inspiration(db_item["id"])
+
+            # Sync graph (overwrite — nodes and edges are rebuilt from scratch in history['graph'])
+            graph = history.get("graph", {})
+            nodes = graph.get("nodes", [])
+            edges = graph.get("edges", [])
+            if nodes or edges:
+                db.clear_graph()
+                db.batch_insert_graph(
+                    [n for n in nodes if isinstance(n, dict) and "id" in n],
+                    [e for e in edges if isinstance(e, dict)],
+                )
+        except Exception as exc:
+            print(f"[save_history] WARNING: SQLite write failed ({exc}). Falling back to JSON only.", flush=True)
+
+        # ── Also write JSON for backwards compatibility during transition ───
+        if HISTORY_PATH.exists():
+            try:
+                with HISTORY_PATH.open("r", encoding="utf-8") as fh:
+                    json.load(fh)
+                # Valid JSON, proceed with backup
+                backup_dir = DATA_DIR / "backups"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                import shutil
+                timestamp = int(time.time())
+                backup_path = backup_dir / f"history_{timestamp}.json"
+                shutil.copy2(HISTORY_PATH, backup_path)
+
+                # Keep only the last 10 backups
+                backups = sorted(backup_dir.glob("history_*.json"))
+                if len(backups) > 10:
+                    for old_backup in backups[:-10]:
+                        try:
+                            old_backup.unlink()
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"[save_history] Backup creation warning: {e}", flush=True)
+
+        _atomic_write_json(HISTORY_PATH, history)
     _commit_volume()
 
 

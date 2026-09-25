@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, compressImage } from "@/lib/utils";
+import { adminFetch } from "@/lib/admin-client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudioStatus } from "@/lib/useStudioStatus";
 
@@ -200,7 +201,7 @@ function saveAgents(agents: AgentRecord[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   
   // Fire-and-forget sync to Modal
-  fetch("/api/save", {
+  adminFetch("/api/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -436,7 +437,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
 
     try {
       await onPulseStart?.();
-      const response = await fetch("/api/pulse", {
+      const response = await adminFetch("/api/pulse", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -473,7 +474,7 @@ export function ManagementSidebar({ onPulseStart, status, onUnsavedChangeStateCh
 
       try {
         const base64Data = await compressImage(file);
-        const response = await fetch("/api/replace-image", {
+        const response = await adminFetch("/api/replace-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

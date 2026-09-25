@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { BrainItem, BriefItem, InspirationItem } from "@/lib/history";
 import { fetchHistory } from "@/lib/history";
+import { adminFetch } from "@/lib/admin-client";
 import { Button } from "@/components/ui/button";
 import { compressImage } from "@/lib/utils";
 
@@ -206,7 +207,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
     setSyncMessage("Initializing sync...");
 
     try {
-      const response = await fetch("/api/sync-brain", {
+      const response = await adminFetch("/api/sync-brain", {
         method: "POST",
       });
 
@@ -220,10 +221,13 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
         throw new Error(result.error || "Sync was not successful.");
       }
 
-      // If in progress, start polling
+      // If in progress, start polling (capped at 5 minutes so a stalled
+      // sync process can't poll forever)
       if (result.in_progress) {
-        let isPolling = true;
-        while (isPolling) {
+        const maxPolls = 150;
+        let polls = 0;
+        while (polls < maxPolls) {
+          polls += 1;
           await new Promise((resolve) => setTimeout(resolve, 2000));
           const statusRes = await fetch("/api/sync-brain");
           if (!statusRes.ok) {
@@ -237,9 +241,12 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
           if (statusData.in_progress) {
             setSyncMessage(`Syncing... (${statusData.current}/${statusData.total} files processed, ${statusData.downloaded} new, ${statusData.failed} failed)`);
           } else {
-            isPolling = false;
             result = statusData;
+            break;
           }
+        }
+        if (polls >= maxPolls) {
+          throw new Error("Sync status polling timed out after 5 minutes.");
         }
       }
 
@@ -267,7 +274,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
     try {
       const base64Data = await compressImage(file);
 
-      const response = await fetch("/api/upload-inspiration", {
+      const response = await adminFetch("/api/upload-inspiration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -323,7 +330,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
 
     try {
       const endpoint = isLegacy ? "/api/delete-inspiration" : "/api/delete-brain-item";
-      const response = await fetch(endpoint, {
+      const response = await adminFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -508,7 +515,7 @@ export function BrainHub({ brain, inspiration, briefs, totalBrainItems, brainTyp
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept="image/*,.md,.txt,.pdf"
+        accept="image/*"
         className="hidden"
       />
 

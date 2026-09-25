@@ -354,8 +354,8 @@ Return JSON only:
         history = None
         try:
             history = load_history()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[{midjourney}] WARNING: load_history failed, generating without history context: {exc}", flush=True)
 
         selected_id = assessment.get("selected_image_id", "")
         selected_turn = next((t for t in recent_turns if t.get("image_id") == selected_id), None) if recent_turns else None
@@ -409,6 +409,8 @@ Return JSON only:
             try:
                 grid_bytes, _ = fetch_image_bytes(grid_url)
                 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+                from core.utils import sanitize_media_id
+                image_id = sanitize_media_id(image_id)
                 webp_path = IMAGE_DIR / f"{image_id}.webp"
 
                 with Image.open(BytesIO(grid_bytes)) as img:

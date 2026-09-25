@@ -3,6 +3,8 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 
+const IS_VERCEL = process.env.VERCEL === "1";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,15 @@ export async function GET() {
  * POST - Spawns local ingestion pipeline (sync_brain.py) in the background.
  */
 export async function POST() {
+  if (IS_VERCEL) {
+    // Serverless has no persistent filesystem; spawning sync_brain.py here
+    // can neither work nor persist results. Run the sync locally instead.
+    return NextResponse.json(
+      { ok: false, error: "Brain sync is only available on a local (non-serverless) deployment." },
+      { status: 501 }
+    );
+  }
+
   try {
     let rootDir = process.cwd();
     if (!fs.existsSync(path.join(rootDir, "sync_brain.py")) && fs.existsSync(path.join(rootDir, "..", "sync_brain.py"))) {
