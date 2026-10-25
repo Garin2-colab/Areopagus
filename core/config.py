@@ -34,7 +34,7 @@ RUNWAY_SAFETY_REPLACEMENTS = {
     "vogue": "fashion magazine",
 }
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.8-flash"
 RUNWAY_MODEL = "gpt_image_2"
 RUNWAY_GEMINI_IMAGE_MODEL = "gemini_image3_pro"
 RUNWAY_ASPECT_RATIO = "1:1"

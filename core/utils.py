@@ -461,7 +461,7 @@ def agent_gemini_model(agent: dict[str, Any]) -> str:
 
     model_name = str(agent.get("model", "")).strip().lower()
     if "gemini" in model_name:
-        return "gemini-2.5-flash"
+        return "gemini-3.8-flash"
 
     return GEMINI_MODEL
 

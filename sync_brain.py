@@ -39,7 +39,7 @@ DOCUMENT_EXTENSIONS = {".md", ".txt", ".markdown"}
 REFERENCE_EXTENSIONS = {".pdf"}
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.8-flash"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
